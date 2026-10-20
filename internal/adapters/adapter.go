@@ -5,10 +5,12 @@ package adapters
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"iter"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/OWNER/goldengate/internal/model"
@@ -84,4 +86,43 @@ func (r *Registry) All() []Adapter {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Name() < out[j].Name() })
 	return out
+}
+
+// issueToolSuffixes are the base names of issue-tracker MCP tools whose results
+// can prove an issue was created or changed (Linear, GitHub). Which tracker a
+// result belongs to is decided from the result's shape, not from the server name.
+var issueToolSuffixes = []string{"save_issue", "get_issue", "issue_write", "issue_read", "create_issue", "update_issue"}
+
+// IsIssueTool reports whether a tool name (Claude Code's mcp__<server>__<tool>,
+// OpenCode's <server>_<tool>, or a bare name) is an issue-tracker tool.
+func IsIssueTool(name string) bool {
+	n := strings.ToLower(name)
+	for _, s := range issueToolSuffixes {
+		if n == s || strings.HasSuffix(n, "__"+s) || strings.HasSuffix(n, "_"+s) {
+			return true
+		}
+	}
+	return false
+}
+
+// issueInputKeys are the only tool-input fields kept for issue-tracker calls:
+// enough to tell create from update and to identify the issue. Descriptions,
+// bodies and comments are dropped at the door.
+var issueInputKeys = map[string]bool{"id": true, "method": true, "owner": true, "repo": true, "issue_number": true,
+	"state": true, "state_reason": true, "title": true, "team": true}
+
+// TrimIssueInput keeps only the identifying fields of an issue tool's input.
+func TrimIssueInput(raw []byte) []byte {
+	var in map[string]json.RawMessage
+	if json.Unmarshal(raw, &in) != nil {
+		return nil
+	}
+	out := map[string]json.RawMessage{}
+	for k, v := range in {
+		if issueInputKeys[k] {
+			out[k] = v
+		}
+	}
+	b, _ := json.Marshal(out)
+	return b
 }

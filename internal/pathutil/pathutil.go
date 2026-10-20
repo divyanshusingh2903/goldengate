@@ -103,3 +103,19 @@ func Scrub(p, home string) string {
 	}
 	return p
 }
+
+// IsVirtualKey reports whether a project key names a non-folder project such as
+// "claude-ai:Chats" or "chatgpt:Chats". Windows drive letters ("C:\\x") are not virtual.
+func IsVirtualKey(k string) bool {
+	i := strings.IndexByte(k, ':')
+	if i < 2 { // "C:" is a drive; "" is empty
+		return false
+	}
+	for j := 0; j < i; j++ {
+		c := k[j]
+		if (c < 'a' || c > 'z') && (c < '0' || c > '9') && c != '-' {
+			return false
+		}
+	}
+	return !strings.ContainsAny(k[:i], `/\`)
+}

@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/OWNER/goldengate/internal/model"
+	"github.com/OWNER/goldengate/internal/pathutil"
 	"github.com/OWNER/goldengate/internal/redact"
 	"github.com/OWNER/goldengate/internal/shellcmd"
 )
@@ -131,6 +132,9 @@ func (e *extractor) inferRepo() string {
 	if best != "" {
 		return best
 	}
+	if pathutil.IsVirtualKey(e.s.Ref.ProjectKey) {
+		return "chat" // chat exports have no repository to name
+	}
 	return filepath.Base(e.s.Ref.ProjectKey)
 }
 
@@ -194,8 +198,12 @@ func (e *extractor) fromTool(ti int, c model.ToolCall, turnTime time.Time) {
 		}
 		e.touch(model.KindFile, "", rel, path.Base(rel), "", st, "", ti, model.ViaToolResult, at)
 	case model.ToolIssue:
-		if evidenceOK(c) && e.o.enabled("linear") {
-			e.fromLinear(ti, c, at)
+		if evidenceOK(c) {
+			e.fromIssueTool(ti, c, at)
+		}
+	case model.ToolArtifact:
+		if evidenceOK(c) {
+			e.fromArtifact(ti, c, at)
 		}
 	}
 }
@@ -350,17 +358,26 @@ func parseLinear(txt string) *linearResult {
 	return &r
 }
 
-func (e *extractor) fromLinear(ti int, c model.ToolCall, at time.Time) {
-	r := parseLinear(c.Result.Text)
-	if r == nil {
+// fromIssueTool decides from the result's shape which tracker answered.
+func (e *extractor) fromIssueTool(ti int, c model.ToolCall, at time.Time) {
+	if r := parseLinear(c.Result.Text); r != nil {
+		if e.o.enabled("linear") {
+			e.fromLinear(ti, c, at, r)
+		}
 		return
 	}
+	if e.o.enabled("github") {
+		e.fromGitHubTool(ti, c, at)
+	}
+}
+
+func (e *extractor) fromLinear(ti int, c model.ToolCall, at time.Time, r *linearResult) {
 	var in struct {
 		ID string `json:"id"`
 	}
 	_ = json.Unmarshal(c.Input, &in)
 	status := model.StatusMentioned // get_issue: read only
-	if strings.HasSuffix(c.Name, "__save_issue") {
+	if strings.HasSuffix(strings.ToLower(c.Name), "save_issue") {
 		status = model.StatusUpdated
 		if in.ID == "" {
 			status = model.StatusCreated
@@ -372,8 +389,90 @@ func (e *extractor) fromLinear(ti int, c model.ToolCall, at time.Time) {
 			status = model.StatusCanceled
 		}
 	}
-	via := model.ViaToolResult
-	e.touch(model.KindIssue, "linear", "linear:"+r.ID, r.Title, r.URL, status, r.Status, ti, via, at)
+	e.touch(model.KindIssue, "linear", "linear:"+r.ID, r.Title, r.URL, status, r.Status, ti, model.ViaToolResult, at)
+}
+
+// fromGitHubTool handles the GitHub MCP server's issue tools. Only the number,
+// URL, state and title are read; bodies and comments are never decoded.
+func (e *extractor) fromGitHubTool(ti int, c model.ToolCall, at time.Time) {
+	var in struct {
+		Method      string `json:"method"`
+		Owner       string `json:"owner"`
+		Repo        string `json:"repo"`
+		IssueNumber int    `json:"issue_number"`
+		State       string `json:"state"`
+		StateReason string `json:"state_reason"`
+		Title       string `json:"title"`
+	}
+	_ = json.Unmarshal(c.Input, &in)
+	var out struct {
+		Number  int    `json:"number"`
+		HTMLURL string `json:"html_url"`
+		URL     string `json:"url"`
+		State   string `json:"state"`
+		Title   string `json:"title"`
+	}
+	_ = json.Unmarshal([]byte(c.Result.Text), &out)
+
+	repo, num, url := in.Owner+"/"+in.Repo, in.IssueNumber, ""
+	for _, u := range []string{out.HTMLURL, out.URL} {
+		if m := reGHIssueURL.FindStringSubmatch(u); m != nil {
+			repo, url = m[1], m[0]
+			num, _ = strconv.Atoi(m[2])
+			break
+		}
+	}
+	if num == 0 && out.Number > 0 {
+		num = out.Number
+	}
+	if num == 0 || repo == "/" || !strings.Contains(repo, "/") {
+		return // no way to say which issue this was
+	}
+	title := firstNonEmpty(out.Title, in.Title)
+	name := strings.ToLower(c.Name)
+	status, raw := model.StatusMentioned, out.State // reading proves nothing was changed
+	if strings.HasSuffix(name, "issue_write") || strings.HasSuffix(name, "create_issue") || strings.HasSuffix(name, "update_issue") {
+		switch {
+		case in.Method == "create" || strings.HasSuffix(name, "create_issue"):
+			status = model.StatusCreated
+		case in.State == "closed" && in.StateReason == "not_planned":
+			status = model.StatusCanceled
+		case in.State == "closed":
+			status = model.StatusCompleted
+		default:
+			status = model.StatusUpdated
+		}
+	}
+	e.touch(model.KindIssue, "github", "github:"+repo+"#"+strconv.Itoa(num), title, url, status, raw, ti, model.ViaToolResult, at)
+}
+
+func firstNonEmpty(ss ...string) string {
+	for _, s := range ss {
+		if s != "" {
+			return s
+		}
+	}
+	return ""
+}
+
+// fromArtifact records a chat-product artifact (metadata only). The export is
+// the product's own record that the artifact exists, so the evidence is a
+// harness event rather than a model claim.
+func (e *extractor) fromArtifact(ti int, c model.ToolCall, at time.Time) {
+	var in struct {
+		ID      string `json:"id"`
+		Title   string `json:"title"`
+		Command string `json:"command"`
+	}
+	_ = json.Unmarshal(c.Input, &in) // the artifact's content is never decoded
+	if in.ID == "" || len(in.ID) > 120 || redact.IsSecretFile(in.Title) {
+		return
+	}
+	status := model.StatusCreated
+	if in.Command == "update" || in.Command == "rewrite" {
+		status = model.StatusUpdated
+	}
+	e.touch(model.KindArtifact, "", "artifact:"+in.ID, in.Title, "", status, "", ti, model.ViaHarnessEvent, at)
 }
 
 func (e *extractor) fromText(ti int, t model.Turn) {

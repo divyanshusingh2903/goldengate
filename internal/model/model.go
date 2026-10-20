@@ -9,8 +9,9 @@ import "time"
 type SessionRef struct {
 	Source     string    `json:"source"`
 	ID         string    `json:"id"`
-	ProjectKey string    `json:"project_key"` // normalized absolute folder path
+	ProjectKey string    `json:"project_key"` // normalized absolute folder path, or "<source>:<name>" for chat exports
 	Path       string    `json:"-"`           // file or db location; never leaves the machine
+	RepoRoot   string    `json:"-"`           // repository root, when the tool itself records it (worktree grouping)
 	StartedAt  time.Time `json:"started_at"`
 	UpdatedAt  time.Time `json:"updated_at"`
 	SizeBytes  int64     `json:"size_bytes"`
@@ -25,7 +26,8 @@ const (
 	ToolFileRead  ToolKind = "file_read"
 	ToolFileWrite ToolKind = "file_write" // whole-file write; Created says whether it was new
 	ToolFileEdit  ToolKind = "file_edit"
-	ToolIssue     ToolKind = "issue" // issue-tracker MCP call (Linear save_issue/get_issue)
+	ToolArtifact  ToolKind = "artifact" // chat-product artifact tool (claude.ai)
+	ToolIssue     ToolKind = "issue"    // issue-tracker MCP call (Linear save_issue/get_issue, GitHub issue_write/issue_read)
 )
 
 // ToolResult is the outcome of a tool call. OK is true only when the source
@@ -45,7 +47,7 @@ type ToolCall struct {
 	Command string // ToolShell: the command line
 	Path    string // file tools: path as recorded by the tool
 	Created bool   // ToolFileWrite: true when the result says a new file was created
-	Input   []byte // raw JSON input, kept only for ToolIssue calls
+	Input   []byte // raw JSON input, kept only for ToolIssue and ToolArtifact calls
 	Time    time.Time
 	Result  ToolResult
 }

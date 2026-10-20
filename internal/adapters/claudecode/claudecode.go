@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/OWNER/goldengate/internal/adapters"
+	"github.com/OWNER/goldengate/internal/adapters/jsonl"
 	"github.com/OWNER/goldengate/internal/model"
 	"github.com/OWNER/goldengate/internal/pathutil"
 )
@@ -162,7 +163,7 @@ func (a *Adapter) header(path string, de os.DirEntry) (model.SessionRef, error) 
 	var started time.Time
 	br := bufio.NewReaderSize(fh, 64<<10)
 	for i := 0; i < headerMaxLines && (cwd == "" || started.IsZero()); i++ {
-		line, tooLong, rerr := readLine(br, headerMaxLineBytes)
+		line, tooLong, rerr := jsonl.ReadLine(br, headerMaxLineBytes)
 		if len(line) > 0 && !tooLong {
 			var h headerEvent
 			if json.Unmarshal(line, &h) == nil {
@@ -170,7 +171,7 @@ func (a *Adapter) header(path string, de os.DirEntry) (model.SessionRef, error) 
 					cwd = h.Cwd
 				}
 				if started.IsZero() {
-					started = parseTime(h.Timestamp)
+					started = jsonl.ParseTime(h.Timestamp)
 				}
 			}
 		}
@@ -265,7 +266,7 @@ func (a *Adapter) Load(ctx context.Context, ref model.SessionRef) (*model.RawSes
 		if lineNo%512 == 0 && ctx.Err() != nil {
 			return nil, ctx.Err()
 		}
-		line, tooLong, rerr := readLine(br, maxLineBytes)
+		line, tooLong, rerr := jsonl.ReadLine(br, maxLineBytes)
 		if tooLong {
 			skipped["oversized line"]++
 		} else if len(bytes.TrimSpace(line)) > 0 {
@@ -309,7 +310,7 @@ func (a *Adapter) apply(s *model.RawSession, ev *event, pend map[string]callRef,
 		}
 	case "pr-link":
 		if ev.PRURL != "" {
-			s.Events = append(s.Events, model.HarnessEvent{Kind: "pr_link", URL: ev.PRURL, Number: ev.PRNumber, Repo: ev.PRRepo, Time: parseTime(ev.Timestamp)})
+			s.Events = append(s.Events, model.HarnessEvent{Kind: "pr_link", URL: ev.PRURL, Number: ev.PRNumber, Repo: ev.PRRepo, Time: jsonl.ParseTime(ev.Timestamp)})
 		}
 	case "user":
 		if ev.IsSidechain || ev.Message == nil {
@@ -371,7 +372,7 @@ func (a *Adapter) applyUser(s *model.RawSession, ev *event, pend map[string]call
 	if joined == "" || strings.HasPrefix(joined, "<local-command-") || strings.HasPrefix(joined, "Caveat:") || strings.HasPrefix(joined, "[Request interrupted") {
 		return
 	}
-	s.Turns = append(s.Turns, model.Turn{Role: "user", Text: clip(joined, keepTextBytes), Time: parseTime(ev.Timestamp)})
+	s.Turns = append(s.Turns, model.Turn{Role: "user", Text: jsonl.Clip(joined, keepTextBytes), Time: jsonl.ParseTime(ev.Timestamp)})
 }
 
 func (a *Adapter) applyAssistant(s *model.RawSession, ev *event, pend map[string]callRef, skipped map[string]int) {
@@ -381,7 +382,7 @@ func (a *Adapter) applyAssistant(s *model.RawSession, ev *event, pend map[string
 		return
 	}
 	if len(s.Turns) == 0 || s.Turns[len(s.Turns)-1].Role != "assistant" {
-		s.Turns = append(s.Turns, model.Turn{Role: "assistant", Time: parseTime(ev.Timestamp)})
+		s.Turns = append(s.Turns, model.Turn{Role: "assistant", Time: jsonl.ParseTime(ev.Timestamp)})
 	}
 	ti := len(s.Turns) - 1
 	t := &s.Turns[ti]
@@ -411,7 +412,7 @@ func collectFiles(s *model.RawSession) {
 			if (c.Kind != model.ToolFileWrite && c.Kind != model.ToolFileEdit) || !c.Result.Known || !c.Result.OK {
 				continue
 			}
-			if rel, ok := relativeTo(s.Ref.ProjectKey, c.Path); ok && !seen[rel] {
+			if rel, ok := jsonl.RelativeTo(s.Ref.ProjectKey, c.Path); ok && !seen[rel] {
 				seen[rel] = true
 				s.FilesTouched = append(s.FilesTouched, rel)
 			}
@@ -424,29 +425,29 @@ func appendText(t *model.Turn, s string) {
 	if s == "" {
 		return
 	}
-	t.LastText = clip(s, keepTextBytes)
+	t.LastText = jsonl.Clip(s, keepTextBytes)
 	if t.Text != "" {
 		t.Text += "\n\n"
 	}
-	t.Text = clip(t.Text+s, keepTextBytes)
+	t.Text = jsonl.Clip(t.Text+s, keepTextBytes)
 }
 
 func (a *Adapter) toolCall(s *model.RawSession, b *block, ev *event) model.ToolCall {
 	var in toolInput
 	_ = json.Unmarshal(b.Input, &in) // tolerate any shape
-	c := model.ToolCall{ID: b.ID, Name: b.Name, Kind: model.ToolOther, Time: parseTime(ev.Timestamp)}
+	c := model.ToolCall{ID: b.ID, Name: b.Name, Kind: model.ToolOther, Time: jsonl.ParseTime(ev.Timestamp)}
 	switch b.Name {
 	case "Bash":
 		c.Kind, c.Command = model.ToolShell, in.Command
 	case "Write":
 		c.Kind, c.Path = model.ToolFileWrite, in.FilePath
 	case "Edit", "MultiEdit", "NotebookEdit":
-		c.Kind, c.Path = model.ToolFileEdit, firstNonEmpty(in.FilePath, in.Path)
+		c.Kind, c.Path = model.ToolFileEdit, jsonl.FirstNonEmpty(in.FilePath, in.Path)
 	case "Read":
 		c.Kind, c.Path = model.ToolFileRead, in.FilePath
 	default:
-		if strings.HasPrefix(b.Name, "mcp__") && (strings.HasSuffix(b.Name, "__save_issue") || strings.HasSuffix(b.Name, "__get_issue")) {
-			c.Kind, c.Input = model.ToolIssue, []byte(b.Input)
+		if strings.HasPrefix(b.Name, "mcp__") && adapters.IsIssueTool(b.Name) {
+			c.Kind, c.Input = model.ToolIssue, adapters.TrimIssueInput(b.Input)
 		}
 	}
 	return c
@@ -475,7 +476,7 @@ func (a *Adapter) applyResult(s *model.RawSession, b *block, ev *event, pend map
 	}
 	switch call.Kind {
 	case model.ToolShell:
-		res.Text = clipMiddle(txt, keepResultBytes)
+		res.Text = jsonl.ClipMiddle(txt, keepResultBytes)
 	case model.ToolIssue:
 		res.Text = txt // must stay parseable JSON; capped by maxLineBytes already
 	}
@@ -526,78 +527,4 @@ func parseExitCode(txt string) (int, bool) {
 		return 0, false
 	}
 	return n, true
-}
-
-func relativeTo(root, p string) (string, bool) {
-	if p == "" {
-		return "", false
-	}
-	if !filepath.IsAbs(p) {
-		return filepath.ToSlash(filepath.Clean(p)), true
-	}
-	rel, err := filepath.Rel(root, p)
-	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return "", false
-	}
-	return filepath.ToSlash(rel), true
-}
-
-// readLine reads one line (without the newline), keeping at most max bytes.
-// A longer line is consumed fully and reported as tooLong with no data.
-func readLine(br *bufio.Reader, max int) (line []byte, tooLong bool, err error) {
-	var buf []byte
-	for {
-		chunk, isPrefix, e := br.ReadLine()
-		if e != nil {
-			return buf, tooLong, e
-		}
-		if !tooLong {
-			if len(buf)+len(chunk) > max {
-				tooLong, buf = true, nil
-			} else {
-				buf = append(buf, chunk...)
-			}
-		}
-		if !isPrefix {
-			if tooLong {
-				return nil, true, nil
-			}
-			return buf, false, nil
-		}
-	}
-}
-
-func parseTime(s string) time.Time {
-	if s == "" {
-		return time.Time{}
-	}
-	t, err := time.Parse(time.RFC3339Nano, s)
-	if err != nil {
-		return time.Time{}
-	}
-	return t
-}
-
-func clip(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return strings.ToValidUTF8(s[:n], "") + "…"
-}
-
-// clipMiddle keeps the head and tail: commit SHAs appear first, PR URLs last.
-func clipMiddle(s string, each int) string {
-	if len(s) <= 2*each {
-		return s
-	}
-	return strings.ToValidUTF8(s[:each], "") + "\n…\n" + strings.ToValidUTF8(s[len(s)-each:], "")
-}
-
-func firstNonEmpty(ss ...string) string {
-	for _, s := range ss {
-		if s != "" {
-			return s
-		}
-	}
-	return ""
 }

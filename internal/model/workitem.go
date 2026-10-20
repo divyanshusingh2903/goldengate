@@ -4,10 +4,11 @@ import "time"
 
 // Work item kinds.
 const (
-	KindCommit = "commit"
-	KindPR     = "pull_request"
-	KindIssue  = "issue"
-	KindFile   = "file"
+	KindCommit   = "commit"
+	KindPR       = "pull_request"
+	KindIssue    = "issue"
+	KindFile     = "file"
+	KindArtifact = "artifact" // an artifact or upload recorded in a chat export
 )
 
 // Work item statuses. Anything above StatusMentioned needs evidence from a

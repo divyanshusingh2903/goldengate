@@ -68,3 +68,12 @@ func TestFold(t *testing.T) {
 		t.Error("fold")
 	}
 }
+
+func TestIsVirtualKey(t *testing.T) {
+	for k, want := range map[string]bool{"claude-ai:Chats": true, "chatgpt:project-ab12": true, "opencode:x": true,
+		`C:\Users\x`: false, "C:/x": false, "/home/u/a:b": false, "~/a:b": false, "": false, "plain": false, ":x": false, "a/b:c": false} {
+		if got := IsVirtualKey(k); got != want {
+			t.Errorf("%q: got %v want %v", k, got, want)
+		}
+	}
+}
