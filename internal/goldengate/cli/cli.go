@@ -109,7 +109,7 @@ func New(d Deps) *cobra.Command {
 	root.SetOut(d.Stdout)
 	root.SetErr(d.Stderr)
 	root.PersistentFlags().StringVar(&a.configPath, "config", "", "config file (default: XDG config dir)")
-	root.AddCommand(a.syncCmd(), a.shareCmd(), a.doctorCmd(), a.initCmd(), a.tokenCmd(), a.purgeCmd(), a.importsCmd(), &cobra.Command{
+	root.AddCommand(a.syncCmd(), a.shareCmd(), a.doctorCmd(), a.summarizerCmd(), a.initCmd(), a.tokenCmd(), a.purgeCmd(), a.importsCmd(), &cobra.Command{
 		Use: "version", Short: "Print the version",
 		Run: func(*cobra.Command, []string) {
 			fmt.Fprintln(a.Stdout, "goldengate", Version, runtime.GOOS+"/"+runtime.GOARCH)
@@ -143,7 +143,7 @@ func (a *app) openState() (*gsync.State, error) {
 // --- sync ---
 
 func (a *app) syncCmd() *cobra.Command {
-	var dry, quiet bool
+	var dry, quiet, resummarize bool
 	var project, source, since string
 	cmd := &cobra.Command{
 		Use:   "sync",
@@ -179,7 +179,8 @@ func (a *app) syncCmd() *cobra.Command {
 			}
 			s := &gsync.Syncer{
 				Registry: reg, Config: cfg, Matcher: m, State: st, Home: a.Home, Now: a.Now, Resolver: a.resolver(cfg),
-				Log: slog.New(slog.NewTextHandler(a.Stderr, &slog.HandlerOptions{Level: level})),
+				Log:        slog.New(slog.NewTextHandler(a.Stderr, &slog.HandlerOptions{Level: level})),
+				Summarizer: a.summarizer(cfg),
 			}
 			var sink gsync.Sink = gsync.DryRunSink{W: a.Stdout}
 			if !dry {
@@ -189,7 +190,10 @@ func (a *app) syncCmd() *cobra.Command {
 				}
 				sink = cl
 			}
-			rep, err := s.Run(cmd.Context(), gsync.RunOpts{Project: project, Source: source, Since: sinceD}, sink, dry)
+			if resummarize && s.Summarizer == nil {
+				return errors.New("--resummarize needs a model summarizer: run `goldengate summarizer use anthropic` (or openai) first")
+			}
+			rep, err := s.Run(cmd.Context(), gsync.RunOpts{Project: project, Source: source, Since: sinceD, Resummarize: resummarize}, sink, dry)
 			if err != nil {
 				return err
 			}
@@ -208,6 +212,13 @@ func (a *app) syncCmd() *cobra.Command {
 					sort.Strings(kinds)
 					fmt.Fprintf(a.Stderr, "redactions: %s\n", strings.Join(kinds, " "))
 				}
+				if rep.Resummarized > 0 {
+					fmt.Fprintf(a.Stderr, "%d synced sessions re-summarized by %s\n", rep.Resummarized, s.Summarizer.Name())
+				}
+				if rep.Stale > 0 {
+					fmt.Fprintf(a.Stderr, "%d synced sessions still have summaries not written by %s; `goldengate sync --resummarize` upgrades them\n",
+						rep.Stale, s.Summarizer.Name())
+				}
 			}
 			return nil
 		},
@@ -217,6 +228,9 @@ func (a *app) syncCmd() *cobra.Command {
 	cmd.Flags().StringVar(&project, "project", "", "only this project folder")
 	cmd.Flags().StringVar(&source, "source", "", "only this source (e.g. claude-code)")
 	cmd.Flags().StringVar(&since, "since", "", "override the since window (e.g. 7d)")
+	cmd.Flags().BoolVar(&resummarize, "resummarize", false,
+		"also rebuild already-synced sessions whose summary was not written by the configured model summarizer;\n"+
+			"sends the redacted conversations of those sessions to that model (answers are cached, so each is sent once)")
 	return cmd
 }
 
@@ -627,6 +641,7 @@ func (a *app) doctorCmd() *cobra.Command {
 				problems++
 			} else {
 				fmt.Fprintf(w, "config  ok    %s (default=%s, level=%s)\n", a.cfgPath(), cfg.Share.Default, cfg.Share.Level)
+				fmt.Fprintf(w, "summary ok    %s\n", a.summarizerLine(cfg))
 			}
 			if st, err := a.openState(); err != nil {
 				fmt.Fprintf(w, "state   FAIL  %v\n", err)

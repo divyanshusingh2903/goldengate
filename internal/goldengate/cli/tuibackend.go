@@ -17,6 +17,8 @@ import (
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/adapters"
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/config"
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/discover"
+	"github.com/divyanshusingh2903/goldengate/internal/goldengate/llm"
+	"github.com/divyanshusingh2903/goldengate/internal/goldengate/secrets"
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/selection"
 	gsync "github.com/divyanshusingh2903/goldengate/internal/goldengate/sync"
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/tui"
@@ -41,6 +43,7 @@ type tuiBackend struct {
 type reviewedBatch struct {
 	batch gsync.Batch
 	cfg   config.Config
+	opts  tui.SyncOpts
 	at    time.Time
 }
 
@@ -49,12 +52,12 @@ const reviewMaxAge = 15 * time.Minute
 
 // takeReview returns the reviewed batch if it may be sent under cfg, and
 // forgets it either way: a review is sent at most once.
-func (b *tuiBackend) takeReview(cfg config.Config) (gsync.Batch, bool) {
+func (b *tuiBackend) takeReview(cfg config.Config, o tui.SyncOpts) (gsync.Batch, bool) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	r := b.reviewed
 	b.reviewed = nil
-	if r == nil || b.a.Now().Sub(r.at) > reviewMaxAge || !reflect.DeepEqual(r.cfg, cfg) {
+	if r == nil || b.a.Now().Sub(r.at) > reviewMaxAge || !reflect.DeepEqual(r.cfg, cfg) || r.opts != o {
 		return gsync.Batch{}, false
 	}
 	return r.batch, true
@@ -82,7 +85,8 @@ func (b *tuiBackend) syncer(ctx context.Context, cfg config.Config) (*gsync.Sync
 	if err != nil {
 		return nil, nil, err
 	}
-	s := &gsync.Syncer{Registry: reg, Config: cfg, Matcher: m, State: st, Home: b.a.Home, Now: b.a.Now, Resolver: b.a.resolver(cfg)}
+	s := &gsync.Syncer{Registry: reg, Config: cfg, Matcher: m, State: st, Home: b.a.Home, Now: b.a.Now, Resolver: b.a.resolver(cfg),
+		Summarizer: b.a.summarizer(cfg)}
 	return s, func() { _ = st.Close() }, nil
 }
 
@@ -155,6 +159,9 @@ func (b *tuiBackend) Snapshot(ctx context.Context) (tui.Snapshot, error) {
 		snap.Rows = append(snap.Rows, row)
 	}
 	snap.Warnings = res.Warnings
+	if c := a.summarizer(cfg); c != nil {
+		snap.Summarizer = c.Name()
+	}
 	snap.Sources, err = b.sourceStatus(ctx, cfg, perSource)
 	return snap, err
 }
@@ -415,7 +422,7 @@ func (b *tuiBackend) DeleteRemote(ctx context.Context, handle any) (string, erro
 }
 
 // Plan implements tui.Backend.
-func (b *tuiBackend) Plan(ctx context.Context) (tui.PlanInfo, error) {
+func (b *tuiBackend) Plan(ctx context.Context, o tui.SyncOpts) (tui.PlanInfo, error) {
 	cfg, err := b.a.load()
 	if err != nil {
 		return tui.PlanInfo{}, err
@@ -425,10 +432,15 @@ func (b *tuiBackend) Plan(ctx context.Context) (tui.PlanInfo, error) {
 		return tui.PlanInfo{}, err
 	}
 	defer closeFn()
-	batch, rep, err := s.Plan(ctx, gsync.RunOpts{})
+	batch, rep, err := s.Plan(ctx, gsync.RunOpts{Resummarize: o.Resummarize})
 	if err != nil {
 		return tui.PlanInfo{}, err
 	}
+	return planInfo(cfg, s, batch, rep), nil
+}
+
+// planInfo describes a plan for the TUI.
+func planInfo(cfg config.Config, s *gsync.Syncer, batch gsync.Batch, rep gsync.Report) tui.PlanInfo {
 	counts := map[string]int{}
 	var order []string
 	for _, p := range batch.Payloads() {
@@ -437,11 +449,15 @@ func (b *tuiBackend) Plan(ctx context.Context) (tui.PlanInfo, error) {
 		}
 		counts[p.Project]++
 	}
-	info := tui.PlanInfo{Sessions: batch.Len(), NotSelected: rep.NotSelected, Unchanged: rep.Unchanged, Warnings: rep.Warnings, Redactions: rep.Redactions, Server: cfg.Server.URL}
+	info := tui.PlanInfo{Sessions: batch.Len(), NotSelected: rep.NotSelected, Unchanged: rep.Unchanged, Warnings: rep.Warnings, Redactions: rep.Redactions, Server: cfg.Server.URL,
+		Stale: rep.Stale, Resummarized: rep.Resummarized}
+	if s.Summarizer != nil {
+		info.Summarizer = s.Summarizer.Name()
+	}
 	for _, k := range order {
 		info.Projects = append(info.Projects, tui.ProjectPlan{Label: k, Sessions: counts[k]})
 	}
-	return info, nil
+	return info
 }
 
 type discardSink struct{}
@@ -455,7 +471,7 @@ func (discardSink) Send(context.Context, []*model.SessionPayload) error { return
 // its progress bar moves while a big project uploads.
 const syncStep = 10
 
-func (b *tuiBackend) Sync(ctx context.Context, dry bool, emit func(tui.SyncEvent)) error {
+func (b *tuiBackend) Sync(ctx context.Context, dry bool, o tui.SyncOpts, emit func(tui.SyncEvent)) error {
 	cfg, err := b.a.load()
 	if err != nil {
 		return err
@@ -475,27 +491,37 @@ func (b *tuiBackend) Sync(ctx context.Context, dry bool, emit func(tui.SyncEvent
 	}
 	batch, reused := gsync.Batch{}, false
 	if !dry {
-		batch, reused = b.takeReview(cfg)
+		batch, reused = b.takeReview(cfg, o)
 	} else {
 		b.mu.Lock()
 		b.reviewed = nil // a new review replaces the old one
 		b.mu.Unlock()
 	}
+	var plan *tui.PlanInfo // only when planned now; a reused review was already shown
 	if !reused {
-		batch, _, err = s.Plan(ctx, gsync.RunOpts{OnPlanned: func() { emit(tui.SyncEvent{Kind: tui.SyncPrepared, Sessions: 1}) }})
+		var rep gsync.Report
+		batch, rep, err = s.Plan(ctx, gsync.RunOpts{Resummarize: o.Resummarize, OnPlanned: func(p *model.SessionPayload) {
+			ev := tui.SyncEvent{Kind: tui.SyncPrepared, Sessions: 1, Project: p.Project, Title: p.TitleOnly, By: "heuristic"}
+			if sm := p.Summary; sm != nil {
+				ev.Title, ev.By = sm.Title, sm.SummarizedBy
+			}
+			emit(ev)
+		}})
 		if err != nil {
 			return err
 		}
+		pi := planInfo(cfg, s, batch, rep)
+		plan = &pi
 	}
 	clean, finished := true, false // a review is kept only if it ran to the end without failures
 	defer func() {
 		if dry && clean && finished && ctx.Err() == nil {
 			b.mu.Lock()
-			b.reviewed = &reviewedBatch{batch: batch, cfg: cfg, at: b.a.Now()}
+			b.reviewed = &reviewedBatch{batch: batch, cfg: cfg, opts: o, at: b.a.Now()}
 			b.mu.Unlock()
 		}
 	}()
-	emit(tui.SyncEvent{Kind: tui.SyncPlanned, Sessions: batch.Len()})
+	emit(tui.SyncEvent{Kind: tui.SyncPlanned, Sessions: batch.Len(), Plan: plan})
 	st := s.State
 	if dry {
 		st = nil
@@ -612,7 +638,17 @@ func (b *tuiBackend) Settings(ctx context.Context) (tui.Settings, error) {
 		return tui.Settings{}, err
 	}
 	return tui.Settings{Level: cfg.Share.Level, Since: cfg.Share.Since, Sources: srcs, ExtraPatterns: slices.Clone(cfg.Redact.ExtraPatterns), EnrichGit: cfg.Enrich.Git,
-		Theme: cfg.UI.Theme}, nil
+		Theme: cfg.UI.Theme, Summarize: b.summarizeSettings(cfg)}, nil
+}
+
+func (b *tuiBackend) summarizeSettings(cfg config.Config) tui.SummarizeSettings {
+	sc := cfg.Summarize
+	out := tui.SummarizeSettings{Model: sc.Model, BaseURL: sc.BaseURL}
+	if sc.UsesModel() {
+		out.Provider = sc.Provider
+		_, out.KeySource = b.a.summarizerKey(sc.Provider)
+	}
+	return out
 }
 
 // SaveSettings implements tui.Backend. Nothing is written unless the whole
@@ -631,6 +667,7 @@ func (b *tuiBackend) SaveSettings(ctx context.Context, s tui.Settings) error {
 	cfg.Redact.ExtraPatterns = slices.Clone(s.ExtraPatterns)
 	cfg.Enrich.Git = s.EnrichGit
 	cfg.UI.Theme = s.Theme
+	cfg.Summarize.Provider, cfg.Summarize.Model, cfg.Summarize.BaseURL = s.Summarize.Provider, strings.TrimSpace(s.Summarize.Model), strings.TrimSpace(s.Summarize.BaseURL)
 	var include []string
 	for _, src := range s.Sources {
 		if src.Enabled {
@@ -642,6 +679,46 @@ func (b *tuiBackend) SaveSettings(ctx context.Context, s tui.Settings) error {
 		return errors.New("at least one source must stay enabled")
 	}
 	return config.Save(b.a.cfgPath(), cfg)
+}
+
+// SetSummarizerKey implements tui.Backend.
+func (b *tuiBackend) SetSummarizerKey(_ context.Context, provider, key string) error {
+	if _, ok := llm.Lookup(provider); !ok {
+		return fmt.Errorf("unknown provider %q", provider)
+	}
+	store := b.a.secretStore()
+	if key = strings.TrimSpace(key); key == "" {
+		if err := store.Delete(summarizerSecret(provider)); err != nil && !errors.Is(err, secrets.ErrNotFound) {
+			return err
+		}
+		return nil
+	}
+	return store.Set(summarizerSecret(provider), key)
+}
+
+// TestSummarizer implements tui.Backend.
+func (b *tuiBackend) TestSummarizer(ctx context.Context) (string, error) {
+	cfg, err := b.a.load()
+	if err != nil {
+		return "", err
+	}
+	return b.a.testSummarizer(ctx, cfg)
+}
+
+// SummarizerModels implements tui.Backend.
+func (b *tuiBackend) SummarizerModels(ctx context.Context, provider, baseURL string) ([]string, error) {
+	key, _ := b.a.summarizerKey(provider)
+	c, err := llm.New(provider, baseURL, key, "")
+	if err != nil {
+		return nil, err
+	}
+	l, ok := c.(llm.Lister)
+	if !ok {
+		return nil, errors.New("this provider cannot list its models")
+	}
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	return l.Models(ctx)
 }
 
 // Detect implements tui.Backend.

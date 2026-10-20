@@ -3,21 +3,21 @@
 ├──────────────────────────────────────────────────────────────────────────────────────────────────┤
 │▌Theme                               Golden Gate Light  ▾  ■■■■■■                                 │
 │ Share level                       ┌ Theme ─────────────────────────────┐                         │
-│ Look back                         │ ▌✓ Golden Gate Light  ■■■■■■ light │                         │
-│ Source CC Claude Code             │    Golden Gate Dark   ■■■■■■ dark  │                         │
-│ Source CX Codex                   │ ────────────────────────────────── │                         │
-│ Source OC OpenCode                │    Catppuccin Latte   ■■■■■■ light │                         │
-│ Source AI claude.ai               │    GitHub Light       ■■■■■■ light │ter                      │
-│ + add a redaction pattern (regex) │    Gruvbox Light      ■■■■■■ light │                         │
-│ Verify commits with local git     │    Solarized Light    ■■■■■■ light │                         │
-│ Session hook / schedule           │    Catppuccin Mocha   ■■■■■■ dark  │ment support)            │
-│                                   │    Dracula            ■■■■■■ dark  │                         │
-│                                   │    GitHub Dark        ■■■■■■ dark  │                         │
-│                                   │    Gruvbox Dark       ■■■■■■ dark  │                         │
-│                                   │    Monokai            ■■■■■■ dark  │                         │
-│                                   │    Nord               ■■■■■■ dark  │                         │
-│                                   │    Solarized Dark     ■■■■■■ dark  │                         │
-│                                   │    Tokyo Night        ■■■■■■ dark  │                         │
+│ Look back                         │ ▌✓ Golden Gate Light ■■■■■■ light  │                         │
+│ Summarizer                        │    Golden Gate Dark  ■■■■■■ dark   │ng is sent to a model    │
+│ Source CC Claude Code             │ ────────────────────────────────── │                         │
+│ Source CX Codex                   │    Catppuccin Latte  ■■■■■■ light  │                         │
+│ Source OC OpenCode                │    GitHub Light      ■■■■■■ light  │                         │
+│ Source AI claude.ai               │    Gruvbox Light     ■■■■■■ light  │ter                      │
+│ + add a redaction pattern (regex) │    Solarized Light   ■■■■■■ light  │                         │
+│ Verify commits with local git     │    Catppuccin Mocha  ■■■■■■ dark   │                         │
+│ Session hook / schedule           │    Dracula           ■■■■■■ dark   │ment support)            │
+│                                   │    GitHub Dark       ■■■■■■ dark   │                         │
+│                                   │    Gruvbox Dark      ■■■■■■ dark   │                         │
+│                                   │    Monokai           ■■■■■■ dark   │                         │
+│                                   │    Nord              ■■■■■■ dark   │                         │
+│                                   │    Solarized Dark    ■■■■■■ dark   │                         │
+│                                   │    Tokyo Night       ■■■■■■ dark   │                         │
 │                                   └────────────────────────────────────┘                         │
 │                                                                                                  │
 │                                                                                                  │

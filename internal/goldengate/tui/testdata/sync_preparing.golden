@@ -1,0 +1,34 @@
+┌ goldengate  1 Projects [2 Sync] 3 Server  4 Settings  ───────────────────── ● connected bridge.example.com ┐
+│ ① Review ──── ② Send   to bridge.example.com                                                               │
+├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Step 1 · Review — nothing is sent in this step                                                             │
+│                                                                                                            │
+│ Each new or changed session in the projects you share is, on this machine:                                 │
+│   1 read from its tool's log                                                                               │
+│   2 redacted: secrets, keys and paths outside the project are removed                                      │
+│   3 summarized by ollama:gemma2:2b on this machine: goals, what was done, outcomes                         │
+│                                                                                                            │
+│ [###################-------------------]  3 of ~6 sessions · ~10s each · about 30s left                    │
+│ 1 session kept the rule-based summary: the model did not answer                                            │
+│                                                                                                            │
+│ Just summarized                                                                                            │
+│ ⚠ Long refactor  ~/code/app  rules (model failed)                                                          │
+│ ✓ Add Ollama support  ~/code/app  ollama:gemma2:2b                                                         │
+│ ✓ Fix the theme dropdown  ~/code/app  ollama:gemma2:2b                                                     │
+│                                                                                                            │
+│ Model answers are cached: a session is summarized once per content, and the send reuses this review.       │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+│                                                                                                            │
+├────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ c cancel  esc back                                                                                         │
+└────────────────────────────────────────────────────────────────────────────────────────────────────────────┘

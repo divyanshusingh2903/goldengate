@@ -255,23 +255,23 @@ func TestBackendSyncReportsProgressAndDryRunRecordsNothing(t *testing.T) {
 	var events []tui.SyncEvent
 	emit := func(e tui.SyncEvent) { mu.Lock(); events = append(events, e); mu.Unlock() }
 
-	plan, err := be.Plan(ctx)
+	plan, err := be.Plan(ctx, tui.SyncOpts{})
 	if err != nil || plan.Sessions != 2 || len(plan.Projects) != 2 || plan.NotSelected != 1 || plan.Server != b.ts.URL {
 		t.Fatalf("plan: %+v %v", plan, err)
 	}
-	if err := be.Sync(ctx, true, emit); err != nil {
+	if err := be.Sync(ctx, true, tui.SyncOpts{}, emit); err != nil {
 		t.Fatal(err)
 	}
 	if ps, _ := b.st.ListProjects(ctx); len(ps) != 0 {
 		t.Fatal("a dry run sends nothing")
 	}
-	plan2, _ := be.Plan(ctx)
+	plan2, _ := be.Plan(ctx, tui.SyncOpts{})
 	if plan2.Sessions != 2 {
 		t.Fatal("a dry run records nothing: the plan is unchanged")
 	}
 
 	events = nil
-	if err := be.Sync(ctx, false, emit); err != nil {
+	if err := be.Sync(ctx, false, tui.SyncOpts{}, emit); err != nil {
 		t.Fatal(err)
 	}
 	kinds := map[tui.SyncEventKind]int{}
@@ -287,7 +287,7 @@ func TestBackendSyncReportsProgressAndDryRunRecordsNothing(t *testing.T) {
 	if len(ps) != 2 {
 		t.Fatalf("server holds %+v", ps)
 	}
-	if plan3, _ := be.Plan(ctx); plan3.Sessions != 0 || plan3.Unchanged != 2 {
+	if plan3, _ := be.Plan(ctx, tui.SyncOpts{}); plan3.Sessions != 0 || plan3.Unchanged != 2 {
 		t.Fatalf("after a real sync nothing is left to send: %+v", plan3)
 	}
 	// the unselected project never reached the server
@@ -310,7 +310,7 @@ func TestBackendSendReusesTheReviewOnlyWhileItIsValid(t *testing.T) {
 		}
 	}
 	// a change to what is shared after the review makes the send read everything again
-	if err := be.Sync(ctx, true, count); err != nil {
+	if err := be.Sync(ctx, true, tui.SyncOpts{}, count); err != nil {
 		t.Fatal(err)
 	}
 	s, _ := be.Snapshot(ctx)
@@ -318,7 +318,7 @@ func TestBackendSendReusesTheReviewOnlyWhileItIsValid(t *testing.T) {
 		t.Fatal(err)
 	}
 	prepared = 0
-	if err := be.Sync(ctx, false, count); err != nil {
+	if err := be.Sync(ctx, false, tui.SyncOpts{}, count); err != nil {
 		t.Fatal(err)
 	}
 	if prepared == 0 {
@@ -329,10 +329,10 @@ func TestBackendSendReusesTheReviewOnlyWhileItIsValid(t *testing.T) {
 	}
 	// a review is sent once: the next send plans again (and finds nothing)
 	prepared = 0
-	if err := be.Sync(ctx, false, count); err != nil {
+	if err := be.Sync(ctx, false, tui.SyncOpts{}, count); err != nil {
 		t.Fatal(err)
 	}
-	if plan, _ := be.Plan(ctx); plan.Sessions != 0 {
+	if plan, _ := be.Plan(ctx, tui.SyncOpts{}); plan.Sessions != 0 {
 		t.Fatalf("nothing left: %+v", plan)
 	}
 }
@@ -352,7 +352,7 @@ func TestBackendSyncFailureOfOneProjectDoesNotStopTheRest(t *testing.T) {
 		}
 	}
 	var events []tui.SyncEvent
-	err := backend(l).Sync(context.Background(), false, func(e tui.SyncEvent) { events = append(events, e) })
+	err := backend(l).Sync(context.Background(), false, tui.SyncOpts{}, func(e tui.SyncEvent) { events = append(events, e) })
 	if err != nil {
 		t.Fatalf("per-project failures are events, not a fatal error: %v", err)
 	}
@@ -368,7 +368,7 @@ func TestBackendSyncFailureOfOneProjectDoesNotStopTheRest(t *testing.T) {
 	if failed != 2 {
 		t.Fatalf("both projects fail visibly: %+v", events)
 	}
-	if plan, _ := backend(l).Plan(context.Background()); plan.Sessions != 2 || plan.Unchanged != 0 {
+	if plan, _ := backend(l).Plan(context.Background(), tui.SyncOpts{}); plan.Sessions != 2 || plan.Unchanged != 0 {
 		t.Errorf("failed pushes must not be recorded as synced, so both stay planned: %+v", plan)
 	}
 }

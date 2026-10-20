@@ -1,0 +1,40 @@
+┌ goldengate  1 Projects  2 Sync  3 Server [4 Settings] ─────────────────────────────── ● connected bridge.example.com ┐
+│ Changes are saved immediately                                                                                        │
+├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Theme                               Golden Gate Light  ▾  ■■■■■■                                                     │
+│ Share level                        [summary]  titles-only                                                            │
+│ Look back                          90d                                                                               │
+│▌Summarizer                          Local heuristic            ▾   nothing is sent to a model                        │
+│ Source CC Claude Code             ┌ Summarizer ───────────────────────────────────────────────────────────────┐      │
+│ Source CX Codex                   │ ▌✓ Local heuristic            local rules · nothing is sent               │      │
+│ Source OC OpenCode                │ ───────────────────────────────────────────────────────────────────────── │      │
+│ Source AI claude.ai               │    Anthropic API (Claude)     Claude Haiku · small and cheap              │      │
+│ + add a redaction pattern (regex) │    OpenAI API (ChatGPT)       GPT nano · OpenAI's cheapest model          │      │
+│ Verify commits with local git     │    Google Gemini API          Gemini Flash-Lite · Google AI Studio key    │      │
+│ Session hook / schedule           │    OpenCode Zen API           OpenCode's gateway · free and paid models   │      │
+│                                   │    Ollama (this machine)      not running here · install from ollama.com  │      │
+│                                   │    Custom (OpenAI-compatible) LM Studio, OpenRouter, any endpoint         │      │
+│                                   └───────────────────────────────────────────────────────────────────────────┘      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ ↑/↓ move  enter choose  esc cancel                                                                                   │
+└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘

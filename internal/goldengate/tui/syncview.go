@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // Syncing is two steps, the way a "review, then push" button works in a git
@@ -15,6 +17,10 @@ import (
 //     session is read, summarized and redacted exactly as it would be sent,
 //     and nothing leaves the machine. The result is a list of what would go.
 //  2. Send: one button sends exactly that. Nothing is sent without it.
+//
+// With a model summarizer configured, the review also counts synced sessions
+// whose summaries the model did not write, and offers to include them: that
+// re-runs the review with SyncOpts.Resummarize.
 
 type syncPhase int
 
@@ -48,7 +54,16 @@ type syncState struct {
 	err      string
 	cancel   context.CancelFunc
 	ch       chan tea.Msg
+	opts     SyncOpts // kept for "review again"; reset when the screen opens
+
+	// while the review prepares sessions
+	expect    int           // about how many it will prepare (from the projects' pending counts)
+	recent    []preparedOne // the last few prepared, newest last
+	fallbacks int           // sessions the model could not summarize (rules were used)
+	started   time.Time
 }
+
+type preparedOne struct{ project, title, by string }
 
 func newSyncState() syncState { return syncState{dry: true, proj: map[string]*projProgress{}} }
 
@@ -57,17 +72,26 @@ func (m *Model) openSync() tea.Cmd {
 	if m.sy.phase == syncRunning {
 		return nil
 	}
+	m.sy.opts = SyncOpts{}
 	return m.planSync()
 }
 
-// planSync starts step 1 over: plan, then check.
+// planSync starts step 1 over: the review pass plans as it goes and reports
+// each session as it is read, redacted and summarized, so a slow model shows
+// its progress instead of a blank wait.
 func (m *Model) planSync() tea.Cmd {
-	m.sy.phase, m.sy.err, m.sy.checked = syncPlanning, "", false
-	be, ctx := m.be, m.ctx
-	return func() tea.Msg {
-		p, err := be.Plan(ctx)
-		return planMsg{p, err}
+	s := &m.sy
+	stale := 0
+	if s.opts.Resummarize {
+		stale = s.plan.Stale
 	}
+	s.err, s.checked = "", false
+	s.plan = PlanInfo{Server: m.snap.Server, Summarizer: m.snap.Summarizer}
+	s.expect = stale
+	for _, r := range m.snap.Rows {
+		s.expect += r.Pending
+	}
+	return m.startSync(true)
 }
 
 func (m *Model) onPlan(msg planMsg) tea.Cmd {
@@ -77,7 +101,7 @@ func (m *Model) onPlan(msg planMsg) tea.Cmd {
 	}
 	m.sy.plan, m.sy.phase = msg.plan, syncReady
 	if msg.plan.Sessions == 0 {
-		m.sy.checked = true // nothing to review
+		m.sy.checked, m.sy.dry = true, true // nothing to review (and nothing being sent)
 		return nil
 	}
 	return m.startSync(true) // step 1 runs by itself: it sends nothing
@@ -86,15 +110,16 @@ func (m *Model) onPlan(msg planMsg) tea.Cmd {
 func (m *Model) startSync(dry bool) tea.Cmd {
 	s := &m.sy
 	s.phase, s.dry, s.err, s.errs, s.done, s.total, s.prepared = syncRunning, dry, "", 0, 0, 0, 0
+	s.recent, s.fallbacks, s.started = nil, 0, time.Now()
 	s.order, s.proj = nil, map[string]*projProgress{}
 	ctx, cancel := context.WithCancel(m.ctx)
 	s.cancel = cancel
 	ch := make(chan tea.Msg, 64)
 	s.ch = ch
-	be := m.be
+	be, o := m.be, s.opts
 	go func() {
 		defer close(ch)
-		err := be.Sync(ctx, dry, func(ev SyncEvent) {
+		err := be.Sync(ctx, dry, o, func(ev SyncEvent) {
 			select {
 			case ch <- syncEventMsg{ev}:
 			case <-ctx.Done():
@@ -121,8 +146,20 @@ func (m *Model) onSyncEvent(msg syncEventMsg) tea.Cmd {
 	switch ev.Kind {
 	case SyncPrepared:
 		s.prepared += ev.Sessions
+		if ev.Title != "" {
+			s.recent = append(s.recent, preparedOne{ev.Project, ev.Title, ev.By})
+			if len(s.recent) > 5 {
+				s.recent = s.recent[1:]
+			}
+		}
+		if m.snap.Summarizer != "" && ev.By == "heuristic" {
+			s.fallbacks++
+		}
 	case SyncPlanned:
 		s.total = ev.Sessions
+		if ev.Plan != nil {
+			s.plan = *ev.Plan
+		}
 	case SyncProgress:
 		p := s.get(ev.Project)
 		p.sent += ev.Sessions
@@ -175,6 +212,12 @@ func (s *syncState) canSend() bool {
 	return s.phase == syncReady && s.checked && s.dry && s.done > 0 && s.errs == 0 && s.err == "" && s.plan.Server != ""
 }
 
+// canResummarize reports whether the review can offer to include synced
+// sessions whose summaries the configured model did not write.
+func (s *syncState) canResummarize() bool {
+	return s.phase == syncReady && s.checked && s.dry && !s.opts.Resummarize && s.plan.Summarizer != "" && s.plan.Stale > 0
+}
+
 // syncBack leaves the sync screen (or, during setup, finishes it).
 func (m *Model) syncBack() tea.Cmd {
 	if m.scr == scrWizard {
@@ -220,6 +263,11 @@ func (m *Model) onKeySync(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if s.phase != syncRunning {
 			return m, m.planSync()
 		}
+	case "m":
+		if s.canResummarize() {
+			s.opts.Resummarize = true
+			return m, m.planSync()
+		}
 	}
 	return m, nil
 }
@@ -256,8 +304,8 @@ func (m *Model) stepper() string {
 		two = m.th.Plain.Render("② Send")
 	}
 	dest := "nowhere yet (no server)"
-	if s.plan.Server != "" {
-		dest = shortHost(s.plan.Server)
+	if srv := orDefault(s.plan.Server, m.snap.Server); srv != "" {
+		dest = shortHost(srv)
 	}
 	return " " + one + m.th.Border.Render(" ──── ") + two + m.th.Dim.Render("   to "+dest)
 }
@@ -267,6 +315,26 @@ func plural(n int, one string) string {
 		return "1 " + one
 	}
 	return fmt.Sprintf("%d %ss", n, one)
+}
+
+// resummarizeOffer is the line and button that include synced sessions with
+// rule-based (or another model's) summaries in this sync.
+func (m *Model) resummarizeOffer(add func(string), buttons func(...btn)) {
+	s := &m.sy
+	if !s.canResummarize() {
+		return
+	}
+	add(m.th.Warn.Render(fmt.Sprintf("%s rule-based summaries", plural(s.plan.Stale, "synced session")+" "+haveHas(s.plan.Stale))))
+	add(m.th.Dim.Render(clip("Including them sends their redacted conversations to "+s.plan.Summarizer+".", m.w-6)))
+	buttons(btn{m.th.Button, "m", "Include them in this sync"})
+	add("")
+}
+
+func haveHas(n int) string {
+	if n == 1 {
+		return "has"
+	}
+	return "have"
 }
 
 func (m *Model) viewSync() string {
@@ -291,6 +359,8 @@ func (m *Model) viewSync() string {
 		buttons(btn{m.th.Button, "r", "Try again"}, btn{m.th.Button, "esc", "Back"})
 	case s.phase == syncPlanning:
 		add(m.th.Dim.Render("Looking for new and changed sessions in the projects you share…"))
+	case s.phase == syncRunning && s.dry && s.total == 0:
+		m.preparingView(add, w)
 	case s.phase == syncReady && s.plan.Sessions == 0:
 		if len(s.plan.Projects) == 0 && s.plan.Unchanged == 0 {
 			add(m.th.Title.Render("Nothing is shared yet"))
@@ -300,6 +370,7 @@ func (m *Model) viewSync() string {
 			add(m.th.Dim.Render(fmt.Sprintf("The server already has all %s from the projects you share.", plural(s.plan.Unchanged, "session"))))
 		}
 		add("")
+		m.resummarizeOffer(add, buttons)
 		buttons(btn{m.th.Button, "enter", "Back to projects"})
 	default:
 		// title for the pass
@@ -387,7 +458,11 @@ func (m *Model) viewSync() string {
 		if s.plan.NotSelected > 0 {
 			add(m.th.Dim.Render(fmt.Sprintf("%s in projects you don't share stay on this machine.", plural(s.plan.NotSelected, "session"))))
 		}
+		if s.opts.Resummarize && s.plan.Resummarized > 0 {
+			add(m.th.Dim.Render(fmt.Sprintf("Includes %s re-summarized by %s.", plural(s.plan.Resummarized, "synced session"), s.plan.Summarizer)))
+		}
 		add("")
+		m.resummarizeOffer(add, buttons)
 
 		// the one thing to do next
 		switch {
@@ -413,10 +488,71 @@ func (m *Model) viewSync() string {
 	switch {
 	case s.phase == syncRunning:
 		f.hint = m.statusLine(m.hints(w, "c", "cancel", "esc", "back"))
+	case s.canSend() && s.canResummarize():
+		f.hint = m.statusLine(m.hints(w, "enter", "send", "m", "include re-summaries", "r", "review again", "esc", "not now"))
 	case s.canSend():
 		f.hint = m.statusLine(m.hints(w, "enter", "send", "r", "review again", "esc", "not now"))
 	default:
 		f.hint = m.statusLine(m.hints(w, "enter", "continue", "r", "review again", "esc", "back"))
 	}
 	return f.render()
+}
+
+// preparingView explains step 1 while it runs: what happens to each session,
+// who summarizes it, how far along it is, and what was just done.
+func (m *Model) preparingView(add func(string), w int) {
+	s := &m.sy
+	by := m.snap.Summarizer
+	local := by == "" || strings.HasPrefix(by, "ollama:")
+	add(m.th.Title.Render("Step 1 · Review") + m.th.Dim.Render(" — nothing is sent in this step"))
+	add("")
+	add("Each new or changed session in the projects you share is, on this machine:")
+	add(m.th.Accent.Render("  1 ") + "read from its tool's log")
+	add(m.th.Accent.Render("  2 ") + "redacted: secrets, keys and paths outside the project are removed")
+	switch {
+	case by == "":
+		add(m.th.Accent.Render("  3 ") + "summarized by local rules " + m.th.Dim.Render("(title, goals, outcomes, files, commands)"))
+	case local:
+		add(m.th.Accent.Render("  3 ") + "summarized by " + m.th.Accent.Render(by) + m.th.Dim.Render(" on this machine: goals, what was done, outcomes"))
+	default:
+		add(m.th.Accent.Render("  3 ") + "summarized by " + m.th.Accent.Render(by) + m.th.Dim.Render(": its redacted conversation goes to that provider"))
+	}
+	add("")
+
+	want := max(s.expect, s.prepared)
+	bw := min(w-48, 40)
+	switch {
+	case s.prepared == 0 && by != "":
+		add(m.coloredBar(0, max(want, 1), bw) + m.th.Dim.Render(fmt.Sprintf("  starting · the first answer can be slow while %s loads", by)))
+	case want > 0:
+		line := fmt.Sprintf("  %d of ~%d sessions", s.prepared, want)
+		elapsed := m.now().Sub(s.started)
+		if elapsed > 0 && elapsed < 24*time.Hour && s.prepared >= 2 {
+			per := elapsed / time.Duration(s.prepared)
+			line += m.th.Dim.Render(fmt.Sprintf(" · ~%s each", per.Round(100*time.Millisecond)))
+			if left := want - s.prepared; left > 0 {
+				line += m.th.Dim.Render(" · about " + (per * time.Duration(left)).Round(time.Second).String() + " left")
+			}
+		}
+		add(m.coloredBar(s.prepared, want, bw) + line)
+	default:
+		add(m.th.Dim.Render("Looking for new and changed sessions…"))
+	}
+	if s.fallbacks > 0 {
+		add(m.th.Warn.Render(fmt.Sprintf("%s kept the rule-based summary: the model did not answer", plural(s.fallbacks, "session"))))
+	}
+	if len(s.recent) > 0 {
+		add("")
+		add(m.th.Label.Render("Just summarized"))
+		for i := len(s.recent) - 1; i >= 0; i-- {
+			r := s.recent[i]
+			mark, tag := m.th.Good.Render("✓ "), m.th.Dim.Render("  "+r.by)
+			if m.snap.Summarizer != "" && r.by == "heuristic" {
+				mark, tag = m.th.Warn.Render("⚠ "), m.th.Warn.Render("  rules (model failed)")
+			}
+			add(mark + clip(r.title, max(w-lipgloss.Width(r.project)-lipgloss.Width(tag)-10, 20)) + m.th.Dim.Render("  "+r.project) + tag)
+		}
+	}
+	add("")
+	add(m.th.Dim.Render("Model answers are cached: a session is summarized once per content, and the send reuses this review."))
 }

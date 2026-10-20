@@ -94,14 +94,7 @@ func (m *Model) wizNext() tea.Cmd {
 }
 
 // openSyncKeep plans a sync without leaving the wizard.
-func (m *Model) openSyncKeep() tea.Cmd {
-	m.sy.phase = syncPlanning
-	be, ctx := m.be, m.ctx
-	return func() tea.Msg {
-		p, err := be.Plan(ctx)
-		return planMsg{p, err}
-	}
-}
+func (m *Model) openSyncKeep() tea.Cmd { return m.planSync() }
 
 func (m *Model) onKeyWizard(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	w := &m.wz

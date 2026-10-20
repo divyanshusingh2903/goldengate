@@ -26,7 +26,7 @@ import (
 
 // Size caps. A summary stays under MaxSummaryBytes so MCP responses are small.
 const (
-	MaxSummaryBytes  = 2048
+	MaxSummaryBytes  = 3072
 	MaxWorkItems     = 50
 	MaxWorkItemBytes = 8 << 10
 	maxFiles         = 20
@@ -51,6 +51,9 @@ type Options struct {
 	ProjectKey string
 	// ExtraRedactions are user regexes added to the built-in rules.
 	ExtraRedactions []string
+	// Model, when set, writes goals, description and outcomes with a language
+	// model on top of the heuristic summary (summary level only).
+	Model *ModelOptions
 }
 
 // Build produces the payload for one session. It never mutates s.
@@ -85,6 +88,9 @@ func Build(s *model.RawSession, o Options) (*model.SessionPayload, error) {
 	} else {
 		sum := heuristic(s, r)
 		sum.Title = title
+		if o.Model != nil {
+			o.Model.apply(s, rd, r, sum)
+		}
 		capSummary(sum)
 		p.Summary = sum
 		p.WorkItems = workItems(s, o.Work, r)
@@ -148,14 +154,15 @@ func firstPrompt(s *model.RawSession) string {
 }
 
 func heuristic(s *model.RawSession, r *scoped) *model.Summary {
-	sum := &model.Summary{GitBranch: r.str(s.GitBranch, 80)}
+	sum := &model.Summary{GitBranch: r.str(s.GitBranch, 80), SummarizedBy: Heuristic}
 	if g := firstPrompt(s); g != "" {
-		sum.Goal = r.str(g, maxGoal)
+		sum.FirstMessage = r.str(g, maxLast)
+		sum.Goals = []string{r.str(g, maxGoal)}
 	}
 	for i := len(s.Turns) - 1; i >= 0; i-- {
 		t := s.Turns[i]
 		if t.Role == "assistant" && strings.TrimSpace(t.LastText) != "" {
-			sum.LastAssistant = r.str(t.LastText, maxLast)
+			sum.LastMessage = r.str(t.LastText, maxLast)
 			break
 		}
 	}
@@ -177,9 +184,12 @@ func heuristic(s *model.RawSession, r *scoped) *model.Summary {
 	}
 	sum.ToolsUsed = topTools(s.ToolsUsed)
 	sum.Commands = commandNames(s)
-	sum.Outcome = outcome(s)
+	sum.Outcomes = outcomes(s)
 	return sum
 }
+
+// Heuristic is summarized_by for summaries written without a model.
+const Heuristic = "heuristic"
 
 // activityWindow is derived from the conversation's own timestamps, not from
 // file mtimes, so bookkeeping events appended to a log do not change the
@@ -321,7 +331,7 @@ func validName(s string) bool { return reName.MatchString(s) }
 
 var reTestCmd = regexp.MustCompile(`^(go test|npm (?:run )?test|pnpm test|yarn test|pytest|cargo test|make test|jest|vitest)\b`)
 
-func outcome(s *model.RawSession) string {
+func outcomes(s *model.RawSession) []string {
 	var parts []string
 	var lastTest *bool
 	commit, pr := false, false
@@ -356,7 +366,7 @@ func outcome(s *model.RawSession) string {
 	if pr {
 		parts = append(parts, "PR opened")
 	}
-	return strings.Join(parts, ", ")
+	return parts
 }
 
 func isGit(inv shellcmd.Invocation, sub string) bool {
@@ -367,18 +377,37 @@ func isGit(inv shellcmd.Invocation, sub string) bool {
 // capSummary shrinks the summary until its JSON fits MaxSummaryBytes.
 func capSummary(sum *model.Summary) {
 	size := func() int { b, _ := json.Marshal(sum); return len(b) }
+	shorten := func(l []string, n int) []string {
+		out := make([]string, len(l))
+		for i, v := range l {
+			out[i] = truncate(v, n)
+		}
+		return out
+	}
+	// Descriptive text (the model's, and the copied messages) shrinks first;
+	// the facts the rules extracted (files, commands, outcomes) go last.
 	steps := []func(){
-		func() { sum.LastAssistant = truncate(sum.LastAssistant, 200) },
-		func() { sum.Goal = truncate(sum.Goal, 160) },
+		func() { sum.FirstMessage = truncate(sum.FirstMessage, 200) },
+		func() { sum.LastMessage = truncate(sum.LastMessage, 200) },
+		func() { sum.Description = shorten(sum.Description, 160) },
+		func() { sum.OpenProblems = shorten(sum.OpenProblems, 120) },
+		func() { sum.Goals = shorten(sum.Goals, 120) },
+		func() { sum.FirstMessage = "" },
+		func() { sum.LastMessage = truncate(sum.LastMessage, 80) },
+		func() { sum.Description = head(shorten(sum.Description, 100), 4) },
+		func() { sum.OpenProblems = head(shorten(sum.OpenProblems, 80), 3) },
+		func() { sum.Goals = head(shorten(sum.Goals, 80), 4) },
+		func() { sum.LastMessage = "" },
+		func() { sum.Description = head(sum.Description, 2) },
+		func() { sum.OpenProblems = head(sum.OpenProblems, 1) },
+		func() { sum.Goals = head(sum.Goals, 2) },
 		func() { sum.FilesTouched = head(sum.FilesTouched, 10) },
 		func() { sum.Commands = head(sum.Commands, 6) },
-		func() { sum.LastAssistant = truncate(sum.LastAssistant, 80) },
 		func() { sum.FilesTouched = head(sum.FilesTouched, 4) },
-		func() { sum.Goal = "" },
-		func() { sum.LastAssistant = "" },
+		func() { sum.ToolsUsed = nil },
 		func() { sum.FilesTouched = nil },
 		func() { sum.Commands = nil },
-		func() { sum.ToolsUsed = nil },
+		func() { sum.Outcomes = head(shorten(sum.Outcomes, 80), 4) },
 		func() { sum.Title = truncate(sum.Title, 60) },
 	}
 	for _, step := range steps {

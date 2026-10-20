@@ -23,9 +23,12 @@ func DiffPayload(prev, cur *model.SessionPayload) []string {
 	chg("title", titleOf(prev), titleOf(cur))
 	ps, cs := prev.Summary, cur.Summary
 	if ps != nil && cs != nil {
-		chg("goal", ps.Goal, cs.Goal)
-		chg("outcome", ps.Outcome, cs.Outcome)
-		chg("last message", ps.LastAssistant, cs.LastAssistant)
+		out = append(out, setDiff("goal", ps.GoalList(), cs.GoalList())...)
+		out = append(out, setDiff("done", ps.Description, cs.Description)...)
+		out = append(out, setDiff("outcome", ps.OutcomeList(), cs.OutcomeList())...)
+		out = append(out, setDiff("open problem", ps.OpenProblems, cs.OpenProblems)...)
+		chg("last message", ps.Closing(), cs.Closing())
+		chg("summarized by", ps.SummarizedBy, cs.SummarizedBy)
 		out = append(out, setDiff("file", ps.FilesTouched, cs.FilesTouched)...)
 		out = append(out, setDiff("command", ps.Commands, cs.Commands)...)
 		if ps.TurnCount != cs.TurnCount {

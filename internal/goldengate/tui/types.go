@@ -64,6 +64,9 @@ type Snapshot struct {
 	Server   string // URL, "" when none is configured
 	FirstRun bool   // no config exists yet
 	Warnings []string
+	// Summarizer names who writes summaries: "" for the local rules, else
+	// "<provider>:<model>".
+	Summarizer string
 }
 
 // PreviewItem is one session exactly as it would be sent.
@@ -140,6 +143,11 @@ type SyncEvent struct {
 	Sessions int    // in this project (start/done) or in total (planned)
 	Projects int    // planned only
 	Err      string
+	// SyncPrepared: the session just summarized, and by whom ("heuristic"
+	// when the rules wrote it, including a model call that failed).
+	Title, By string
+	// SyncPlanned: the whole plan, so the review needs no separate pass.
+	Plan *PlanInfo
 }
 
 // ProjectPlan is what a sync would do for one project.
@@ -157,6 +165,19 @@ type PlanInfo struct {
 	Warnings    int
 	Redactions  map[string]int
 	Server      string // "" means a real sync is impossible (no server configured)
+	// Summarizer is the configured model ("" for the heuristic). Stale counts
+	// already-synced sessions whose summary it did not write; Resummarized
+	// those of them included in this plan (SyncOpts.Resummarize).
+	Summarizer   string
+	Stale        int
+	Resummarized int
+}
+
+// SyncOpts narrows a plan and its sync.
+type SyncOpts struct {
+	// Resummarize includes already-synced sessions whose summary the
+	// configured model did not write; their redacted conversations go to it.
+	Resummarize bool
 }
 
 // RemoteProject is something the server holds.
@@ -185,6 +206,15 @@ type Settings struct {
 	ExtraPatterns []string
 	EnrichGit     bool
 	Theme         string // color preset; "" is the default (Golden Gate Light)
+	Summarize     SummarizeSettings
+}
+
+// SummarizeSettings choose how summaries are written. Provider "" is the local
+// heuristic; "anthropic" and "openai" send the redacted conversation of shared
+// projects to a model (opt-in).
+type SummarizeSettings struct {
+	Provider, Model, BaseURL string
+	KeySource                string // where the API key comes from: "keyring", "$ANTHROPIC_API_KEY", "none" (read-only)
 }
 
 // ToolStatus is a detected coding tool, for the wizard.
@@ -217,12 +247,22 @@ type Backend interface {
 	Apply(ctx context.Context, a Action) (ActionResult, error)
 	Undo(ctx context.Context) (string, error)
 	DeleteRemote(ctx context.Context, handle any) (string, error)
-	Plan(ctx context.Context) (PlanInfo, error)
-	Sync(ctx context.Context, dry bool, emit func(SyncEvent)) error
+	Plan(ctx context.Context, o SyncOpts) (PlanInfo, error)
+	Sync(ctx context.Context, dry bool, o SyncOpts, emit func(SyncEvent)) error
 	Server(ctx context.Context) (ServerInfo, error)
 	DeleteServerProject(ctx context.Context, label string) error
 	Settings(ctx context.Context) (Settings, error)
 	SaveSettings(ctx context.Context, s Settings) error
+	// SetSummarizerKey stores a provider's API key in the OS keyring; an
+	// empty key removes it.
+	SetSummarizerKey(ctx context.Context, provider, key string) error
+	// TestSummarizer sends one tiny sample (not the user's data) to the
+	// configured model and describes the result.
+	TestSummarizer(ctx context.Context) (string, error)
+	// SummarizerModels lists the models a provider offers at baseURL (""
+	// means its default endpoint), using the stored key. For Ollama it also
+	// tells whether Ollama is running here.
+	SummarizerModels(ctx context.Context, provider, baseURL string) ([]string, error)
 	Detect(ctx context.Context) ([]ToolStatus, error)
 	Init(ctx context.Context, p InitParams) (InitResult, error)
 }

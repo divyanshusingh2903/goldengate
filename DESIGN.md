@@ -29,11 +29,11 @@ Non-goals
 ```
  laptop                                              cloud (Cloud Run)               assistant
 ┌──────────────────────────────┐   HTTPS + bearer   ┌──────────────────────┐  MCP   ┌─────────┐
-│ goldengate (TUI + CLI)        │ ─────────────────► │ goldengatebridge      │ ◄───── │ Gemini  │
+│ goldengate (TUI + CLI)       │ ─────────────────► │ goldengatebridge     │ ◄───── │ Gemini  │
 │  adapters: claude-code,      │   POST /v1/ingest  │  /v1/ingest (write)  │  /mcp  │ etc.    │
 │  codex, opencode, claude.ai  │                    │  /mcp (read-only)    │        └─────────┘
-│  select -> redact -> summarize│                   │  store: Firestore/   │
-│  state: ~/.config/goldengate  │                    │  SQLite/Postgres     │
+│ select -> redact -> summarize│                    │  store: Firestore/   │
+│  state: ~/.config/goldengate │                    │  SQLite/Postgres     │
 └──────────────────────────────┘                    └──────────────────────┘
 ```
 
@@ -223,7 +223,18 @@ refresh_state = false                       # look up live state via each tracke
 [redact]
 extra_patterns = []
 strip_home_prefix = true
+
+[ui]
+theme = "goldengate-light"       # a color preset; empty = goldengate-light
+
+[summarize]
+provider = ""                    # "" / heuristic (local, default) | anthropic | openai | gemini | opencode | custom
+model = ""                       # empty = the provider's default (see llm.Providers)
+base_url = ""                    # endpoint override; custom defaults to http://localhost:11434/v1 (Ollama)
+max_input_chars = 0              # conversation sent per session; 0 = 24000 (about 6k tokens)
 ```
+
+Per-source rules: `deny_source = ["codex@~/code/app"]` under `[share]` keeps one tool's sessions of a folder out while the rest of the folder stays shared.
 
 Rules
 - Deny beats allow. Globs supported (doublestar).
@@ -233,51 +244,65 @@ Rules
 
 ## 6. TUI (the "rich" part)
 
-Stack: Go, Bubble Tea + Bubbles + Lip Gloss (and `huh` for forms). Must work in a plain 80x24 terminal, degrade without color (`NO_COLOR`), and be keyboard-first with mouse support as a bonus. Responsive to resize.
+Stack: Go, Bubble Tea + Bubbles + Lip Gloss (and `huh` for forms). Must work in a plain 80x24 terminal, degrade without color (`NO_COLOR`), and be fully usable with either the keyboard or the mouse. Responsive to resize.
+
+Principle: every screen answers "what leaves this machine, and when?" in words, not only glyphs. A project's line says whether it is shared and what the next sync would do with it; nothing is described as "since the last sync" unless it has been synced.
 
 ### Screens
 1. **First-run wizard**: detect installed tools -> enter server URL + token (stored in keyring) -> choose share level -> pick projects -> dry-run preview -> first sync.
 2. **Projects (main screen)**: the project picker. Two panes.
 3. **Preview**: shows exactly what would be sent for the highlighted project (redacted summary), with redactions highlighted.
-4. **Sync**: live progress, per-project results, errors, retry.
+4. **Sync**: two steps. *Review* runs on open: plan, then a dry pass that reads, summarizes and redacts every session and sends nothing, then a table of what would go (per project, totals, redactions, what stays local). *Send* sends exactly the reviewed batch (it is reused while the config is unchanged and it is under 15 minutes old; otherwise the send plans again). Progress is per session while preparing and per step of 10 while sending; failures are listed per project and a retry skips what already arrived.
 5. **Server**: connection health, token check, what the server currently holds per project, delete remote data.
-6. **Settings**: share level, since-window, redaction patterns, sources on/off, schedule/hook installation.
+6. **Settings**: theme (dropdown with live preview), summarizer (dropdown: local heuristic, Anthropic, OpenAI, Gemini, OpenCode Zen or a custom OpenAI-compatible endpoint; choosing a model asks first and names what is sent; then rows for model, endpoint, API key (hidden input, stored in the OS keyring, never in the config) and a test call), share level, since-window, redaction patterns, sources on/off, schedule/hook installation.
 7. **Help**: keybinding overlay (`?`).
 
 ### Main screen mockup
 
+At 80x24 (the golden snapshot `internal/goldengate/tui/testdata/projects_80x24.golden`; wider windows add a source-tag column and the sources line):
+
 ```
-┌ goldengate ───────────────────────────────── server: ● connected ┐
-│ Sources  ● Claude Code 142  ● Codex 37  ● OpenCode 58  ○ claude.ai│
-├───────────────────────────────┬──────────────────────────────────┤
-│ Filter: /pharm_               │ pharmfindr                       │
-│                               │ ~/code/pharmfindr   main         │
-│ [x] ~/code/pharmfindr    ▲ 3  │ Sources: claude-code 41, codex 6 │
-│ [x] ~/code/forge         ▲ 1  │ Last activity: 2h ago            │
-│ [ ] ~/code/vihayas             │ Level: summary                   │
-│ [~] ~/code/website  (partial) │                                  │
-│ [-] ~/work/client-x   denied  │ Recent sessions                  │
-│ [ ] ~/scratch/tmp              │  • Fix OAuth redirect mismatch   │
-│                               │  • Add Go gRPC health checks     │
-│                               │ Redactions in preview: 2 secrets │
-├───────────────────────────────┴──────────────────────────────────┤
-│ space toggle  a all  d deny  p preview  s sync  / filter  ? help  │
-└──────────────────────────────────────────────────────────────────┘
+┌ goldengate ────────────────────────────────── ● connected bridge.example.com ┐
+│ [All 8]  Shared 4   To sync 3   Not shared 4                                 │
+├──────────────────────────────────────┬───────────────────────────────────────┤
+│ / search projects…                   │ pharmfindr                            │
+│▌ [x] ~/code/pharmfindr    ▲ 3 to sync│ ~/code/pharmfindr                     │
+│  [x] …aude/worktrees/fox  ▲ 2 to sync│                                       │
+│  [x] ~/code/forge         ▲ 1 to sync│ ● Shared · ▲ 3 to sync                │
+│  [ ] ~/code/vihayas        not shared│ 3 sessions waiting: 1 new, 1 changed  │
+│  [~] ~/code/website      ✓ synced 40h│ since the last sync.                  │
+│  [-] ~/work/client-x         ✕ denied│                                       │
+│  [ ] ~/scratch/tmp         not shared│ Kind      code · coding-tool sessions │
+│  [ ] claude-ai:Chats       not shared│ Sessions  47                          │
+│                                      │           CC Claude Code 41           │
+│                                      │           CX Codex 6                  │
+│                                      │ Activity  2h ago                      │
+│                                      │ Synced    2h ago · 44 on the server   │
+│                                      │ Level     summary                     │
+│                                      │ Rule      allowed by ~/code/pharmfindr│
+│                                      │                                       │
+│                                      │ [s Sync now] [space Unshare]          │
+│                                      │ [p Preview] [e Sources]               │
+├──────────────────────────────────────┴───────────────────────────────────────┤
+│ space unshare  p preview  s sync  f view  / search  d deny  u undo  ? help   │
+└──────────────────────────────────────────────────────────────────────────────┘
 ```
 
-Legend: `[x]` shared, `[ ]` not shared, `[~]` some sources shared, `[-]` denied, `▲ n` = new unsynced sessions.
+Legend: `[x]` shared, `[ ]` not shared, `[~]` some sources shared, `[-]` denied. Sync column: `▲ n to sync` (new or changed sessions the next sync sends; shared projects only), `✓ synced 2h` (up to date), `not shared` (stays local), `✕ denied`. Source tags: `CC` Claude Code, `CX` Codex, `OC` OpenCode (kind *code*), `AI` claude.ai, `GPT` ChatGPT (kind *chat*). The card states the project's sync state in a sentence: not shared ("nothing from this project leaves your machine"), shared and never synced, waiting, or up to date. The per-project sync record (`Synced`, "on the server") comes from the local state database.
 
 ### Required TUI features
 - Project list grouped by normalized folder across all tools, with per-source badges, session counts, last-activity time, and unsynced counts. Sort by recent / name / size.
 - Fuzzy filter (`/`), multi-select (space, `v` range, `a` all visible, `A` none), `d` deny, `u` undo.
-- Toggle sharing per project and optionally per source within a project.
+- Views (`f`, or click a chip): All / Shared / To sync / Not shared, each with its count.
+- Toggle sharing per project and optionally per source within a project (`e`). On a project that is not shared, ticking a source shares the project with only that source; a denied project must be shared first.
 - Tree mode (`t`) to browse by directory hierarchy and select a parent folder to cover children (writes a glob rule).
 - Live preview pane of the exact payload (redacted), with a diff of what changed since last sync.
 - Secret-redaction highlights, and a "paranoid" toggle that previews every string leaving the machine.
-- Dry-run (`--dry-run` and a TUI toggle): shows what would be sent and removes nothing.
-- Sync screen with progress bars, per-project status, and error details.
+- Dry-run (`--dry-run`; in the TUI the Review step): shows what would be sent and removes nothing.
+- Sync screen with a Review → Send stepper, progress bars that follow each session, per-project status, and error details.
 - Remote view: list/delete what the server holds; "forget project" action.
-- Theme: adaptive light/dark, consistent palette, no layout jank on resize.
+- Mouse: every action has a click target (rows, the share box, tabs, view chips, card and modal buttons, settings values, the theme dropdown, the hint-bar keys); wheel scrolls; double-click previews; ctrl+click marks. Views register click zones while they render, so a click can only hit what is on screen.
+- Themes: named presets (Golden Gate Light, the default, and Dark; GitHub, Gruvbox, Catppuccin, Solarized in light and dark; Dracula, Monokai, Nord, Tokyo Night), each one palette from which every style is derived. The terminal background is set to the theme's while the UI runs (OSC 11) and restored on exit. Chosen in Settings, saved as `[ui] theme`, overridable with `GOLDENGATE_THEME`. No layout jank on resize.
 - Non-interactive parity: everything the TUI does has a CLI equivalent so hooks/cron can use it.
 
 ## 7. CLI surface
@@ -293,6 +318,9 @@ goldengate install-hook claude-code   # adds a SessionEnd hook that runs `golden
 goldengate install-schedule     # launchd / systemd timer / Task Scheduler
 goldengate purge --project PATH # delete remote data
 goldengate token rotate read|ingest   # mint a replacement token; needs the admin token
+goldengate summarizer use heuristic|anthropic|openai|gemini|opencode|custom [--model M] [--base-url URL]   # opt-in model summaries
+goldengate summarizer set-key <provider> [--delete]   # API key into the OS keyring
+goldengate summarizer status|test   # where the key comes from; one sample call
 goldengate version
 ```
 
@@ -359,8 +387,16 @@ Redaction (`internal/utils/redact`)
 - State plainly in docs that regex redaction is best-effort, not a guarantee.
 
 Summarization (`internal/goldengate/summarize`)
-- **Default: heuristic, fully local.** Title (first user prompt, trimmed), goal, files touched (top N), tools used, commands run (names only), last assistant message (trimmed), outcome guess (tests passed, commit made), duration, turn count.
-- **Opt-in: LLM summarizer**, behind an interface, provider-agnostic (local command, Ollama, or an API key the user supplies). Off by default and the TUI must say clearly that transcript text will go to that model.
+- **Summary schema.** A coding session often covers several tasks, so the work fields are lists: `goals[]` (what was asked), `description[]` (what was done; model only), `outcomes[]` (tests, commits, PRs, open problems), plus `title`, `first_message`, `last_message`, files touched, tools used, command names, duration, turn count, git branch and `summarized_by` (`heuristic` or `<provider>:<model>`). The older single `goal` / `outcome` / `last_assistant` fields are still accepted and read, so stored records keep working.
+- **Default: heuristic, fully local.** Title (the tool's title or the first prompt), `goals` = the first prompt, `outcomes` from command results (tests passed or failing, commit made, PR opened), `first_message`, `last_message`, files touched (top N), tools used, commands run (names only), duration, turn count. No `description`.
+- **Opt-in: model summarizer** (`internal/goldengate/llm`, wired in `summarize/model.go`). The provider catalog is `llm.Providers`: `anthropic` (Claude through the official SDK; default `claude-haiku-5-5`, low effort, structured JSON output); `openai` (ChatGPT API, `gpt-5.4-nano`), `gemini` (Google's OpenAI-compatible endpoint, `gemini-3.5-flash-lite`), `opencode` (OpenCode Zen, `glm-5.3-flash`) and `custom` (any OpenAI-compatible endpoint; default a local Ollama), all through one chat-completions client with `response_format: json_schema`. Endpoints and models are defaults, overridable per config, since providers rename models often. Keys: OS keyring, else each provider's env variable (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `OPENCODE_API_KEY`, `GOLDENGATE_SUMMARIZER_KEY`). It runs on top of the heuristic and replaces title, goals and outcomes and adds description.
+  - Input: the session's developer and assistant messages, each redacted then capped at 2000 characters, the whole cut in the middle beyond `max_input_chars`, then redacted again; plus the file list, command names and observed results. Never tool output, file contents or command arguments.
+  - Output: constrained by a JSON schema, then every string is redacted again and capped (8 items per list, 300 characters each), and the summary is shrunk to 3 KB.
+  - Only sessions of shared projects reach it (the plan filters before loading). Previews run offline: cached answers only, never a call.
+  - Answers are cached in the state DB (`model_summaries`) by a hash of prompt version, model and exact input, so a session is summarized once per content and payload hashes stay stable.
+  - Calls run 4 at a time during a plan; results keep their order. A failed or unreadable answer keeps the heuristic summary and is counted (`ModelFailures`).
+  - Re-summarizing: the plan skips sessions whose file stat is unchanged, so turning the model on affects only new or changed sessions. `RunOpts.Resummarize` (CLI `sync --resummarize`; Sync screen button "Include them in this sync", which re-runs the review with the flag) also loads already-pushed sessions of shared projects whose stored payload's `summary.summarized_by` differs from the configured model's name (the heuristic, or another model; titles-only payloads have no summary and are left alone). They are rebuilt like any session: the model cache prevents a second call for the same input, and the content-hash comparison pushes only those whose payload changed (a failed call keeps the heuristic summary, so nothing is pushed). Without the flag such sessions are counted in `Report.Stale`, which the CLI prints and the review shows.
+  - Off by default. Turning it on (CLI `summarizer use`, or Settings → Summarizer) states what will be sent; the TUI asks for confirmation. Keys come from the OS keyring (`summarizer set-key`) or `ANTHROPIC_API_KEY` / `OPENAI_API_KEY`.
 - Hard size caps per summary (e.g. 2 KB) so MCP responses stay small. Work items (see 4.1) are carried as separate structured records alongside the summary, with their own caps, and are shown in the preview exactly as they will be sent.
 
 ## 9. Server

@@ -34,7 +34,7 @@ func (m *Model) typing() bool {
 	case scrProjects:
 		return m.pk.filtering
 	case scrSettings:
-		return m.st.editing || m.st.dd
+		return m.st.editing || m.st.dd != menuNone
 	case scrWizard:
 		return m.wz.step == wizServer && !m.wz.done && m.wz.mode != 2
 	}

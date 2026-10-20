@@ -175,8 +175,8 @@ func (m *Model) onMouse(msg tea.MouseMsg) (tea.Model, tea.Cmd) {
 		if m.modal != nil {
 			m.modal = nil
 		}
-		if m.st.dd {
-			return m, m.closeThemeMenu(false)
+		if m.st.dd != menuNone {
+			return m, m.closeMenu(false)
 		}
 		m.help = false
 	}

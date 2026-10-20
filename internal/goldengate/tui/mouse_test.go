@@ -116,11 +116,11 @@ func TestCardExplainsSyncState(t *testing.T) {
 func TestMouseSettings(t *testing.T) {
 	h := newHarness(t, 100, 30)
 	h.key("4")
-	h.clickAt(10, yBody+3, false) // label of "Source CC Claude Code": selects only
-	if h.m.st.cursor != 3 || len(h.be.saved) != 0 {
+	h.clickAt(10, yBody+4, false) // label of "Source CC Claude Code": selects only
+	if h.m.st.cursor != 4 || len(h.be.saved) != 0 {
 		t.Fatalf("a click on the label selects: cursor %d, saved %d", h.m.st.cursor, len(h.be.saved))
 	}
-	h.clickAt(10, yBody+3, false) // second click changes it
+	h.clickAt(10, yBody+4, false) // second click changes it
 	if len(h.be.saved) != 1 || h.be.saved[0].Sources[0].Enabled {
 		t.Fatalf("a second click toggles the source: %+v", h.be.saved)
 	}

@@ -245,10 +245,17 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case serverDelMsg:
 		return m, m.onServerDelete(msg)
 	case settingsMsg:
-		m.onSettings(msg)
-		return m, nil
+		return m, m.onSettings(msg)
 	case savedMsg:
 		return m, m.onSaved(msg)
+	case keySavedMsg:
+		return m, m.onKeySaved(msg)
+	case testDoneMsg:
+		m.onTestDone(msg)
+		return m, nil
+	case modelsMsg:
+		m.onModels(msg)
+		return m, nil
 	case detectMsg:
 		m.onDetect(msg)
 		return m, nil

@@ -256,9 +256,12 @@ func SearchText(p *model.SessionPayload) string {
 	add(p.TitleOnly)
 	if s := p.Summary; s != nil {
 		add(s.Title)
-		add(s.Goal)
-		add(s.LastAssistant)
-		add(s.Outcome)
+		add(strings.Join(s.GoalList(), " "))
+		add(strings.Join(s.Description, " "))
+		add(strings.Join(s.OpenProblems, " "))
+		add(strings.Join(s.OutcomeList(), " "))
+		add(s.FirstMessage)
+		add(s.Closing())
 		add(strings.Join(s.FilesTouched, " "))
 	}
 	for _, w := range p.WorkItems {

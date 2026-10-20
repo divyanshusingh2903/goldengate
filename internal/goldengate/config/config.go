@@ -28,7 +28,27 @@ type Config struct {
 	Issues    Issues    `toml:"issues"`
 	Redact    Redact    `toml:"redact"`
 	UI        UI        `toml:"ui"`
+	Summarize Summarize `toml:"summarize"`
 }
+
+// Summarize chooses how session summaries are written. The default is the
+// local heuristic; a model is opt-in, and then the redacted conversation of
+// shared projects is sent to it.
+type Summarize struct {
+	// Provider is "" or "heuristic" (local, default), or a model backend:
+	// "anthropic", "openai" (ChatGPT), "gemini", "opencode" (OpenCode Zen) or
+	// "custom" (any OpenAI-compatible endpoint, e.g. a local Ollama).
+	Provider string `toml:"provider,omitempty"`
+	// Model is the model id; empty means the provider's default.
+	Model string `toml:"model,omitempty"`
+	// BaseURL overrides the provider's endpoint (not used by anthropic).
+	BaseURL string `toml:"base_url,omitempty"`
+	// MaxInputChars bounds the conversation sent per session (default 24000).
+	MaxInputChars int `toml:"max_input_chars,omitempty"`
+}
+
+// UsesModel reports whether summaries are written by a language model.
+func (s Summarize) UsesModel() bool { return s.Provider != "" && s.Provider != "heuristic" }
 
 // UI holds interface preferences.
 type UI struct {
@@ -113,6 +133,17 @@ func (c Config) Validate() error {
 	}
 	if _, err := ParseSince(c.Share.Since); err != nil {
 		return err
+	}
+	switch c.Summarize.Provider {
+	case "", "heuristic", "anthropic", "openai", "gemini", "opencode", "ollama", "custom":
+	default:
+		return fmt.Errorf("config: summarize.provider must be heuristic, anthropic, openai, gemini, opencode, ollama or custom, got %q", c.Summarize.Provider)
+	}
+	if c.Summarize.MaxInputChars < 0 {
+		return errors.New("config: summarize.max_input_chars must not be negative")
+	}
+	if u := c.Summarize.BaseURL; u != "" && !strings.HasPrefix(u, "http://") && !strings.HasPrefix(u, "https://") {
+		return fmt.Errorf("config: summarize.base_url must be an http(s) URL, got %q", u)
 	}
 	for _, sd := range c.Share.SourceDeny {
 		if _, _, ok := selection.SplitSourceRule(sd); !ok {

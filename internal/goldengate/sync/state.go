@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"github.com/divyanshusingh2903/goldengate/internal/goldengate/summarize"
 	"os"
 	"path/filepath"
 	"time"
@@ -34,6 +35,7 @@ CREATE TABLE IF NOT EXISTS sessions(
   PRIMARY KEY(source, session_id));
 CREATE INDEX IF NOT EXISTS sessions_project ON sessions(project);
 CREATE TABLE IF NOT EXISTS tombstones(project TEXT PRIMARY KEY, created_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS model_summaries(key TEXT PRIMARY KEY, answer TEXT NOT NULL, created_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS imports(
   id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT NOT NULL, path TEXT NOT NULL, added_at INTEGER NOT NULL, UNIQUE(source, path));
 `
@@ -177,6 +179,31 @@ func (s *State) Count(ctx context.Context) (int, error) {
 		return 0, fmt.Errorf("state: count: %w", err)
 	}
 	return n, nil
+}
+
+// SummaryCache stores model answers in the state database, so a session is
+// summarized once per content and model, across runs and previews.
+func (s *State) SummaryCache(ctx context.Context, now func() time.Time) summarize.Cache {
+	return stateCache{s, ctx, now}
+}
+
+type stateCache struct {
+	st  *State
+	ctx context.Context
+	now func() time.Time
+}
+
+func (c stateCache) Get(key string) ([]byte, bool) {
+	var v string
+	if err := c.st.db.QueryRowContext(c.ctx, `SELECT answer FROM model_summaries WHERE key=?`, key).Scan(&v); err != nil {
+		return nil, false
+	}
+	return []byte(v), true
+}
+
+func (c stateCache) Put(key string, value []byte) {
+	_, _ = c.st.db.ExecContext(c.ctx, `INSERT INTO model_summaries(key, answer, created_at) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET answer=excluded.answer`,
+		key, string(value), c.now().Unix()) // a lost cache entry only costs a call
 }
 
 // ProjectStat is what the server already holds for a project, as far as this

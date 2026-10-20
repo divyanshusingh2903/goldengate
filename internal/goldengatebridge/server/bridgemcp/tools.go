@@ -130,27 +130,34 @@ func result(lines []string) *mcp.CallToolResult {
 
 // SessionView is the tool-facing form of a stored session. Every string is untrusted data.
 type SessionView struct {
-	ID            string   `json:"id"`
-	Source        string   `json:"source"`
-	Project       string   `json:"project"`
-	Title         string   `json:"title"`
-	UpdatedAt     string   `json:"updated_at"`
-	Level         string   `json:"level"`
-	Goal          string   `json:"goal,omitempty"`
-	Outcome       string   `json:"outcome,omitempty"`
-	LastAssistant string   `json:"last_assistant,omitempty"`
-	FilesTouched  []string `json:"files_touched,omitempty"`
-	Commands      []string `json:"commands,omitempty"`
-	GitBranch     string   `json:"git_branch,omitempty"`
+	ID           string   `json:"id"`
+	Source       string   `json:"source"`
+	Project      string   `json:"project"`
+	Title        string   `json:"title"`
+	UpdatedAt    string   `json:"updated_at"`
+	Level        string   `json:"level"`
+	Goals        []string `json:"goals,omitempty"`
+	Description  []string `json:"description,omitempty"` // what was done, one entry per task
+	Outcomes     []string `json:"outcomes,omitempty"`
+	OpenProblems []string `json:"open_problems,omitempty"`
+	FirstMessage string   `json:"first_message,omitempty"`
+	LastMessage  string   `json:"last_message,omitempty"`
+	FilesTouched []string `json:"files_touched,omitempty"`
+	Commands     []string `json:"commands,omitempty"`
+	GitBranch    string   `json:"git_branch,omitempty"`
+	SummarizedBy string   `json:"summarized_by,omitempty"`
 }
 
 func viewOf(r store.SessionRecord, full bool) SessionView {
 	p := r.Payload
 	v := SessionView{ID: p.SessionID, Source: p.Source, Project: p.Project, UpdatedAt: ts(p.UpdatedAt), Level: p.Level, Title: p.TitleOnly}
 	if sm := p.Summary; sm != nil {
-		v.Title, v.Outcome, v.GitBranch = sm.Title, sm.Outcome, sm.GitBranch
+		// older records carry goal/outcome/last_assistant; the accessors read either
+		v.Title, v.Outcomes, v.GitBranch = sm.Title, sm.OutcomeList(), sm.GitBranch
 		if full {
-			v.Goal, v.LastAssistant, v.FilesTouched, v.Commands = sm.Goal, sm.LastAssistant, sm.FilesTouched, sm.Commands
+			v.Goals, v.Description, v.FirstMessage, v.LastMessage = sm.GoalList(), sm.Description, sm.FirstMessage, sm.Closing()
+			v.OpenProblems = sm.OpenProblems
+			v.FilesTouched, v.Commands, v.SummarizedBy = sm.FilesTouched, sm.Commands, sm.SummarizedBy
 		}
 	}
 	return v
@@ -159,15 +166,21 @@ func viewOf(r store.SessionRecord, full bool) SessionView {
 func sessionLines(now time.Time, v SessionView, detail bool) []string {
 	updated, _ := time.Parse(time.RFC3339, v.UpdatedAt)
 	l := []string{fmt.Sprintf("- [%s] %s (%s, %s) id=%s", clean(v.Source), clean(v.Title), ago(now, updated), clean(v.Project), clean(v.ID))}
-	if v.Outcome != "" {
-		l = append(l, "    outcome: "+clean(v.Outcome))
-	}
-	if detail {
-		if v.Goal != "" {
-			l = append(l, "    goal: "+clean(v.Goal))
+	list := func(name string, vs []string) {
+		for _, x := range vs {
+			l = append(l, "    "+name+": "+clean(x))
 		}
-		if v.LastAssistant != "" {
-			l = append(l, "    last message: "+clean(v.LastAssistant))
+	}
+	list("outcome", v.Outcomes)
+	if detail {
+		list("goal", v.Goals)
+		list("done", v.Description)
+		list("open problem", v.OpenProblems)
+		if v.FirstMessage != "" && len(v.Description) > 0 {
+			l = append(l, "    first message: "+clean(v.FirstMessage))
+		}
+		if v.LastMessage != "" {
+			l = append(l, "    last message: "+clean(v.LastMessage))
 		}
 		if len(v.FilesTouched) > 0 {
 			l = append(l, "    files: "+clean(strings.Join(v.FilesTouched, ", ")))

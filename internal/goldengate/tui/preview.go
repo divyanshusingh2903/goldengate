@@ -156,11 +156,24 @@ func (m *Model) renderPreview(pv Preview, width int) string {
 		p := it.Payload
 		wrap("  ", "Title: "+m.highlight(titleOf(&p)))
 		if s := p.Summary; s != nil {
-			if s.Goal != "" {
-				wrap("  ", "Goal: "+m.highlight(s.Goal))
+			list := func(name string, vs []string) {
+				switch len(vs) {
+				case 0:
+				case 1:
+					wrap("  ", name+": "+m.highlight(vs[0]))
+				default:
+					b.WriteString("  " + name + ":\n")
+					for _, v := range vs {
+						wrap("    • ", m.highlight(v))
+					}
+				}
 			}
-			if s.Outcome != "" {
-				wrap("  ", "Outcome: "+m.highlight(s.Outcome))
+			list("Goals", s.GoalList())
+			list("Done", s.Description)
+			list("Outcomes", s.OutcomeList())
+			list("Open problems", s.OpenProblems)
+			if s.FirstMessage != "" && len(s.Description) > 0 { // the heuristic's goal already is the first message
+				wrap("  ", "First message: "+m.highlight(s.FirstMessage))
 			}
 			if len(s.FilesTouched) > 0 {
 				wrap("  ", "Files: "+m.highlight(strings.Join(s.FilesTouched, ", ")))
@@ -168,9 +181,14 @@ func (m *Model) renderPreview(pv Preview, width int) string {
 			if len(s.Commands) > 0 {
 				wrap("  ", "Commands: "+strings.Join(s.Commands, ", "))
 			}
-			if s.LastAssistant != "" {
-				wrap("  ", "Last message: "+m.highlight(s.LastAssistant))
+			if c := s.Closing(); c != "" {
+				wrap("  ", "Last message: "+m.highlight(c))
 			}
+			by := s.SummarizedBy
+			if by == "" || by == "heuristic" {
+				by = "local heuristic"
+			}
+			wrap("  ", m.th.Dim.Render("Summarized by "+by))
 		}
 		if len(p.WorkItems) > 0 {
 			b.WriteString("  Work items:\n")

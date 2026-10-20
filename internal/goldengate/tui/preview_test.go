@@ -8,7 +8,7 @@ import (
 )
 
 func TestPreviewScreen(t *testing.T) {
-	h := newHarness(t, 100, 40)
+	h := newHarness(t, 100, 50)
 	h.key("p")
 	if h.m.scr != scrPreview {
 		t.Fatal("p opens the preview")
@@ -16,7 +16,8 @@ func TestPreviewScreen(t *testing.T) {
 	h.contains("~/code/pharmfindr", "level summary", "Fix OAuth redirect mismatch", "Since the last sync:",
 		"+ file auth/redirect_test.go", "[REDACTED:aws-access-key]", "pull_request example/pharmfindr#7 [mentioned] (text)",
 		"commit pharmfindr@abc1234 [created] (tool_result)", "2 redactions", "showing the newest 3 of 47 sessions")
-	h.checkGeometry(100, 40)
+	h.contains("Goals: The login redirect fails on staging", "Outcomes:", "• tests passed", "Summarized by local heuristic")
+	h.checkGeometry(100, 50)
 	h.golden("preview_summary")
 	h.key("esc")
 	if h.m.scr != scrProjects {
@@ -66,7 +67,7 @@ func TestDiffPayload(t *testing.T) {
 	cur := &model.SessionPayload{Level: "summary", Summary: &model.Summary{Title: "New", Outcome: "tests passed", FilesTouched: []string{"a.go", "c.go"}, Commands: []string{"go test", "git commit"}, TurnCount: 3},
 		WorkItems: []model.WorkItem{{Kind: "pull_request", Key: "o/r#1", Status: "merged"}, {Kind: "issue", Key: "linear:ENG-5", Status: "created"}}}
 	got := strings.Join(DiffPayload(prev, cur), "\n")
-	for _, want := range []string{`title: "Old" -> "New"`, `outcome: "tests failing" -> "tests passed"`, "+ file c.go", "- file b.go", "+ command git commit",
+	for _, want := range []string{`title: "Old" -> "New"`, "+ outcome tests passed", "- outcome tests failing", "+ file c.go", "- file b.go", "+ command git commit",
 		"turns: 2 -> 3", "~ pull_request o/r#1: created -> merged", "+ issue linear:ENG-5 [created]", "- commit r@abc"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("diff is missing %q:\n%s", want, got)

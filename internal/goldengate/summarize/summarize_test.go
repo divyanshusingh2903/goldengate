@@ -51,8 +51,8 @@ func TestSummaryLevel(t *testing.T) {
 	if got := strings.Join(p.Summary.Commands, ","); got != "git commit,go test" {
 		t.Errorf("commands must be names only, got %q", got)
 	}
-	if p.Summary.Outcome != "tests passed, commit made" {
-		t.Errorf("outcome: %q", p.Summary.Outcome)
+	if got := strings.Join(p.Summary.Outcomes, ", "); got != "tests passed, commit made" {
+		t.Errorf("outcomes: %q", got)
 	}
 	if _, ok := p.Summary.ToolsUsed["mcp:save_issue"]; !ok {
 		t.Errorf("mcp tool name not normalized: %v", p.Summary.ToolsUsed)
@@ -176,10 +176,11 @@ func TestCommandNamesIgnoreHeredocsAndKeywords(t *testing.T) {
 			t.Errorf("missing %q in %s", want, got)
 		}
 	}
-	if strings.Contains(p.Summary.Outcome, "commit made") {
-		t.Errorf("commit text inside a heredoc is not a commit: %q", p.Summary.Outcome)
+	outs := strings.Join(p.Summary.Outcomes, ", ")
+	if strings.Contains(outs, "commit made") {
+		t.Errorf("commit text inside a heredoc is not a commit: %q", outs)
 	}
-	if !strings.Contains(p.Summary.Outcome, "PR opened") || !strings.Contains(p.Summary.Outcome, "tests passed") {
-		t.Errorf("outcome: %q", p.Summary.Outcome)
+	if !strings.Contains(outs, "PR opened") || !strings.Contains(outs, "tests passed") {
+		t.Errorf("outcomes: %q", outs)
 	}
 }

@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"github.com/divyanshusingh2903/goldengate/internal/goldengate/llm"
 	"slices"
 	"strings"
 
@@ -20,6 +21,11 @@ const (
 	setGit
 	setNote
 	setTheme
+	setSummarizer
+	setSumModel
+	setSumURL
+	setSumKey
+	setSumTest
 )
 
 type settingRow struct {
@@ -38,9 +44,17 @@ type settingsState struct {
 	input   textinput.Model
 	err     string
 
-	dd       bool   // the theme dropdown is open
-	ddCursor int    // highlighted theme in it
-	ddOrig   string // the theme before the dropdown opened (esc returns to it)
+	dd       menuKind // which dropdown is open
+	ddCursor int      // highlighted item in it
+	ddOrig   string   // the value before it opened (esc returns to it)
+
+	test     string // the summarizer test's last result
+	focusKey bool   // after choosing a provider, go to its API key
+
+	ollama        string   // Ollama's state for the menu: "", "checking…", "running · 3 models", …
+	models        []string // models the current provider offers
+	modelsErr     string
+	modelsLoading bool
 }
 
 func newSettingsState(blink bool) settingsState {
@@ -56,13 +70,29 @@ func (m *Model) openSettings() tea.Cmd {
 	}
 }
 
-func (m *Model) onSettings(msg settingsMsg) {
+func (m *Model) onSettings(msg settingsMsg) tea.Cmd {
 	if msg.err != nil {
 		m.st.err = msg.err.Error()
-		return
+		return nil
 	}
 	m.st.s, m.st.loaded, m.st.err = msg.s, true, ""
+	if m.st.focusKey { // a provider was just chosen: its key, or for a local one its model, comes next
+		m.st.focusKey = false
+		next := setSumKey
+		if p, ok := llm.Lookup(m.st.s.Summarize.Provider); ok && p.KeyOptional {
+			next = setSumModel
+		}
+		for i, r := range m.settingRows() {
+			if r.kind == next {
+				m.st.cursor = i
+			}
+		}
+		if next == setSumModel {
+			return m.openModelMenu() // pick from what is installed
+		}
+	}
 	m.st.cursor = max(min(m.st.cursor, len(m.settingRows())-1), 0)
+	return nil
 }
 
 func (m *Model) onSaved(msg savedMsg) tea.Cmd {
@@ -90,6 +120,21 @@ func (m *Model) settingRows() []settingRow {
 		{kind: setTheme, label: "Theme", value: themeName(s.Theme)},
 		{kind: setLevel, label: "Share level", value: s.Level},
 		{kind: setSince, label: "Look back", value: orNone(s.Since)},
+		{kind: setSummarizer, label: "Summarizer", value: s.Summarize.Provider},
+	}
+	if p, ok := llm.Lookup(s.Summarize.Provider); ok {
+		sm := s.Summarize
+		def := "(choose one)"
+		if p.Model != "" {
+			def = p.Model + " (default)"
+		}
+		rows = append(rows, settingRow{kind: setSumModel, label: "  Model", value: orDefault(sm.Model, def) + " ▾"})
+		if p.BaseURL != "" {
+			rows = append(rows, settingRow{kind: setSumURL, label: "  Endpoint", value: orDefault(sm.BaseURL, p.BaseURL+" (default)")})
+		}
+		rows = append(rows,
+			settingRow{kind: setSumKey, label: "  API key", value: keyNote(sm, p)},
+			settingRow{kind: setSumTest, label: "  Test", value: m.st.test})
 	}
 	for i, src := range s.Sources {
 		v := "off"
@@ -121,62 +166,6 @@ func themeName(s string) string {
 	return n
 }
 
-// openThemeMenu opens the theme dropdown on the current theme.
-func (m *Model) openThemeMenu() {
-	st := &m.st
-	st.dd, st.ddOrig = true, themeName(st.s.Theme)
-	for i, n := range ThemeNames() {
-		if n == st.ddOrig {
-			st.ddCursor = i
-		}
-	}
-}
-
-// moveThemeMenu moves the dropdown cursor and previews that theme.
-func (m *Model) moveThemeMenu(i int) {
-	names := ThemeNames()
-	m.st.ddCursor = min(max(i, 0), len(names)-1)
-	m.applyTheme(names[m.st.ddCursor])
-}
-
-// closeThemeMenu keeps the highlighted theme (and saves it) or reverts.
-func (m *Model) closeThemeMenu(keep bool) tea.Cmd {
-	st := &m.st
-	st.dd = false
-	if !keep {
-		m.applyTheme(st.ddOrig)
-		return nil
-	}
-	name := ThemeNames()[st.ddCursor]
-	m.applyTheme(name)
-	if name == themeName(st.s.Theme) && st.s.Theme != "" {
-		return nil
-	}
-	s := st.s
-	s.Theme = name
-	st.s = s
-	return m.save(s)
-}
-
-func (m *Model) onKeyThemeMenu(k tea.KeyMsg) (tea.Model, tea.Cmd) {
-	c := m.st.ddCursor
-	switch k.String() {
-	case "up", "k":
-		m.moveThemeMenu(c - 1)
-	case "down", "j":
-		m.moveThemeMenu(c + 1)
-	case "home", "g":
-		m.moveThemeMenu(0)
-	case "end", "G":
-		m.moveThemeMenu(len(ThemeNames()) - 1)
-	case "enter", " ":
-		return m, m.closeThemeMenu(true)
-	case "esc", "q", "backspace":
-		return m, m.closeThemeMenu(false)
-	}
-	return m, nil
-}
-
 // swatch shows a palette's main colors.
 func (m *Model) swatch(p Palette) string {
 	sw := ""
@@ -184,56 +173,6 @@ func (m *Model) swatch(p Palette) string {
 		sw += m.rendStyle().Foreground(lipgloss.Color(c)).Render("■")
 	}
 	return sw
-}
-
-// themeMenu is the dropdown box, drawn under the Theme row at (x, y).
-func (m *Model) themeMenu(x, y int) []string {
-	names := ThemeNames()
-	var ls []string
-	for i, n := range names {
-		p := Presets[n]
-		mode := "light"
-		if p.Dark {
-			mode = "dark "
-		}
-		mark := "  "
-		if n == m.st.ddOrig {
-			mark = m.th.Good.Render("✓ ")
-		}
-		line := " " + mark + fit(ThemeTitle(n), 18) + " " + m.swatch(p) + " " + m.th.Dim.Render(mode)
-		if i == m.st.ddCursor {
-			// every segment carries the highlight, since an inner reset would end it
-			hl := func(st lipgloss.Style, t string) string { return st.Background(m.th.CurBg).Render(t) }
-			mk := hl(m.th.Plain, "  ")
-			if n == m.st.ddOrig {
-				mk = hl(m.th.Good, "✓ ")
-			}
-			sw := ""
-			for _, c := range []string{p.Brand, p.Accent, p.Good, p.Warn, p.Bad, p.Chat} {
-				sw += hl(m.rendStyle().Foreground(lipgloss.Color(c)), "■")
-			}
-			line = hl(m.th.Accent, "▌") + mk + hl(m.th.Title, fit(ThemeTitle(n), 18)+" ") + sw + hl(m.th.Plain, " ") + hl(m.th.Dim, mode)
-		}
-		ls = append(ls, line)
-		if i == 1 && len(names) > 2 { // Golden Gate's pair, then the rest
-			ls = append(ls, m.th.Border.Render(strings.Repeat("─", 34)))
-		}
-	}
-	b := box(m.th, "Theme", ls)
-	// each item is a click target; the separator is not
-	row := 0
-	for i := range names {
-		idx := i
-		m.addZone(x+1, x+lipgloss.Width(b[0])-1, y+1+row, func(m *Model) tea.Cmd {
-			m.moveThemeMenu(idx)
-			return m.closeThemeMenu(true)
-		})
-		row++
-		if i == 1 && len(names) > 2 {
-			row++
-		}
-	}
-	return b
 }
 
 func orNone(s string) string {
@@ -251,21 +190,31 @@ func (m *Model) save(s Settings) tea.Cmd {
 func (m *Model) onKeySettings(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	st := &m.st
 	rows := m.settingRows()
-	if st.dd {
-		return m.onKeyThemeMenu(k)
+	if st.dd != menuNone {
+		return m.onKeyMenu(k)
 	}
 	if st.editing {
 		switch k.String() {
 		case "esc":
 			st.editing = false
+			st.input.EchoMode = textinput.EchoNormal
 			return m, nil
 		case "enter":
 			v := strings.TrimSpace(st.input.Value())
 			st.editing = false
+			if st.kind == setSumKey { // goes to the keyring, never into the config
+				st.input.EchoMode = textinput.EchoNormal
+				st.input.SetValue("")
+				return m, m.saveKey(st.s.Summarize.Provider, v)
+			}
 			s := st.s
 			switch st.kind {
 			case setSince:
 				s.Since = v
+			case setSumModel:
+				s.Summarize.Model = v
+			case setSumURL:
+				s.Summarize.BaseURL = v
 			case setAddPattern:
 				if v == "" {
 					return m, nil
@@ -290,8 +239,29 @@ func (m *Model) onKeySettings(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		s := st.s
 		switch row.kind {
 		case setTheme:
-			m.openThemeMenu()
+			m.openMenu(menuTheme)
 			return m, nil
+		case setSummarizer:
+			m.openMenu(menuSummarizer)
+			return m, m.probeOllama()
+		case setSumKey:
+			return m, m.startKeyEdit()
+		case setSumTest:
+			if st.test != "testing…" {
+				return m, m.runSummarizerTest()
+			}
+			return m, nil
+		case setSumModel:
+			return m, m.openModelMenu()
+		case setSumURL:
+			st.editing, st.kind = true, row.kind
+			v := s.Summarize.Model
+			if row.kind == setSumURL {
+				v = s.Summarize.BaseURL
+			}
+			st.input.SetValue(v)
+			st.input.CursorEnd()
+			return m, st.input.Focus()
 		case setLevel:
 			if s.Level == "summary" {
 				s.Level = "titles-only"
@@ -344,9 +314,35 @@ func (m *Model) settingLine(r settingRow, cur bool, w int) string {
 		return label + v
 	case setGit:
 		return label + m.toggle(m.st.s.EnrichGit)
+	case setSummarizer:
+		name := r.value
+		if m.st.dd == menuSummarizer {
+			name = m.st.ddOrig
+		}
+		v := m.th.Chip.Render(" " + fit(summarizerName(name), 26) + " ▾ ")
+		if name == "" {
+			return label + v + m.th.Dim.Render("  nothing is sent to a model")
+		}
+		return label + v + m.th.Warn.Render("  redacted chats are sent")
+	case setSumKey:
+		st := m.th.Good
+		if !strings.HasPrefix(r.value, "✓") {
+			st = m.th.Warn
+		}
+		return label + st.Render(r.value)
+	case setSumTest:
+		switch {
+		case strings.HasPrefix(r.value, "✓"):
+			return label + m.th.Good.Render(r.value)
+		case strings.HasPrefix(r.value, "✗"):
+			return label + m.th.Bad.Render(r.value)
+		case r.value == "testing…":
+			return label + m.th.Dim.Render(r.value)
+		}
+		return label + m.th.Button.Render("[enter Test connection]") + m.th.Dim.Render("  one tiny sample, not your data")
 	case setTheme:
 		name := r.value
-		if m.st.dd {
+		if m.st.dd == menuTheme {
 			name = m.st.ddOrig
 		}
 		return label + m.th.Chip.Render(" "+fit(ThemeTitle(name), 18)+" ▾ ") + " " + m.swatch(Presets[name])
@@ -403,7 +399,7 @@ func (m *Model) viewSettings() string {
 		}
 		cur := i == st.cursor && !st.editing
 		y := yBody + len(out)
-		if !st.editing && !st.dd && r.kind != setNote {
+		if !st.editing && st.dd == menuNone && r.kind != setNote {
 			i, r := i, r
 			m.addZone(1, 1+w, y, func(m *Model) tea.Cmd {
 				again := m.st.cursor == i
@@ -424,9 +420,16 @@ func (m *Model) viewSettings() string {
 	}
 	if st.editing {
 		var label string
-		if st.kind == setSince {
+		switch st.kind {
+		case setSince:
 			label = "Look back (e.g. 30d, 12h, 2w; empty = no limit)"
-		} else {
+		case setSumModel:
+			label = "Model id (empty = the provider's default)"
+		case setSumURL:
+			label = "Endpoint, OpenAI-compatible (empty = the provider's default)"
+		case setSumKey:
+			label = "API key for " + summarizerName(st.s.Summarize.Provider) + " (saved in the OS keyring; empty removes the stored key)"
+		default:
 			label = "Redaction regex (matched text is replaced before anything leaves)"
 		}
 		out = append(out, "", " "+m.th.Title.Render(label), " > "+st.input.View())
@@ -437,24 +440,26 @@ func (m *Model) viewSettings() string {
 	f := frame{th: m.th, w: m.w, h: m.h, title: m.header("settings"), right: m.serverBadge(), top: " Changes are saved immediately"}
 	f.left = lines(strings.Join(out, "\n"), w, bh)
 	switch {
-	case st.dd:
+	case st.dd == menuTheme:
 		f.hint = m.hints(w, "↑/↓", "preview", "enter", "choose", "esc", "cancel")
+	case st.dd != menuNone:
+		f.hint = m.hints(w, "↑/↓", "move", "enter", "choose", "esc", "cancel")
 	case st.editing:
 		f.hint = m.hints(w, "enter", "save", "esc", "cancel")
 	default:
 		f.hint = m.statusLine(m.hints(w, "↑/↓", "select", "enter/space", "change", "x", "delete pattern", "esc", "back"))
 	}
 	out2 := f.render()
-	if st.dd {
+	if st.dd != menuNone {
 		y := yBody
 		for i, r := range m.settingRows() {
-			if r.kind == setTheme {
+			if r.kind == menuRowKind(st.dd) {
 				y += i
 			}
 		}
 		x := settingValueX - 1
-		top := max(min(y+1, m.h-1-(len(ThemeNames())+3)), 1) // below the row, but on screen
-		out2 = overlayAt(out2, m.themeMenu(x, top), x, top)
+		top := max(min(y+1, m.h-1-m.menuHeight()), 1) // below the row, but on screen
+		out2 = overlayAt(out2, m.menuBox(x, top), x, top)
 	}
 	return out2
 }

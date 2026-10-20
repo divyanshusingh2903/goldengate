@@ -20,6 +20,9 @@ const (
 	MaxTitleLen       = 200
 	MaxGoalLen        = 400
 	MaxLastLen        = 500
+	MaxListItems      = 8 // goals, description and outcomes each
+	MaxListItemLen    = 300
+	MaxSummarizedBy   = 80
 	MaxPathLen        = 200
 	MaxFiles          = 20
 	MaxCommands       = 12
@@ -138,10 +141,25 @@ func (s *Summary) validate() error {
 		v string
 		n int
 	}{{"summary.title", s.Title, MaxTitleLen}, {"summary.goal", s.Goal, MaxGoalLen}, {"summary.last_assistant", s.LastAssistant, MaxLastLen},
-		{"summary.outcome", s.Outcome, 100}, {"summary.git_branch", s.GitBranch, 100}}
+		{"summary.outcome", s.Outcome, 100}, {"summary.git_branch", s.GitBranch, 100},
+		{"summary.first_message", s.FirstMessage, MaxLastLen}, {"summary.last_message", s.LastMessage, MaxLastLen},
+		{"summary.summarized_by", s.SummarizedBy, MaxSummarizedBy}}
 	for _, c := range checks {
 		if err := CheckText(c.f, c.v, c.n); err != nil {
 			return err
+		}
+	}
+	for _, l := range []struct {
+		f  string
+		vs []string
+	}{{"summary.goals", s.Goals}, {"summary.description", s.Description}, {"summary.outcomes", s.Outcomes}, {"summary.open_problems", s.OpenProblems}} {
+		if len(l.vs) > MaxListItems {
+			return fmt.Errorf("%s: more than %d items", l.f, MaxListItems)
+		}
+		for _, v := range l.vs {
+			if err := CheckText(l.f, v, MaxListItemLen); err != nil {
+				return err
+			}
 		}
 	}
 	if s.Title == "" {

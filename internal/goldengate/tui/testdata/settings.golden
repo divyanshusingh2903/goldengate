@@ -4,6 +4,7 @@
 │▌Theme                               Golden Gate Light  ▾  ■■■■■■                                 │
 │ Share level                        [summary]  titles-only                                        │
 │ Look back                          90d                                                           │
+│ Summarizer                          Local heuristic            ▾   nothing is sent to a model    │
 │ Source CC Claude Code              ● on   code                                                   │
 │ Source CX Codex                    ● on   code                                                   │
 │ Source OC OpenCode                 ● on   code                                                   │
@@ -11,7 +12,6 @@
 │ + add a redaction pattern (regex)                                                                │
 │ Verify commits with local git      ○ off                                                         │
 │ Session hook / schedule            not available yet (coming with deployment support)            │
-│                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │

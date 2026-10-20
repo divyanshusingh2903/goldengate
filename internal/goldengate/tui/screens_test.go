@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -228,7 +229,7 @@ func TestSettingsChangesAreSavedImmediately(t *testing.T) {
 	if got := h.be.saved[len(h.be.saved)-1].Since; got != "30d" {
 		t.Fatalf("since: %q", got)
 	}
-	h.key("down", "space") // first source off
+	h.key("down", "down", "space") // first source off (past the Summarizer row)
 	if s := h.be.saved[len(h.be.saved)-1].Sources[0]; s.Enabled {
 		t.Fatalf("source toggled: %+v", s)
 	}
@@ -469,5 +470,220 @@ func TestSyncProgressFollowsEachStep(t *testing.T) {
 	ev(SyncEvent{Kind: SyncProjectDone, Project: "~/code/forge", Sessions: 116})
 	if m.sy.done != 116 {
 		t.Fatalf("done counts each session once: %d", m.sy.done)
+	}
+}
+
+func TestSummarizerDropdownDoesEverythingInTheTUI(t *testing.T) {
+	h := newHarness(t, 120, 40)
+	h.key("4")
+	for i, r := range h.m.settingRows() {
+		if r.kind == setSummarizer {
+			h.m.st.cursor = i
+		}
+	}
+	h.contains("Summarizer", "Local heuristic", "nothing is sent to a model")
+	h.key("enter") // opens the dropdown
+	if h.m.st.dd != menuSummarizer {
+		t.Fatal("enter opens the summarizer dropdown")
+	}
+	h.contains("┌ Summarizer", "✓ Local heuristic", "Anthropic API (Claude)", "OpenAI API (ChatGPT)", "Google Gemini API", "OpenCode Zen API", "Custom (OpenAI-compatible)")
+	h.golden("summarizer_menu")
+	h.key("esc")
+	if h.m.st.dd != menuNone || len(h.be.saved) != 0 {
+		t.Fatal("esc closes without a change")
+	}
+
+	// choose Gemini: asks first, then lands on the API key
+	h.key("enter", "down", "down", "down", "enter")
+	if h.m.modal == nil || len(h.be.saved) != 0 {
+		t.Fatal("choosing a model asks before saving")
+	}
+	h.contains("Summarize with Google Gemini API?", "redacted conversation", "Tool output and file contents are never sent")
+	h.key("y")
+	if s := h.be.saved[len(h.be.saved)-1].Summarize; s.Provider != "gemini" || s.Model != "" {
+		t.Fatalf("gemini with its defaults: %+v", s)
+	}
+	h.contains("Google Gemini API", "gemini-3.5-flash-lite (default)", "generativelanguage.googleapis.com", "missing · enter to paste your key", "[enter Test connection]")
+	if r := h.m.settingRows()[h.m.st.cursor]; r.kind != setSumKey {
+		t.Fatalf("after choosing, the cursor is on the API key row: %v", r.kind)
+	}
+
+	// paste a key: hidden while typing, stored through the backend, never in settings
+	h.key("enter")
+	h.typeText("sk-secret-123")
+	if strings.Contains(h.view(), "sk-secret-123") {
+		t.Fatal("the key is masked while typed")
+	}
+	h.contains("API key for Google Gemini API (saved in the OS keyring")
+	h.key("enter")
+	if h.be.keys["gemini"] != "sk-secret-123" {
+		t.Fatalf("the key went to the keyring: %v", h.be.keys)
+	}
+	for _, s := range h.be.saved {
+		if strings.Contains(fmt.Sprintf("%+v", s), "sk-secret") {
+			t.Fatal("the key never goes into the settings/config")
+		}
+	}
+	h.contains("✓ keyring")
+
+	// change the model, then test the connection
+	for i, r := range h.m.settingRows() {
+		if r.kind == setSumModel {
+			h.m.st.cursor = i
+		}
+	}
+	h.be.models = map[string][]string{"gemini": {"gemini-3.5-flash-lite", "gemini-3.6-flash"}}
+	h.key("enter") // the model picker lists what the provider offers
+	if h.m.st.dd != menuModel {
+		t.Fatal("enter on Model opens the model picker")
+	}
+	h.contains("┌ Model", "gemini-3.6-flash", "✎ Type a model name…")
+	h.click("gemini-3.6-flash")
+	if s := h.be.saved[len(h.be.saved)-1].Summarize; s.Model != "gemini-3.6-flash" {
+		t.Fatalf("model: %+v", s)
+	}
+	h.key("enter", "end", "enter") // or type one
+	h.m.st.input.SetValue("gemini-3.7-flash-lite")
+	h.key("enter")
+	if s := h.be.saved[len(h.be.saved)-1].Summarize; s.Model != "gemini-3.7-flash-lite" {
+		t.Fatalf("typed model: %+v", s)
+	}
+	for i, r := range h.m.settingRows() {
+		if r.kind == setSumTest {
+			h.m.st.cursor = i
+		}
+	}
+	h.key("enter")
+	if h.be.tests != 1 {
+		t.Fatal("enter on Test runs it")
+	}
+	h.contains("✓ gemini:model ok in 812ms")
+
+	// a custom endpoint, chosen by mouse
+	for i, r := range h.m.settingRows() {
+		if r.kind == setSummarizer {
+			h.m.st.cursor = i
+		}
+	}
+	h.key("enter")
+	h.click("Custom (OpenAI-compatible)")
+	h.key("y") // a local provider goes straight to its model picker; this endpoint is down
+	if h.m.st.dd != menuModel {
+		t.Fatal("after choosing a keyless provider, its model picker opens")
+	}
+	h.contains("couldn't list models", "connection refused", "✎ Type a model name…")
+	h.key("esc")
+	h.contains("(choose one)", "localhost:1234", "none (fine for a local server)")
+
+	// back to the heuristic: no question, provider rows go away
+	for i, r := range h.m.settingRows() {
+		if r.kind == setSummarizer {
+			h.m.st.cursor = i
+		}
+	}
+	h.key("enter", "home", "enter")
+	if s := h.be.saved[len(h.be.saved)-1].Summarize; s.Provider != "" || h.m.modal != nil {
+		t.Fatalf("the heuristic needs no confirmation: %+v", s)
+	}
+	if strings.Contains(h.view(), "Test connection") {
+		t.Error("the model rows go away with the heuristic")
+	}
+}
+func TestSyncOffersToResummarizeHeuristicSessions(t *testing.T) {
+	be := newFake()
+	be.stale = 5
+	h := newHarnessWith(t, be, 110, 34)
+	h.key("s")
+	h.contains("5 synced sessions have rule-based summaries", "anthropic:claude-haiku-5-5", "[m Include them in this sync]")
+	h.click("[m Include them in this sync]")
+	if n := len(be.planOpts); n < 2 || !be.planOpts[n-1].Resummarize {
+		t.Fatalf("the button plans again with the flag: %+v", be.planOpts)
+	}
+	if n := len(be.syncOpts); n < 2 || !be.syncOpts[n-1].Resummarize || !be.syncs[n-1] {
+		t.Fatalf("and reviews again (dry) with it: %+v %v", be.syncOpts, be.syncs)
+	}
+	h.lacks("[m Include them in this sync]")
+	h.contains("Includes 5 synced sessions re-summarized by anthropic:claude-haiku-5-5")
+	h.key("enter")
+	if n := len(be.syncOpts); be.syncs[n-1] || !be.syncOpts[n-1].Resummarize {
+		t.Fatalf("the send keeps the flag: %+v %v", be.syncOpts, be.syncs)
+	}
+	// leaving and coming back starts without it
+	h.key("enter")
+	h.key("s")
+	if n := len(be.planOpts); be.planOpts[n-1].Resummarize {
+		t.Fatal("a fresh sync screen does not re-summarize unasked")
+	}
+}
+
+func TestSyncNoResummarizeOfferWithoutAModel(t *testing.T) {
+	h := newHarnessWith(t, newFake(), 110, 34)
+	h.key("s")
+	h.lacks("rule-based", "Include them")
+}
+
+func TestOllamaOutOfTheBox(t *testing.T) {
+	h := newHarness(t, 120, 40)
+	h.be.models = map[string][]string{"ollama": {"llama3.2:latest", "qwen3:8b"}}
+	h.key("4")
+	for i, r := range h.m.settingRows() {
+		if r.kind == setSummarizer {
+			h.m.st.cursor = i
+		}
+	}
+	h.key("enter") // the menu says whether Ollama runs here
+	h.contains("Ollama (this machine)", "running here · 2 models installed")
+	h.click("Ollama (this machine)")
+	h.contains("Summarize with Ollama (this machine)?", "Ollama runs on this machine: nothing leaves it.")
+	h.key("y")
+	if h.m.st.dd != menuModel {
+		t.Fatal("the installed models are offered right away")
+	}
+	h.contains("llama3.2:latest", "qwen3:8b")
+	h.click("qwen3:8b")
+	s := h.be.saved[len(h.be.saved)-1].Summarize
+	if s.Provider != "ollama" || s.Model != "qwen3:8b" {
+		t.Fatalf("ollama with an installed model: %+v", s)
+	}
+	h.contains("qwen3:8b ▾", "localhost:11434", "none (fine for a local server)")
+	if len(h.be.keys) != 0 {
+		t.Error("Ollama needs no key")
+	}
+}
+
+func TestOllamaNotRunningSaysSo(t *testing.T) {
+	h := newHarness(t, 120, 40)
+	h.key("4")
+	for i, r := range h.m.settingRows() {
+		if r.kind == setSummarizer {
+			h.m.st.cursor = i
+		}
+	}
+	h.key("enter")
+	h.contains("not running here · install from ollama.com")
+}
+
+func TestReviewShowsWhatHappensWhileItSummarizes(t *testing.T) {
+	h := newHarness(t, 110, 34)
+	h.key("2") // the fake review finishes at once; replay a slow one by hand
+	m := h.m
+	m.snap.Summarizer = "ollama:gemma2:2b"
+	m.sy.phase, m.sy.dry, m.sy.total, m.sy.prepared, m.sy.expect = syncRunning, true, 0, 0, 6
+	m.sy.recent, m.sy.fallbacks, m.sy.started = nil, 0, clock.Add(-30*time.Second)
+	m.sy.ch = make(chan tea.Msg, 1)
+	h.contains("Step 1 · Review", "nothing is sent in this step", "read from its tool's log",
+		"redacted: secrets, keys and paths", "summarized by ollama:gemma2:2b on this machine", "starting · the first answer can be slow")
+	ev := func(title, by string) {
+		m.onSyncEvent(syncEventMsg{SyncEvent{Kind: SyncPrepared, Sessions: 1, Project: "~/code/app", Title: title, By: by}})
+	}
+	ev("Fix the theme dropdown", "ollama:gemma2:2b")
+	ev("Add Ollama support", "ollama:gemma2:2b")
+	ev("Long refactor", "heuristic") // the model failed on this one
+	h.contains("3 of ~6 sessions", "~10s each", "about 30s left", "Just summarized", "✓ Add Ollama support",
+		"⚠ Long refactor", "rules (model failed)", "1 session kept the rule-based summary", "Model answers are cached")
+	h.checkGeometry(110, 34)
+	h.golden("sync_preparing")
+	if strings.Contains(h.view(), "nowhere yet") {
+		t.Error("the destination is known from the snapshot while the plan builds")
 	}
 }

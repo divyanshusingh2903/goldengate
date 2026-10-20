@@ -3,11 +3,14 @@
 ├──────────────────────────────────────────────────────────────────────────────────────────────────┤
 │ ── [changed] CC Claude Code · 2h ago · s-0001                                                    │
 │  Title: Fix OAuth redirect mismatch                                                              │
-│  Goal: The login redirect fails on staging                                                       │
-│  Outcome: tests passed, commit made                                                              │
+│  Goals: The login redirect fails on staging                                                      │
+│  Outcomes:                                                                                       │
+│    • tests passed                                                                                │
+│    • commit made                                                                                 │
 │  Files: auth/redirect.go, auth/redirect_test.go                                                  │
 │  Commands: git commit, go test                                                                   │
 │  Last message: Fixed. Key was [REDACTED:aws-access-key] in the log.                              │
+│  Summarized by local heuristic                                                                   │
 │  Work items:                                                                                     │
 │    commit pharmfindr@abc1234 [created] (tool_result)                                             │
 │    pull_request example/pharmfindr#7 [mentioned] (text)                                          │
@@ -17,20 +20,27 @@
 │                                                                                                  │
 │ ── [new] CX Codex · 2h ago · s-0002                                                              │
 │  Title: Add gRPC health checks                                                                   │
-│  Goal: Expose /healthz over gRPC                                                                 │
-│  Outcome: tests passed, commit made                                                              │
+│  Goals: Expose /healthz over gRPC                                                                │
+│  Outcomes:                                                                                       │
+│    • tests passed                                                                                │
+│    • commit made                                                                                 │
 │  Files: auth/redirect.go, auth/redirect_test.go                                                  │
 │  Commands: git commit, go test                                                                   │
 │  Last message: Fixed. Key was [REDACTED:aws-access-key] in the log.                              │
+│  Summarized by local heuristic                                                                   │
 │                                                                                                  │
 │ ── [unchanged] CC Claude Code · 2h ago · s-0003                                                  │
 │  Title: Refactor token store                                                                     │
-│  Outcome: tests passed, commit made                                                              │
+│  Outcomes:                                                                                       │
+│    • tests passed                                                                                │
+│    • commit made                                                                                 │
 │  Files: auth/redirect.go, auth/redirect_test.go                                                  │
 │  Commands: git commit, go test                                                                   │
 │  Last message: Fixed. Key was [REDACTED:aws-access-key] in the log.                              │
+│  Summarized by local heuristic                                                                   │
 │                                                                                                  │
 │ showing the newest 3 of 47 sessions                                                              │
+│                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │

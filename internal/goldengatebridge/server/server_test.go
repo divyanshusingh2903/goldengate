@@ -732,3 +732,27 @@ func TestDeletedProjectDisappearsFromMCP(t *testing.T) {
 		t.Errorf("deleted work items still listed:\n%s", txt)
 	}
 }
+
+func TestMCPShowsTheWorkSummaryAndReadsOlderRecords(t *testing.T) {
+	e := newEnv(t)
+	fresh := payload("n1", "~/code/app", "Fix the login redirect and add tests")
+	fresh.Summary = &model.Summary{Title: "Fix the login redirect and add tests", Goals: []string{"Fix the login bug", "Add a regression test"},
+		Description: []string{"Kept the redirect URL in auth.go", "Added auth_test.go"}, Outcomes: []string{"Fixed and committed"},
+		FirstMessage: "the login breaks on staging", LastMessage: "Done.", SummarizedBy: "anthropic:claude-haiku-5-5"}
+	e.ingestOK(fresh, payload("o1", "~/code/app", "An older record")) // payload() fills the legacy fields
+	cs := e.mcpSession(e.read)
+	_, txt := call(t, cs, "get_session", map[string]any{"id": "n1"})
+	for _, want := range []string{"goal: Fix the login bug", "goal: Add a regression test", "done: Kept the redirect URL in auth.go", "outcome: Fixed and committed", "last message: Done."} {
+		if !strings.Contains(txt, want) {
+			t.Errorf("get_session lacks %q:\n%s", want, txt)
+		}
+	}
+	_, txt = call(t, cs, "get_session", map[string]any{"id": "o1"})
+	if !strings.Contains(txt, "goal: goal") || !strings.Contains(txt, "outcome: tests passed") || !strings.Contains(txt, "last message: done") {
+		t.Errorf("an older record still reads:\n%s", txt)
+	}
+	_, txt = call(t, cs, "search_work", map[string]any{"query": "regression"})
+	if !strings.Contains(txt, "Fix the login redirect") {
+		t.Errorf("the new fields are searchable:\n%s", txt)
+	}
+}

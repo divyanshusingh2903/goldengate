@@ -10,7 +10,17 @@ Use GitHub private vulnerability reporting on this repository (channel to be con
 - **One door.** Every payload leaves through `sync.Push`, which validates it first. Sessions from unselected projects are dropped before they are even parsed, and are never named in logs.
 - **Previews are exact.** `goldengate sync --dry-run` prints the payloads that would be sent and records nothing.
 - **Redaction is best-effort.** Secret patterns, high-entropy strings and absolute paths are scrubbed before and after summarization. Regexes miss things. Use `titles-only` for sensitive projects and read the preview.
-- **No telemetry.** Neither binary makes network calls other than to the server you configured.
+- **No telemetry.** Neither binary makes network calls other than to the server you configured, and, only if you turn it on, the summarizer model you chose.
+
+## The model summarizer (opt-in)
+By default summaries are written locally by fixed rules and no model is involved. If you choose a model (Settings → Summarizer, which asks first, or `goldengate summarizer use anthropic|openai|gemini|opencode|custom`), each session of a **shared** project is summarized by that model:
+- It receives the session's conversation (your messages and the assistant's replies) after the same secret and path redaction as everything else, with each message capped and long sessions cut in the middle. Tool output, file contents and command arguments are never sent. Sessions of projects you do not share never reach it.
+- Previews never call the model; they show a model summary only if one was already made during a sync.
+- The answer is constrained to a JSON schema, redacted again, capped, and stored as plain text; it reaches the server only through the same validated path as every payload.
+- That provider sees the redacted text under its own terms. With an OpenAI-compatible endpoint on this machine (Ollama, LM Studio) nothing leaves it.
+- API keys are typed hidden in the TUI or `goldengate summarizer set-key` and stored in the OS keyring, or read from the provider's variable (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `OPENCODE_API_KEY`, `GOLDENGATE_SUMMARIZER_KEY`); they are never written to the config or shown.
+- Some free models on gateways such as OpenCode Zen retain data or are for trial use; read the provider's terms before sending work there.
+- Transcripts may contain text that tries to instruct the model. The prompt tells it the conversation is data; the worst case is a misleading summary, since the model has no tools and its output is only stored text.
 
 ## Tokens
 | Scope | Can | Cannot |
@@ -65,6 +75,6 @@ What it cannot do: stop a model from obeying text it was shown. This reduces the
 ## Residual risks
 - A compromised server leaks the stored summaries. Prefer `titles-only` for sensitive projects.
 - The `read` token lives in your assistant vendor's connector settings.
-- Regex redaction will occasionally miss secrets.
+- Regex redaction will occasionally miss secrets. With the model summarizer on, a missed secret reaches that provider as well as the server.
 - Without an OS keyring the ingest token is kept in a `0600` file that is **not encrypted**; `goldengate` says so when it falls back.
 - SQLite data is not encrypted at rest by the application; use disk encryption.

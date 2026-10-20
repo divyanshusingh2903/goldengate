@@ -41,18 +41,54 @@ Un-share with `goldengate share remove ~/code/myproject --purge-remote`. Rotate 
 
 ## The interactive UI
 
-Run `goldengate` in a terminal. The first run starts a short setup (find your tools, connect to your server, choose the share level, pick projects, see a dry run, first sync); after that it opens the project picker.
+Run `goldengate` in a terminal. The first run starts a short setup (find your tools, connect to your server, choose the share level, pick projects, review, first sync); after that it opens the project picker.
 
-| Screen | Keys |
+| Screen | What it does |
 |---|---|
-| Projects (`1`) | `space` share/un-share · `v` range · `a`/`A` mark all/none · `d` deny · `u` undo · `e` choose sources · `/` fuzzy filter · `t` folder tree (space on a folder shares everything below it) · `o` sort · `p` preview · `P` paranoid (raw payloads) |
-| Sync (`2`, or `s`) | plan, `enter` start, `D` dry run / real, `c` cancel, `r` retry or replan |
-| Server (`3`) | health, token check, what the server holds, `D` delete a project from it |
-| Settings (`4`) | share level, look-back window, sources, redaction patterns, commit verification |
+| Projects (`1`) | Every project folder, with its sync state: `▲ 3 to sync`, `✓ synced 2h`, `not shared`, `✕ denied`. Views: All / Shared / To sync / Not shared (`f`). `space` share or un-share · `v` range · `a`/`A` mark all/none · `d` deny · `u` undo · `e` choose which tools are sent · `/` search · `t` folder tree (space on a folder shares everything below it) · `o` sort · `p` preview · `P` paranoid (raw payloads) |
+| Sync (`2`, or `s`) | Two steps. **Review** runs at once: every session is read and redacted exactly as it would be sent, and nothing leaves the machine. **Send** (`enter`) sends exactly what was reviewed. Progress follows each session; a failed project can be retried and skips what already arrived. |
+| Server (`3`) | Health, token check, what the server holds (code or chat), `D` delete a project from it |
+| Settings (`4`) | Theme, share level, look-back window, sources, redaction patterns, commit verification |
 
-`?` shows every key. The preview is the exact outgoing payload, redactions highlighted, with what changed since the last sync. Sync is a dry run until you press `D`. It works at 80x24, follows resizes, supports the mouse (wheel, click), and honors `NO_COLOR` (nothing relies on color alone). `GOLDENGATE_THEME=light|dark` overrides background detection. Everything the UI does is also available as a command.
+The card beside the list says in words what happens to the highlighted project: "Not shared: nothing from this project leaves your machine", "Shared · never synced", "Shared · up to date". Every project and session carries the tag of the tool it came from: `CC` Claude Code, `CX` Codex, `OC` OpenCode (coding sessions), `AI` claude.ai, `GPT` ChatGPT (chat exports).
 
-A source can be switched off for one project (`e`) without un-sharing the rest; that is stored as `deny_source = ["codex@~/code/app"]` in the config.
+The preview is the exact outgoing payload, redactions marked, with what changed since the last sync. `?` shows every key. It works at 80x24 and follows resizes.
+
+**Mouse.** Click a row to select it, click its `[ ]` box to share it, double-click to preview, ctrl+click to mark. Tabs, view chips, buttons, settings and the keys in the bottom bar are all clickable, and the wheel scrolls.
+
+**Themes.** Golden Gate Light (default) and Dark, plus GitHub, Gruvbox, Catppuccin and Solarized (light and dark), Dracula, Monokai, Nord and Tokyo Night. Pick one under Settings → Theme (a dropdown that previews as you move); it is saved as `[ui] theme` in the config. `GOLDENGATE_THEME=gruvbox-dark` overrides it for one run. While the UI runs it sets the terminal's background to the theme's and restores yours on exit. `NO_COLOR` turns color off; nothing relies on color alone.
+
+**Summaries.** Each session is summarized on your machine before anything is sent: a title, goals, what was done, outcomes (tests, commits, PRs), the first and last message, files touched and command names. Raw transcripts, tool output and file contents are never sent. By default fixed rules write the summary. For better summaries of sessions that cover several tasks, you can opt in to a small model; it then receives the redacted conversation of shared projects only. See [SECURITY.md](SECURITY.md).
+
+Everything is in the TUI: **Settings → Summarizer** opens a dropdown (it asks before turning a model on), then the rows below it set the model, the endpoint, the API key (typed hidden, stored in the OS keyring) and run a test call.
+
+| Choice | Default model | Key |
+|---|---|---|
+| Local heuristic (default) | none | none |
+| Anthropic API (Claude) | `claude-haiku-5-5` | `ANTHROPIC_API_KEY` or keyring |
+| OpenAI API (ChatGPT) | `gpt-5.4-nano` | `OPENAI_API_KEY` or keyring |
+| Google Gemini API | `gemini-3.5-flash-lite` | `GEMINI_API_KEY` or keyring |
+| OpenCode Zen API | `glm-5.3-flash` | `OPENCODE_API_KEY` or keyring |
+| Custom, any OpenAI-compatible endpoint (Ollama, LM Studio, OpenRouter, …) | `llama3.2` at `http://localhost:11434/v1` | optional: `GOLDENGATE_SUMMARIZER_KEY` or keyring |
+
+Model names change often: every default can be overridden, and "Test connection" tells you at once whether it works. The same from the command line:
+
+```bash
+goldengate summarizer use gemini --model gemini-3.5-flash-lite
+goldengate summarizer set-key gemini
+goldengate summarizer test                    # one tiny sample call (not your data)
+goldengate summarizer use custom --base-url http://localhost:1234/v1 --model qwen3
+goldengate summarizer use heuristic           # back to local rules
+goldengate sync --resummarize                 # also upgrade sessions already synced with the rules
+```
+
+A session is summarized once per content: answers are cached, and an unchanged session is not sent to the model again.
+
+Turning a model on only affects new and changed sessions. Sessions synced earlier keep their rule-based summaries until you ask: `goldengate sync --resummarize` (or, on the Sync screen, the "N synced sessions have rule-based summaries" line and its **Include them in this sync** button) rebuilds them and sends their redacted conversations to the model. Only sessions whose summary actually changes are pushed again.
+
+Everything the UI does is also available as a command.
+
+The tools sent for one project can be chosen with `e`: on a shared project, untick a tool to stop sending it; on one that is not shared yet, ticking a tool shares the project with only that tool. That is stored as `deny_source = ["codex@~/code/app"]` in the config.
 
 ## Sources
 

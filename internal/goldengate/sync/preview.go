@@ -86,8 +86,9 @@ func (s *Syncer) Preview(ctx context.Context, project string, limit int) (Previe
 			return res, fmt.Errorf("sync: load: %w", err)
 		}
 		res.Warnings += len(raw.Warnings)
-		p, err := summarize.Build(raw, summarize.Options{Level: s.Config.Share.Level, Home: s.Home, Work: wo,
-			ExtraRedactions: s.Config.Redact.ExtraPatterns, ProjectKey: s.serverKey(f.ref)})
+		// offline: a preview never calls the model (the project may not be
+		// shared); it shows the model's summary only when one is cached
+		p, err := summarize.Build(raw, s.summarizeOptions(ctx, f.ref, wo, true, nil))
 		if err != nil {
 			return res, fmt.Errorf("sync: summarize: %w", err)
 		}

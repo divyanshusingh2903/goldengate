@@ -25,6 +25,11 @@ type fakeBackend struct {
 	patterns []string
 	git      bool
 	theme    string
+	summ     SummarizeSettings
+	keys     map[string]string // summarizer keys by provider
+	testErr  error
+	tests    int
+	models   map[string][]string // by provider; absent: an error, like a server that is not running
 
 	previews map[string]Preview
 	srvInfo  ServerInfo
@@ -37,6 +42,8 @@ type fakeBackend struct {
 	saved      []Settings
 	inits      []InitParams
 	syncs      []bool
+	planOpts   []SyncOpts
+	syncOpts   []SyncOpts
 
 	// behavior switches
 	applyErr   error
@@ -46,6 +53,7 @@ type fakeBackend struct {
 	initErr    error
 	saveErr    error
 	snapshotFn func() (Snapshot, error)
+	stale      int // synced sessions with heuristic summaries (a model is configured when > 0)
 }
 
 func ago(d time.Duration) time.Time { return clock.Add(-d) }
@@ -90,8 +98,9 @@ func (f *fakeBackend) samplePreview() Preview {
 	mk := func(src, id, title, goal string, st string, diff []string, work ...model.WorkItem) PreviewItem {
 		p := model.SessionPayload{Source: src, SessionID: id, Project: "~/code/pharmfindr", Level: "summary", StartedAt: ago(3 * time.Hour), UpdatedAt: ago(2 * time.Hour),
 			ContentHash: "ab" + id,
-			Summary:     &model.Summary{Title: title, Goal: goal, Outcome: "tests passed, commit made", Commands: []string{"git commit", "go test"}, FilesTouched: []string{"auth/redirect.go", "auth/redirect_test.go"}, LastAssistant: "Fixed. Key was [REDACTED:aws-access-key] in the log."},
-			WorkItems:   work}
+			Summary: &model.Summary{Title: title, Goals: nonEmpty(goal), Outcomes: []string{"tests passed", "commit made"}, Commands: []string{"git commit", "go test"},
+				FilesTouched: []string{"auth/redirect.go", "auth/redirect_test.go"}, LastMessage: "Fixed. Key was [REDACTED:aws-access-key] in the log.", SummarizedBy: "heuristic"},
+			WorkItems: work}
 		return PreviewItem{Source: src, ID: id, Updated: ago(2 * time.Hour), Status: st, Payload: p, Diff: diff,
 			JSON: fmt.Sprintf("{\n  \"source\": %q,\n  \"session_id\": %q,\n  \"summary\": {\n    \"title\": %q,\n    \"last_assistant\": \"Fixed. Key was [REDACTED:aws-access-key] in the log.\"\n  }\n}", src, id, title)}
 	}
@@ -203,23 +212,41 @@ func (f *fakeBackend) DeleteRemote(_ context.Context, h any) (string, error) {
 	return "deleted 1 project from the server", nil
 }
 
-func (f *fakeBackend) Plan(context.Context) (PlanInfo, error) {
+func (f *fakeBackend) Plan(_ context.Context, o SyncOpts) (PlanInfo, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.planOpts = append(f.planOpts, o)
 	p := PlanInfo{Sessions: 7, NotSelected: 120, Unchanged: 30, Warnings: 1, Redactions: map[string]int{"aws-access-key": 2}, Server: f.server,
 		Projects: []ProjectPlan{{"~/code/pharmfindr", 4}, {"~/code/forge", 1}, {"~/code/pharmfindr/.claude/worktrees/fox", 2}}}
+	if f.stale > 0 {
+		p.Summarizer = "anthropic:claude-haiku-5-5"
+		if o.Resummarize {
+			p.Resummarized = f.stale
+		} else {
+			p.Stale = f.stale
+		}
+	}
 	return p, nil
 }
 
-func (f *fakeBackend) Sync(ctx context.Context, dry bool, emit func(SyncEvent)) error {
+func (f *fakeBackend) Sync(ctx context.Context, dry bool, o SyncOpts, emit func(SyncEvent)) error {
 	f.mu.Lock()
 	f.syncs = append(f.syncs, dry)
+	f.syncOpts = append(f.syncOpts, o)
 	block, fails := f.syncBlock, f.syncFail
 	if dry { // a dry pass never talks to the server, so it neither blocks nor fails on it
 		block, fails = nil, nil
 	}
 	f.mu.Unlock()
-	emit(SyncEvent{Kind: SyncPlanned, Sessions: 7, Projects: 3})
+	var plan *PlanInfo
+	if dry { // the review plans as it goes, like the real backend
+		p, _ := f.Plan(ctx, o)
+		for i := 0; i < p.Sessions; i++ {
+			emit(SyncEvent{Kind: SyncPrepared, Sessions: 1, Project: "~/code/pharmfindr", Title: fmt.Sprintf("Session %d", i+1), By: "heuristic"})
+		}
+		plan = &p
+	}
+	emit(SyncEvent{Kind: SyncPlanned, Sessions: 7, Projects: 3, Plan: plan})
 	for _, p := range []struct {
 		l string
 		n int
@@ -268,7 +295,7 @@ func (f *fakeBackend) DeleteServerProject(_ context.Context, label string) error
 func (f *fakeBackend) Settings(context.Context) (Settings, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return Settings{Level: f.level, Since: f.since, Sources: append([]SourceStatus(nil), f.sources...), ExtraPatterns: append([]string(nil), f.patterns...), EnrichGit: f.git, Theme: f.theme}, nil
+	return Settings{Level: f.level, Since: f.since, Sources: append([]SourceStatus(nil), f.sources...), ExtraPatterns: append([]string(nil), f.patterns...), EnrichGit: f.git, Theme: f.theme, Summarize: f.summ}, nil
 }
 
 func (f *fakeBackend) SaveSettings(_ context.Context, s Settings) error {
@@ -278,7 +305,11 @@ func (f *fakeBackend) SaveSettings(_ context.Context, s Settings) error {
 	if f.saveErr != nil {
 		return f.saveErr
 	}
-	f.level, f.since, f.patterns, f.git, f.theme = s.Level, s.Since, s.ExtraPatterns, s.EnrichGit, s.Theme
+	f.level, f.since, f.patterns, f.git, f.theme, f.summ = s.Level, s.Since, s.ExtraPatterns, s.EnrichGit, s.Theme, s.Summarize
+	f.summ.KeySource = "none"
+	if f.keys[f.summ.Provider] != "" {
+		f.summ.KeySource = "keyring"
+	}
 	f.sources = append([]SourceStatus(nil), s.Sources...)
 	return nil
 }
@@ -300,4 +331,45 @@ func (f *fakeBackend) Init(_ context.Context, p InitParams) (InitResult, error) 
 		r.ReadToken = "ggb_read_EXAMPLE"
 	}
 	return r, nil
+}
+
+func nonEmpty(s string) []string {
+	if s == "" {
+		return nil
+	}
+	return []string{s}
+}
+
+func (f *fakeBackend) SetSummarizerKey(_ context.Context, provider, key string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.keys == nil {
+		f.keys = map[string]string{}
+	}
+	f.keys[provider] = key
+	f.summ.KeySource = "none"
+	if key != "" && provider == f.summ.Provider {
+		f.summ.KeySource = "keyring"
+	}
+	return nil
+}
+
+func (f *fakeBackend) TestSummarizer(context.Context) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.tests++
+	if f.testErr != nil {
+		return "", f.testErr
+	}
+	return f.summ.Provider + ":model ok in 812ms", nil
+}
+
+func (f *fakeBackend) SummarizerModels(_ context.Context, provider, _ string) ([]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	l, ok := f.models[provider]
+	if !ok {
+		return nil, fmt.Errorf("connection refused")
+	}
+	return l, nil
 }
