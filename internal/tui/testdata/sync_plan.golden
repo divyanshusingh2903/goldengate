@@ -1,0 +1,30 @@
+┌ sync ─────────────────────────────────────────────────────────────────────── server: ● connected ┐
+│ Sync · dry run (nothing is sent or recorded)                                                     │
+├──────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ 7 session(s) in 3 project(s) would be sent                                                       │
+│ 120 session(s) not selected, 30 already up to date, 1 warning(s)                                 │
+│ 2 redaction(s) applied                                                                           │
+│                                                                                                  │
+│   ~/code/pharmfindr                                                                    4         │
+│   ~/code/forge                                                                         1         │
+│   ~/code/pharmfindr/.claude/worktrees/fox                                              2         │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+├──────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ enter start  D dry/real  r replan  esc back                                                      │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘

@@ -1,0 +1,30 @@
+┌ goldengate setup ────────────────────────────────────────────────────── server: ○ not configured ┐
+│ Setup 5/6 · Review                                                                               │
+├──────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Dry run: this is exactly what the first sync would send                                          │
+│                                                                                                  │
+│ 7 session(s) in 3 project(s)                                                                     │
+│ 2 redaction(s) applied                                                                           │
+│   ~/code/pharmfindr                                                                    4         │
+│   ~/code/forge                                                                         1         │
+│   ~/code/pharmfindr/.claude/worktrees/fox                                              2         │
+│                                                                                                  │
+│ Open any project with p on the previous step to read its payloads.                               │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+├──────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ enter continue  shift+tab back  esc finish later                                                 │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘

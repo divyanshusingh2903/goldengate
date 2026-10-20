@@ -1,0 +1,30 @@
+┌ goldengate ───────────────────────────────────────────────────────────────── server: ● connected ┐
+│ Sources  ● Claude Code 142  ● Codex 37  ● OpenCode 58  ○ claude.ai                               │
+├────────────────────────────────────────────────┬─────────────────────────────────────────────────┤
+│ Filter: / to search           sort:recent tree │ code                                            │
+│  [~] ▾ home/u                                  │ /home/u/code                                    │
+│> [~]   ▸ code                                  │                                                 │
+│  [ ]     scratch/tmp                           │ 5 project(s), 3 shared                          │
+│  [-]     work/client-x                   denied│                                                 │
+│  [ ] ▾ claude-ai:                              │ space shares this whole folder                  │
+│  [ ]     Chats                                 │ (one rule covers everything below)              │
+│                                                │                                                 │
+│                                                │                                                 │
+│                                                │                                                 │
+│                                                │                                                 │
+│                                                │                                                 │
+│                                                │                                                 │
+│                                                │                                                 │
+│                                                │                                                 │
+│                                                │                                                 │
+│                                                │                                                 │
+│                                                │                                                 │
+│                                                │                                                 │
+│                                                │                                                 │
+│                                                │                                                 │
+│                                                │                                                 │
+│                                                │                                                 │
+│                                                │                                                 │
+├────────────────────────────────────────────────┴─────────────────────────────────────────────────┤
+│ space toggle  a all  d deny  p preview  s sync  / filter  t tree  u undo  ? help                 │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘

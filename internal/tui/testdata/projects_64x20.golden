@@ -1,0 +1,20 @@
+┌ goldengate ───────────────────────────── server: ● connected ┐
+│ Sources  ● Claude Code 142  ● Codex 37  ● OpenCode 58  ○ cla…│
+├──────────────────────────────────────────────────────────────┤
+│ Filter: / to search                              sort:recent │
+│> [x] ~/code/pharmfindr                                    ▲ 3│
+│  [x] ~/code/pharmfindr/.claude/worktrees/fox              ▲ 2│
+│  [x] ~/code/forge                                         ▲ 1│
+│  [ ] ~/code/vihayas                                          │
+│  [~] ~/code/website                                 (partial)│
+│  [-] ~/work/client-x                                   denied│
+│  [ ] ~/scratch/tmp                                           │
+│  [ ] claude-ai:Chats                                         │
+│                                                              │
+│                                                              │
+│                                                              │
+│                                                              │
+│                                                              │
+├──────────────────────────────────────────────────────────────┤
+│ space toggle  a all  d deny  p preview  s sync  ? help       │
+└──────────────────────────────────────────────────────────────┘

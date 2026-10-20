@@ -1,0 +1,40 @@
+┌ goldengate ───────────────────────────────────────────────────────────────────────────────────── server: ● connected ┐
+│ Sources  ● Claude Code 142  ● Codex 37  ● OpenCode 58  ○ claude.ai                                                   │
+├──────────────────────────────────────────────────────────┬───────────────────────────────────────────────────────────┤
+│ Filter: / to search                          sort:recent │ pharmfindr                                                │
+│> [x] ~/code/pharmfindr                                ▲ 3│ ~/code/pharmfindr                                         │
+│  [x] ~/code/pharmfindr/.claude/worktrees/fox          ▲ 2│ Sources: claude-code 41, codex 6                          │
+│  [x] ~/code/forge                                     ▲ 1│ Last activity: 2h ago                                     │
+│  [ ] ~/code/vihayas                                      │ Level: summary                                            │
+│  [~] ~/code/website                             (partial)│ Status: shared (allowed by ~/code/pharmfindr)             │
+│  [-] ~/work/client-x                               denied│                                                           │
+│  [ ] ~/scratch/tmp                                       │ Recent sessions                                           │
+│  [ ] claude-ai:Chats                                     │  • Fix OAuth redirect mismatch                            │
+│                                                          │  • Add gRPC health checks                                 │
+│                                                          │  • Refactor token store                                   │
+│                                                          │ Redactions in preview: 2                                  │
+│                                                          │ Since last sync: 1 new, 1 changed, 1 unchanged            │
+│                                                          │                                                           │
+│                                                          │                                                           │
+│                                                          │                                                           │
+│                                                          │                                                           │
+│                                                          │                                                           │
+│                                                          │                                                           │
+│                                                          │                                                           │
+│                                                          │                                                           │
+│                                                          │                                                           │
+│                                                          │                                                           │
+│                                                          │                                                           │
+│                                                          │                                                           │
+│                                                          │                                                           │
+│                                                          │                                                           │
+│                                                          │                                                           │
+│                                                          │                                                           │
+│                                                          │                                                           │
+│                                                          │                                                           │
+│                                                          │                                                           │
+│                                                          │                                                           │
+│                                                          │                                                           │
+├──────────────────────────────────────────────────────────┴───────────────────────────────────────────────────────────┤
+│ space toggle  a all  d deny  p preview  s sync  / filter  t tree  u undo  ? help                                     │
+└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘

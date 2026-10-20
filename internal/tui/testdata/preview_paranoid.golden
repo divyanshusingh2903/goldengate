@@ -1,0 +1,40 @@
+┌ preview ──────────────────────────────────────────────────────────────────── server: ● connected ┐
+│ ~/code/pharmfindr · level summary · PARANOID: raw payloads · 1 new, 1 changed, 1 unchanged · 2 r…│
+├──────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ PARANOID: the exact bytes of every payload that would leave this machine                         │
+│                                                                                                  │
+│ ── claude-code s-0001                                                                            │
+│  {                                                                                               │
+│    "source": "claude-code",                                                                      │
+│    "session_id": "s-0001",                                                                       │
+│    "summary": {                                                                                  │
+│      "title": "Fix OAuth redirect mismatch",                                                     │
+│      "last_assistant": "Fixed. Key was [REDACTED:aws-access-key] in the log."                    │
+│    }                                                                                             │
+│  }                                                                                               │
+│                                                                                                  │
+│ ── codex s-0002                                                                                  │
+│  {                                                                                               │
+│    "source": "codex",                                                                            │
+│    "session_id": "s-0002",                                                                       │
+│    "summary": {                                                                                  │
+│      "title": "Add gRPC health checks",                                                          │
+│      "last_assistant": "Fixed. Key was [REDACTED:aws-access-key] in the log."                    │
+│    }                                                                                             │
+│  }                                                                                               │
+│                                                                                                  │
+│ ── claude-code s-0003                                                                            │
+│  {                                                                                               │
+│    "source": "claude-code",                                                                      │
+│    "session_id": "s-0003",                                                                       │
+│    "summary": {                                                                                  │
+│      "title": "Refactor token store",                                                            │
+│      "last_assistant": "Fixed. Key was [REDACTED:aws-access-key] in the log."                    │
+│    }                                                                                             │
+│  }                                                                                               │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+├──────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ ↑/↓ scroll  P paranoid  r reload  s sync  esc back                                               │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘

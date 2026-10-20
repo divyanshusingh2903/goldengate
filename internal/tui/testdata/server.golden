@@ -1,0 +1,30 @@
+┌ server ───────────────────────────────────────────────────────────────────── server: ● connected ┐
+│ Sources  ● Claude Code 142  ● Codex 37  ● OpenCode 58  ○ claude.ai                               │
+├──────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ https://bridge.example.com                                                                       │
+│ Server ● reachable   Ingest token ● accepted (keyring)                                           │
+│                                                                                                  │
+│ What the server holds (2 project(s))                                                             │
+│ ~/code/pharmfindr                                                   44 sessions  2h ago          │
+│ ~/code/forge                                                        11 sessions  6h ago          │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+├──────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ ↑/↓ select  D delete from server  r refresh  i setup  esc back                                   │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘

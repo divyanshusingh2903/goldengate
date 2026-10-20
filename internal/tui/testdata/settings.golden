@@ -1,0 +1,30 @@
+┌ settings ─────────────────────────────────────────────────────────────────── server: ● connected ┐
+│ Changes are saved immediately                                                                    │
+├──────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Share level                        summary                                                       │
+│ Look back                          90d                                                           │
+│ Source Claude Code                 on                                                            │
+│ Source Codex                       on                                                            │
+│ Source OpenCode                    on                                                            │
+│ Source claude.ai                   on (not found)                                                │
+│ + add a redaction pattern (regex)                                                                │
+│ Verify commits with local git      off                                                           │
+│ Session hook / schedule            not available yet (coming with deployment support)            │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+├──────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ ↑/↓ select  enter/space change  x delete pattern  esc back                                       │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘

@@ -1,0 +1,40 @@
+┌ preview ──────────────────────────────────────────────────────────────────── server: ● connected ┐
+│ ~/code/pharmfindr · level summary · summary view · 1 new, 1 changed, 1 unchanged · 2 redactions  │
+├──────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ ── [changed] Claude Code · 2h ago · s-0001                                                       │
+│  Title: Fix OAuth redirect mismatch                                                              │
+│  Goal: The login redirect fails on staging                                                       │
+│  Outcome: tests passed, commit made                                                              │
+│  Files: auth/redirect.go, auth/redirect_test.go                                                  │
+│  Commands: git commit, go test                                                                   │
+│  Last message: Fixed. Key was [REDACTED:aws-access-key] in the log.                              │
+│  Work items:                                                                                     │
+│    commit pharmfindr@abc1234 [created] (tool_result)                                             │
+│    pull_request example/pharmfindr#7 [mentioned] (text)                                          │
+│  Since the last sync:                                                                            │
+│    title: "Fix OAuth redirect" -> "Fix OAuth redirect mismatch"                                  │
+│    + file auth/redirect_test.go                                                                  │
+│                                                                                                  │
+│ ── [new] Codex · 2h ago · s-0002                                                                 │
+│  Title: Add gRPC health checks                                                                   │
+│  Goal: Expose /healthz over gRPC                                                                 │
+│  Outcome: tests passed, commit made                                                              │
+│  Files: auth/redirect.go, auth/redirect_test.go                                                  │
+│  Commands: git commit, go test                                                                   │
+│  Last message: Fixed. Key was [REDACTED:aws-access-key] in the log.                              │
+│                                                                                                  │
+│ ── [unchanged] Claude Code · 2h ago · s-0003                                                     │
+│  Title: Refactor token store                                                                     │
+│  Outcome: tests passed, commit made                                                              │
+│  Files: auth/redirect.go, auth/redirect_test.go                                                  │
+│  Commands: git commit, go test                                                                   │
+│  Last message: Fixed. Key was [REDACTED:aws-access-key] in the log.                              │
+│                                                                                                  │
+│ showing the newest 3 of 47 sessions                                                              │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+├──────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ ↑/↓ scroll  P paranoid  r reload  s sync  esc back                                               │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘

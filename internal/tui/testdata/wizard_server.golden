@@ -1,0 +1,30 @@
+┌ goldengate setup ────────────────────────────────────────────────────── server: ○ not configured ┐
+│ Setup 2/6 · Server                                                                               │
+├──────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Where do the summaries go?                                                                       │
+│                                                                                                  │
+│ (•) Connect with the admin token                                                                 │
+│ ( ) Connect with a pairing code                                                                  │
+│ ( ) Stay local for now (nothing is sent)                                                         │
+│                                                                                                  │
+│ Server URL   https://bridge.example.com                                                          │
+│ Admin token  admin token (input hidden)                                                          │
+│ The admin token is used once to create scoped tokens and is never written down.                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+├──────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ tab mode  ↑/↓ field  enter connect/continue  esc back                                            │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘

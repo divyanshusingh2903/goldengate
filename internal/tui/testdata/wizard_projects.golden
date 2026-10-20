@@ -1,0 +1,30 @@
+┌ goldengate ──────────────────────────────────────────────────────────── server: ○ not configured ┐
+│ Setup 4/6 · Choose what to share (nothing is shared by default)                                  │
+├────────────────────────────────────────────────┬─────────────────────────────────────────────────┤
+│ Filter: / to search                sort:recent │ pharmfindr                                      │
+│> [ ] ~/code/pharmfindr                         │ ~/code/pharmfindr                               │
+│  [ ] ~/code/pharmfindr/.claude/worktrees/fox   │ Sources: claude-code 41, codex 6                │
+│  [ ] ~/code/forge                              │ Last activity: 2h ago                           │
+│  [ ] ~/code/vihayas                            │ Level: titles-only                              │
+│  [ ] ~/code/website                            │ Status: not shared                              │
+│  [ ] ~/work/client-x                           │                                                 │
+│  [ ] ~/scratch/tmp                             │ Recent sessions                                 │
+│  [ ] claude-ai:Chats                           │  • Fix OAuth redirect mismatch                  │
+│                                                │  • Add gRPC health checks                       │
+│                                                │  • Refactor token store                         │
+│                                                │ Redactions in preview: 2                        │
+│                                                │ Since last sync: 1 new, 1 changed, 1 unchanged  │
+│                                                │                                                 │
+│                                                │                                                 │
+│                                                │                                                 │
+│                                                │                                                 │
+│                                                │                                                 │
+│                                                │                                                 │
+│                                                │                                                 │
+│                                                │                                                 │
+│                                                │                                                 │
+│                                                │                                                 │
+│                                                │                                                 │
+├────────────────────────────────────────────────┴─────────────────────────────────────────────────┤
+│ space share  t tree  p preview  tab next step  shift+tab back  ? help                            │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘

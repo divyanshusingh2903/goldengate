@@ -1,0 +1,40 @@
+┌ goldengate ───────────────────────────────────────────────────────────────── server: ● connected ┐
+│ Sources  ● Claude Code 142  ● Codex 37  ● OpenCode 58  ○ claude.ai                               │
+├────────────────────────────────────────────────┬─────────────────────────────────────────────────┤
+│ Filter: / to search                sort:recent │ pharmfindr                                      │
+│> [x] ~/code/pharmfindr                      ▲ 3│ ~/code/pharmfindr                               │
+│  [x] …code/pharmfindr/.claude/worktrees/fox ▲ 2│ Sources: claude-code 41, codex 6                │
+│  [x] ~/code/forge                           ▲ 1│ Last activity: 2h ago                           │
+│  [ ] ~/code/vihayas                            │ Level: summary                                  │
+│  [~] ~/code/websi┌ Keys ──────────────────────────────────────────────────────┐ode/pharmfindr)   │
+│  [-] ~/work/clien│ Projects                                                   │                  │
+│  [ ] ~/scratch/tm│ ↑ ↓ j k  move   (pgup/pgdn, g/G jump)                      │                  │
+│  [ ] claude-ai:Ch│ space    share / un-share (marked rows, or this row)       │                  │
+│                  │ v        start/end range selection                         │                  │
+│                  │ a  A     mark all visible / clear marks                    │                  │
+│                  │ d        deny (beats any allow rule)                       │                  │
+│                  │ u        undo the last change                              │ged, 1 unchanged  │
+│                  │ e        choose which sources are shared                   │                  │
+│                  │ /        fuzzy filter   (esc clears)                       │                  │
+│                  │ t        folder tree: space on a folder shares all of it   │                  │
+│                  │ o        sort: recent / name / size                        │                  │
+│                  │ p enter  preview exactly what would be sent                │                  │
+│                  │ P        paranoid: raw payloads, every string              │                  │
+│                  │ Everywhere                                                 │                  │
+│                  │ 1-4 tab  projects / sync / server / settings               │                  │
+│                  │ s        sync   (D toggles dry run)                        │                  │
+│                  │ r        refresh                                           │                  │
+│                  │ ?        this help                                         │                  │
+│                  │ q ctrl+c quit                                              │                  │
+│                  │                                                            │                  │
+│                  │ [x] shared  [ ] not  [~] some sources  [-] denied  ▲ n new │                  │
+│                  │ Nothing is sent until you sync, and previews are exact.    │                  │
+│                  └────────────────────────────────────────────────────────────┘                  │
+│                                                │                                                 │
+│                                                │                                                 │
+│                                                │                                                 │
+│                                                │                                                 │
+│                                                │                                                 │
+├────────────────────────────────────────────────┴─────────────────────────────────────────────────┤
+│ space toggle  a all  d deny  p preview  s sync  / filter  t tree  u undo  ? help                 │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘

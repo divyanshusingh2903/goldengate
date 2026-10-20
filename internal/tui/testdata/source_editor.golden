@@ -1,0 +1,30 @@
+┌ goldengate ───────────────────────────────────────────────────────────────── server: ● connected ┐
+│ Sources  ● Claude Code 142  ● Codex 37  ● OpenCode 58  ○ claude.ai                               │
+├────────────────────────────────────────────────┬─────────────────────────────────────────────────┤
+│ Filter: / to search                sort:recent │ Sources of pharmfindr                           │
+│> [x] ~/code/pharmfindr                      ▲ 3│                                                 │
+│  [x] …code/pharmfindr/.claude/worktrees/fox ▲ 2│ [x] Claude Code (41)                            │
+│  [x] ~/code/forge                           ▲ 1│ [x] Codex (6)                                   │
+│  [ ] ~/code/vihayas                            │                                                 │
+│  [~] ~/code/website                   (partial)│ A source switched off here is never sent        │
+│  [-] ~/work/client-x                     denied│ for this project; the rest still is.            │
+│  [ ] ~/scratch/tmp                             │                                                 │
+│  [ ] claude-ai:Chats                           │                                                 │
+│                                                │                                                 │
+│                                                │                                                 │
+│                                                │                                                 │
+│                                                │                                                 │
+│                                                │                                                 │
+│                                                │                                                 │
+│                                                │                                                 │
+│                                                │                                                 │
+│                                                │                                                 │
+│                                                │                                                 │
+│                                                │                                                 │
+│                                                │                                                 │
+│                                                │                                                 │
+│                                                │                                                 │
+│                                                │                                                 │
+├────────────────────────────────────────────────┴─────────────────────────────────────────────────┤
+│ space toggle source  esc close                                                                   │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘

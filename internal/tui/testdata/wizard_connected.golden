@@ -1,0 +1,30 @@
+┌ goldengate setup ────────────────────────────────────────────────── server: ● bridge.example.com ┐
+│ Setup 2/6 · Server                                                                               │
+├──────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Connected.                                                                                       │
+│                                                                                                  │
+│ Ingest token stored in the keyring. The admin token was not saved.                               │
+│                                                                                                  │
+│ Read token for your assistant (shown only now):                                                  │
+│    ggb_read_EXAMPLE                                                                              │
+│ Connector URL: https://bridge.example.com/mcp                                                    │
+│ OAuth is enabled: assistants that need it can connect without a token.                           │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+├──────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ enter continue                                                                                   │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
