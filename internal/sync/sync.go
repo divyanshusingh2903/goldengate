@@ -18,6 +18,7 @@ import (
 	"github.com/OWNER/goldengate/internal/config"
 	"github.com/OWNER/goldengate/internal/model"
 	"github.com/OWNER/goldengate/internal/pathutil"
+	"github.com/OWNER/goldengate/internal/project"
 	"github.com/OWNER/goldengate/internal/selection"
 	"github.com/OWNER/goldengate/internal/summarize"
 	"github.com/OWNER/goldengate/internal/workitems"
@@ -100,6 +101,7 @@ type Syncer struct {
 	Matcher  *selection.Matcher
 	State    *State
 	Home     string
+	Resolver project.Resolver
 	Log      *slog.Logger
 	Now      func() time.Time
 }
@@ -148,7 +150,11 @@ func (s *Syncer) Plan(ctx context.Context, o RunOpts) (Batch, Report, error) {
 	}
 	wantProject := ""
 	if o.Project != "" {
-		wantProject = pathutil.Normalize(pathutil.ExpandHome(o.Project, s.Home))
+		if pathutil.IsVirtualKey(o.Project) {
+			wantProject = o.Project
+		} else {
+			wantProject = pathutil.Normalize(pathutil.ExpandHome(o.Project, s.Home))
+		}
 	}
 	wo := workitems.Options{Providers: s.Config.Issues.Providers}
 	wo.KnownPrefixes = append(append([]string{}, s.Config.Issues.LinearTeams...), s.Config.Issues.JiraProjects...)
@@ -174,7 +180,7 @@ func (s *Syncer) Plan(ctx context.Context, o RunOpts) (Batch, Report, error) {
 				return b, rep, fmt.Errorf("sync: list %s: %w", a.Name(), lerr)
 			}
 			rep.Seen++
-			if wantProject != "" && pathutil.Fold(ref.ProjectKey, s.caseInsensitive()) != pathutil.Fold(wantProject, s.caseInsensitive()) {
+			if wantProject != "" && !sameProject(ref.ProjectKey, wantProject, s.caseInsensitive()) {
 				rep.NotSelected++
 				continue
 			}
@@ -209,6 +215,7 @@ func (s *Syncer) Plan(ctx context.Context, o RunOpts) (Batch, Report, error) {
 			rep.Warnings += len(raw.Warnings)
 			p, err := summarize.Build(raw, summarize.Options{
 				Level: s.Config.Share.Level, Home: s.Home, Work: wo, ExtraRedactions: s.Config.Redact.ExtraPatterns,
+				ProjectKey: s.serverKey(ref),
 			})
 			if err != nil {
 				return b, rep, fmt.Errorf("sync: summarize: %w", err)
@@ -232,6 +239,27 @@ func (s *Syncer) Plan(ctx context.Context, o RunOpts) (Batch, Report, error) {
 		}
 	}
 	return b, rep, nil
+}
+
+// serverKey is the project a session is filed under on the server: the
+// repository root for a worktree session, but only when that root is itself
+// selected, so an unselected folder's name is never sent.
+func (s *Syncer) serverKey(ref model.SessionRef) string {
+	root := s.Resolver.Root(ref)
+	if root == "" || root == ref.ProjectKey {
+		return ref.ProjectKey
+	}
+	if s.Matcher.Decide(root, ref.Source).Shared {
+		return root
+	}
+	return ref.ProjectKey
+}
+
+func sameProject(a, b string, ci bool) bool {
+	if pathutil.IsVirtualKey(a) || pathutil.IsVirtualKey(b) {
+		return a == b
+	}
+	return pathutil.Fold(a, ci) == pathutil.Fold(b, ci)
 }
 
 func (s *Syncer) caseInsensitive() bool { return pathutil.CaseInsensitiveFS() }

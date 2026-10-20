@@ -46,6 +46,9 @@ type Options struct {
 	Level string // titles-only | summary (full is not implemented yet)
 	Home  string // used to scrub the project key; "" = no scrub
 	Work  workitems.Options
+	// ProjectKey, when set, replaces the session's folder as the project the
+	// payload is filed under (a repository root for a worktree session).
+	ProjectKey string
 	// ExtraRedactions are user regexes added to the built-in rules.
 	ExtraRedactions []string
 }
@@ -71,7 +74,7 @@ func Build(s *model.RawSession, o Options) (*model.SessionPayload, error) {
 	p := &model.SessionPayload{
 		Source:    s.Ref.Source,
 		SessionID: s.Ref.ID,
-		Project:   pathutil.Scrub(s.Ref.ProjectKey, o.Home),
+		Project:   pathutil.Scrub(firstNonEmpty(o.ProjectKey, s.Ref.ProjectKey), o.Home),
 		Level:     level,
 	}
 	p.StartedAt, p.UpdatedAt = activityWindow(s)
@@ -434,4 +437,11 @@ func hash(p *model.SessionPayload) (string, error) {
 	}
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:]), nil
+}
+
+func firstNonEmpty(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
 }

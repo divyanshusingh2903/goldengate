@@ -251,3 +251,50 @@ func TestPlantedSecretNeverInPayload(t *testing.T) {
 		t.Fatal("planted secret reached the payload")
 	}
 }
+
+func TestWorktreesAreFiledUnderTheirRepositoryOnlyWhenItIsSelected(t *testing.T) {
+	run := func(allow []string, sessions ...model.RawSession) []*model.SessionPayload {
+		e := setup(t, selection.Policy{Allow: allow}, sessions...)
+		sink := &capture{}
+		if _, err := e.s.Run(context.Background(), gsync.RunOpts{}, sink, true); err != nil {
+			t.Fatal(err)
+		}
+		return sink.got
+	}
+	wt := sess("w1", "/home/u/code/app/.claude/worktrees/fox", "work in a worktree")
+	main := sess("m1", "/home/u/code/app", "work in the main checkout")
+
+	// the repository is selected: both file under it
+	got := run([]string{"~/code/app"}, wt, main)
+	for _, p := range got {
+		if p.Project != "~/code/app" {
+			t.Errorf("want ~/code/app, got %s", p.Project)
+		}
+	}
+	if len(got) != 2 {
+		t.Fatalf("payloads: %d", len(got))
+	}
+	// only the worktree is selected: the repository's name must never be sent
+	got = run([]string{"~/code/app/.claude/worktrees/fox"}, wt, main)
+	if len(got) != 1 || got[0].Project != "~/code/app/.claude/worktrees/fox" {
+		t.Fatalf("a worktree-only selection must keep the worktree key: %+v", got)
+	}
+	// a tool-recorded root (OpenCode) behaves the same
+	oc := sess("o1", "/home/u/code/app-feature", "opencode worktree")
+	oc.Ref.RepoRoot = "/home/u/code/app"
+	got = run([]string{"~/code/app-feature", "~/code/app"}, oc)
+	if len(got) != 1 || got[0].Project != "~/code/app" {
+		t.Errorf("RepoRoot with both selected: %+v", got)
+	}
+	got = run([]string{"~/code/app-feature"}, oc)
+	if len(got) != 1 || got[0].Project != "~/code/app-feature" {
+		t.Errorf("RepoRoot not selected must stay hidden: %+v", got)
+	}
+	// a denied repository root is never used either
+	e := setup(t, selection.Policy{Allow: []string{"~/code/app-feature", "~/code/app"}, Deny: []string{"/home/u/code/app"}}, oc)
+	sink := &capture{}
+	_, _ = e.s.Run(context.Background(), gsync.RunOpts{}, sink, true)
+	if len(sink.got) != 1 || sink.got[0].Project != "~/code/app-feature" {
+		t.Errorf("deny on the root: %+v", sink.got)
+	}
+}
