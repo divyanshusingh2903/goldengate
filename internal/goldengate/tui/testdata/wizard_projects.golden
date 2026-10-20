@@ -1,26 +1,26 @@
-┌ goldengate ──────────────────────────────────────────────────────────── server: ○ not configured ┐
+┌ goldengate setup ────────────────────────────────────────────────────── server: ○ not configured ┐
 │ Setup 4/6 · Choose what to share (nothing is shared by default)                                  │
 ├────────────────────────────────────────────────┬─────────────────────────────────────────────────┤
-│ Filter: / to search                sort:recent │ pharmfindr                                      │
-│> [ ] ~/code/pharmfindr                         │ ~/code/pharmfindr                               │
-│  [ ] ~/code/pharmfindr/.claude/worktrees/fox   │ Sources: claude-code 41, codex 6                │
-│  [ ] ~/code/forge                              │ Last activity: 2h ago                           │
-│  [ ] ~/code/vihayas                            │ Level: titles-only                              │
-│  [ ] ~/code/website                            │ Status: not shared                              │
-│  [ ] ~/work/client-x                           │                                                 │
-│  [ ] ~/scratch/tmp                             │ Recent sessions                                 │
-│  [ ] claude-ai:Chats                           │  • Fix OAuth redirect mismatch                  │
-│                                                │  • Add gRPC health checks                       │
-│                                                │  • Refactor token store                         │
-│                                                │ Redactions in preview: 2                        │
-│                                                │ Since last sync: 1 new, 1 changed, 1 unchanged  │
+│ / search projects…        sort recent · ▤ list │ pharmfindr                                      │
+│▌ [ ] ~/code/pharmfindr               not shared│ ~/code/pharmfindr                               │
+│  [ ] …ndr/.claude/worktrees/fox      not shared│                                                 │
+│  [ ] ~/code/forge                    not shared│ ○ Not shared                                    │
+│  [ ] ~/code/vihayas                  not shared│ Nothing from this project leaves your machine.  │
+│  [ ] ~/code/website                  not shared│ If you share it, the next sync sends 47         │
+│  [ ] ~/work/client-x                 not shared│ sessions.                                       │
+│  [ ] ~/scratch/tmp                   not shared│                                                 │
+│  [ ] claude-ai:Chats                 not shared│ Kind      code · coding-tool sessions           │
+│                                                │ Sessions  47 · CC Claude Code 41, CX Codex 6    │
+│                                                │ Activity  2h ago                                │
+│                                                │ Level     titles-only                           │
 │                                                │                                                 │
+│                                                │ [space Share] [p Preview] [e Sources]           │
 │                                                │                                                 │
-│                                                │                                                 │
-│                                                │                                                 │
-│                                                │                                                 │
-│                                                │                                                 │
-│                                                │                                                 │
+│                                                │ Recent sessions (not sent)                      │
+│                                                │  CC Fix OAuth redirect mismatch                 │
+│                                                │  CX Add gRPC health checks                      │
+│                                                │  CC Refactor token store                        │
+│                                                │ 2 secret(s) redacted before sending             │
 │                                                │                                                 │
 │                                                │                                                 │
 │                                                │                                                 │

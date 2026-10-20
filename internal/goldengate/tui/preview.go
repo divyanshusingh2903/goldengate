@@ -28,6 +28,16 @@ func newPreviewState() previewState {
 	return previewState{cache: map[string]Preview{}, loading: map[string]bool{}, vp: newViewport()}
 }
 
+// rowByKey finds a project in the current snapshot.
+func (m *Model) rowByKey(key string) (*Row, bool) {
+	for i := range m.snap.Rows {
+		if m.snap.Rows[i].Key == key {
+			return &m.snap.Rows[i], true
+		}
+	}
+	return nil, false
+}
+
 func (m *Model) currentProject() (*Row, bool) {
 	it, ok := m.current()
 	if !ok || it.row == nil {
@@ -132,9 +142,17 @@ func (m *Model) renderPreview(pv Preview, width int) string {
 		}
 		return b.String()
 	}
+	r, _ := m.rowByKey(pv.Key)
+	tracked := r == nil || ((r.State == Shared || r.State == Partial) && r.Synced > 0)
 	for _, it := range pv.Items {
 		tag := map[string]string{"new": m.th.Added.Render("new"), "changed": m.th.Changed.Render("changed"), "unchanged": m.th.Dim.Render("unchanged")}[it.Status]
-		b.WriteString(m.th.Title.Render(" ── ") + fmt.Sprintf("[%s] %s · %s · %s\n", tag, pretty(it.Source), relTime(m.now(), it.Updated), clip(it.ID, 12)))
+		if !tracked {
+			tag = m.th.Dim.Render("not sent")
+			if r.State == Shared || r.State == Partial {
+				tag = m.th.Added.Render("new")
+			}
+		}
+		b.WriteString(m.th.Title.Render(" ── ") + fmt.Sprintf("[%s] %s %s · %s · %s\n", tag, m.tag(it.Source), pretty(it.Source), relTime(m.now(), it.Updated), clip(it.ID, 12)))
 		p := it.Payload
 		wrap("  ", "Title: "+m.highlight(titleOf(&p)))
 		if s := p.Summary; s != nil {
@@ -164,7 +182,7 @@ func (m *Model) renderPreview(pv Preview, width int) string {
 				wrap("    ", fmt.Sprintf("%s %s [%s]%s", w.Kind, m.highlight(w.Key), w.Status, ev))
 			}
 		}
-		if len(it.Diff) > 0 {
+		if len(it.Diff) > 0 && tracked {
 			b.WriteString("  " + m.th.Changed.Render("Since the last sync:") + "\n")
 			for _, d := range it.Diff {
 				st := m.th.Changed
@@ -220,14 +238,21 @@ func (m *Model) viewPreview() string {
 		mode = "PARANOID: raw payloads"
 	}
 	top := fmt.Sprintf(" %s · level %s · %s", label, m.snap.Level, mode)
-	if s := summarizeStatuses(pv.Items); s != "" {
-		top += " · " + s
+	switch r, _ := m.rowByKey(m.pv.key); {
+	case r != nil && (r.State == NotShared || r.State == Denied):
+		top += " · " + m.th.Dim.Render("not shared: this is what sharing it would send")
+	case r != nil && r.Synced == 0:
+		top += " · " + m.th.Warn.Render("never synced: everything here is new")
+	default:
+		if s := summarizeStatuses(pv.Items); s != "" {
+			top += " · " + s
+		}
 	}
 	if n := totalRedactions(pv.Redactions); n > 0 {
 		top += fmt.Sprintf(" · %d redactions", n)
 	}
-	f := frame{th: m.th, w: m.w, h: m.h, title: "preview", right: m.serverBadge(), top: top}
+	f := frame{th: m.th, w: m.w, h: m.h, title: m.header("preview"), right: m.serverBadge(), top: top}
 	f.left = lines(m.pv.vp.View(), m.w-2, bodyHeight(m.h))
-	f.hint = m.statusLine(hints(m.th, m.w-2, "↑/↓", "scroll", "P", "paranoid", "r", "reload", "s", "sync", "esc", "back"))
+	f.hint = m.statusLine(m.hints(m.w-2, "↑/↓", "scroll", "P", "paranoid", "r", "reload", "s", "sync", "esc", "back"))
 	return f.render()
 }

@@ -1,17 +1,17 @@
-┌ sync ─────────────────────────────────────────────────────────────────────── server: ● connected ┐
-│ Sync · dry run (nothing is sent or recorded)                                                     │
+┌ goldengate  1 Projects [2 Sync] 3 Server  4 Settings  ─────────── ● connected bridge.example.com ┐
+│ ✓ Review ──── ② Send   to bridge.example.com                                                     │
 ├──────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ 7 session(s) in 3 project(s) would be sent                                                       │
-│ 120 session(s) not selected, 30 already up to date, 1 warning(s)                                 │
-│ 2 redaction(s) applied                                                                           │
+│ ✓ Ready to send · nothing has left this machine yet                                              │
 │                                                                                                  │
-│   ~/code/pharmfindr                                                                    4         │
-│   ~/code/forge                                                                         1         │
-│   ~/code/pharmfindr/.claude/worktrees/fox                                              2         │
+│ PROJECT                                                                   SESSIONS               │
+│ ✓  ~/code/pharmfindr                                                             4               │
+│ ✓  ~/code/forge                                                                  1               │
+│ ✓  ~/code/pharmfindr/.claude/worktrees/fox                                       2               │
 │                                                                                                  │
+│ 7 sessions · 3 projects · 2 secrets redacted · 1 warning                                         │
+│ 120 sessions in projects you don't share stay on this machine.                                   │
 │                                                                                                  │
-│                                                                                                  │
-│                                                                                                  │
+│ [enter Send 7 sessions] [r Review again] [esc Not now]                                           │
 │                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │
@@ -26,5 +26,5 @@
 │                                                                                                  │
 │                                                                                                  │
 ├──────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ enter start  D dry/real  r replan  esc back                                                      │
+│ enter send  r review again  esc not now                                                          │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘

@@ -1,19 +1,19 @@
-┌ sync ─────────────────────────────────────────────────────────────────────── server: ● connected ┐
-│ Sync · REAL SYNC                                                                                 │
+┌ goldengate  1 Projects [2 Sync] 3 Server  4 Settings  ─────────── ● connected bridge.example.com ┐
+│ ✓ Review ──── ② Send   to bridge.example.com                                                     │
 ├──────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ [#########################################-------]  6/7 sessions                                 │
+│ ✗ 1 project could not be sent                                                                    │
+│ 6 sessions were sent. Retrying skips what already arrived.                                       │
 │                                                                                                  │
-│ [ok] ~/code/pharmfindr  4                                                                        │
-│ [!!] ~/code/forge  1                                                                             │
+│ PROJECT                                                                   SESSIONS               │
+│ ✓  ~/code/pharmfindr                                                             4               │
+│ ✗  ~/code/forge                                                                  1               │
 │      server returned 503: try later                                                              │
-│ [ok] ~/code/pharmfindr/.claude/worktrees/fox  2                                                  │
-│ 1 project(s) failed. Press r to retry; finished projects are skipped.                            │
+│ ✓  ~/code/pharmfindr/.claude/worktrees/fox                                       2               │
 │                                                                                                  │
+│ 7 sessions · 3 projects · 2 secrets redacted · 1 warning                                         │
+│ 120 sessions in projects you don't share stay on this machine.                                   │
 │                                                                                                  │
-│                                                                                                  │
-│                                                                                                  │
-│                                                                                                  │
-│                                                                                                  │
+│ [enter Retry] [esc Back]                                                                         │
 │                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │
@@ -26,5 +26,5 @@
 │                                                                                                  │
 │                                                                                                  │
 ├──────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ r retry/replan  D dry/real  esc back                                                             │
+│ enter continue  r review again  esc back                                                         │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘

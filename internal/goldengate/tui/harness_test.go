@@ -72,6 +72,7 @@ func (h *harness) run(cmd tea.Cmd) {
 func (h *harness) send(msg tea.Msg) {
 	h.t.Helper()
 	_, cmd := h.m.Update(msg)
+	h.m.View() // the runtime renders after every update; click zones come from it
 	h.run(cmd)
 }
 

@@ -1,11 +1,27 @@
 package tui
 
 import (
+	"fmt"
+	"os"
+
 	tea "github.com/charmbracelet/bubbletea"
 )
 
 // Run starts the UI and blocks until it exits.
 func Run(be Backend, o Options) error {
+	painted := false
+	o.SetColors = func(fg, bg string) {
+		if bg == "" {
+			if painted {
+				fmt.Fprint(os.Stdout, "\x1b]111\x07\x1b]110\x07") // back to the terminal's own colors
+				painted = false
+			}
+			return
+		}
+		fmt.Fprintf(os.Stdout, "\x1b]11;%s\x07\x1b]10;%s\x07", bg, fg)
+		painted = true
+	}
+	defer o.SetColors("", "")
 	p := tea.NewProgram(New(be, o), tea.WithAltScreen(), tea.WithMouseCellMotion(), tea.WithContext(o.Context))
 	_, err := p.Run()
 	return err
@@ -18,7 +34,7 @@ func (m *Model) typing() bool {
 	case scrProjects:
 		return m.pk.filtering
 	case scrSettings:
-		return m.st.editing
+		return m.st.editing || m.st.dd
 	case scrWizard:
 		return m.wz.step == wizServer && !m.wz.done && m.wz.mode != 2
 	}

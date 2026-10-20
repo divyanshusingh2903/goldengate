@@ -179,6 +179,33 @@ func (s *State) Count(ctx context.Context) (int, error) {
 	return n, nil
 }
 
+// ProjectStat is what the server already holds for a project, as far as this
+// machine knows: how many sessions were pushed and when the latest push was.
+type ProjectStat struct {
+	Synced   int
+	LastSync time.Time
+}
+
+// ProjectStats returns a ProjectStat for every project with pushed sessions.
+func (s *State) ProjectStats(ctx context.Context) (map[string]ProjectStat, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT project, COUNT(*), MAX(synced_at) FROM sessions GROUP BY project`)
+	if err != nil {
+		return nil, fmt.Errorf("state: project stats: %w", err)
+	}
+	defer rows.Close()
+	out := map[string]ProjectStat{}
+	for rows.Next() {
+		var p string
+		var n int
+		var at int64
+		if err := rows.Scan(&p, &n, &at); err != nil {
+			return nil, fmt.Errorf("state: project stats: %w", err)
+		}
+		out[p] = ProjectStat{Synced: n, LastSync: time.Unix(at, 0)}
+	}
+	return out, rows.Err()
+}
+
 // ForgetProject drops the remembered sessions of a project (after a remote
 // purge) so that the next sync uploads them again if the project is still shared.
 func (s *State) ForgetProject(ctx context.Context, project string) error {

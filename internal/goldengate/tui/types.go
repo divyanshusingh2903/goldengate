@@ -38,7 +38,9 @@ type Row struct {
 	Sources  []SourceInfo
 	Sessions int
 	Last     time.Time
-	Pending  int // sessions a sync would look at again
+	Pending  int       // sessions a sync would send (new or changed); shared projects only
+	Synced   int       // sessions already pushed to the server
+	LastSync time.Time // latest push; zero when nothing was ever pushed
 	State    ShareState
 	Reason   string
 	Virtual  bool // a chat export bucket rather than a folder
@@ -101,7 +103,8 @@ const (
 type Action struct {
 	Kind   ActionKind
 	Keys   []string
-	Source string // ActToggleSource only
+	Source string   // ActToggleSource only
+	Others []string // ActToggleSource: the project's other sources
 }
 
 // RemotePrompt offers to delete un-shared projects from the server too.
@@ -126,6 +129,8 @@ const (
 	SyncProjectDone
 	SyncProjectFailed
 	SyncFinished
+	SyncPrepared // one more session read and redacted (before the plan is complete)
+	SyncProgress // Sessions more of Project reached the server
 )
 
 // SyncEvent is one progress report.
@@ -179,6 +184,7 @@ type Settings struct {
 	Sources       []SourceStatus
 	ExtraPatterns []string
 	EnrichGit     bool
+	Theme         string // color preset; "" is the default (Golden Gate Light)
 }
 
 // ToolStatus is a detected coding tool, for the wizard.

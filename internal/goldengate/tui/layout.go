@@ -171,6 +171,24 @@ func overlay(screen string, box []string, w, h int) string {
 	return strings.Join(rows, "\n")
 }
 
+// overlayAt draws a box of lines with its top-left corner at (x, y).
+func overlayAt(screen string, box []string, x, y int) string {
+	rows := strings.Split(screen, "\n")
+	bw := 0
+	for _, l := range box {
+		bw = max(bw, lipgloss.Width(l))
+	}
+	y = max(min(y, len(rows)-len(box)), 0) // keep it on screen
+	for i, l := range box {
+		if y+i >= len(rows) {
+			break
+		}
+		row := rows[y+i]
+		rows[y+i] = ansi.Truncate(row, x, "") + fit(l, bw) + ansi.TruncateLeft(row, x+bw, "")
+	}
+	return strings.Join(rows, "\n")
+}
+
 // box wraps content lines in a small border for overlays.
 func box(th Theme, title string, content []string) []string {
 	inner := lipgloss.Width(title) + 2

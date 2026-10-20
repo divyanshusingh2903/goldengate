@@ -156,10 +156,11 @@ func TestWizardFullFlow(t *testing.T) {
 	if h.m.wz.step != wizSync {
 		t.Fatalf("step: %v", h.m.wz.step)
 	}
-	h.key("enter") // run (a dry run: no server)
-	if h.m.sy.phase != syncDone || !be.syncs[0] {
-		t.Fatalf("no server, so the first sync is a dry run: %v %v", h.m.sy.phase, be.syncs)
+	// the review already ran on the previous step; without a server it is all there is
+	if len(be.syncs) != 1 || !be.syncs[0] {
+		t.Fatalf("no server, so the first sync is a review only: %v", be.syncs)
 	}
+	h.contains("✓ Ready to send", "can only be a review")
 	h.key("enter") // finish
 	if h.m.scr != scrProjects {
 		t.Fatal("the wizard ends on the project picker")

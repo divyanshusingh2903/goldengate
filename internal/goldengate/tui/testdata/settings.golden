@@ -1,16 +1,16 @@
-┌ settings ─────────────────────────────────────────────────────────────────── server: ● connected ┐
+┌ goldengate  1 Projects  2 Sync  3 Server [4 Settings] ─────────── ● connected bridge.example.com ┐
 │ Changes are saved immediately                                                                    │
 ├──────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ Share level                        summary                                                       │
+│▌Theme                               Golden Gate Light  ▾  ■■■■■■                                 │
+│ Share level                        [summary]  titles-only                                        │
 │ Look back                          90d                                                           │
-│ Source Claude Code                 on                                                            │
-│ Source Codex                       on                                                            │
-│ Source OpenCode                    on                                                            │
-│ Source claude.ai                   on (not found)                                                │
+│ Source CC Claude Code              ● on   code                                                   │
+│ Source CX Codex                    ● on   code                                                   │
+│ Source OC OpenCode                 ● on   code                                                   │
+│ Source AI claude.ai                ● on   chat · not found on this computer                      │
 │ + add a redaction pattern (regex)                                                                │
-│ Verify commits with local git      off                                                           │
+│ Verify commits with local git      ○ off                                                         │
 │ Session hook / schedule            not available yet (coming with deployment support)            │
-│                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │

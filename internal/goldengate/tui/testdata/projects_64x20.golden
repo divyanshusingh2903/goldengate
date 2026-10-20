@@ -1,20 +1,20 @@
-┌ goldengate ───────────────────────────── server: ● connected ┐
-│ Sources  ● Claude Code 142  ● Codex 37  ● OpenCode 58  ○ cla…│
+┌ goldengate ────────────────── ● connected bridge.example.com ┐
+│ [All 8]  Shared 4   To sync 3   Not shared 4                 │
 ├──────────────────────────────────────────────────────────────┤
-│ Filter: / to search                              sort:recent │
-│> [x] ~/code/pharmfindr                                    ▲ 3│
-│  [x] ~/code/pharmfindr/.claude/worktrees/fox              ▲ 2│
-│  [x] ~/code/forge                                         ▲ 1│
-│  [ ] ~/code/vihayas                                          │
-│  [~] ~/code/website                                 (partial)│
-│  [-] ~/work/client-x                                   denied│
-│  [ ] ~/scratch/tmp                                           │
-│  [ ] claude-ai:Chats                                         │
+│ / search projects…                      sort recent · ▤ list │
+│▌ [x] ~/code/pharmfindr                  CC CX     ▲ 3 to sync│
+│  [x] …/pharmfindr/.claude/worktrees/fox    CC     ▲ 2 to sync│
+│  [x] ~/code/forge                          CC     ▲ 1 to sync│
+│  [ ] ~/code/vihayas                        CC      not shared│
+│  [~] ~/code/website                     CC OC    ✓ synced 40h│
+│  [-] ~/work/client-x                       CC        ✕ denied│
+│  [ ] ~/scratch/tmp                         CX      not shared│
+│  [ ] claude-ai:Chats                       AI      not shared│
 │                                                              │
 │                                                              │
 │                                                              │
 │                                                              │
 │                                                              │
 ├──────────────────────────────────────────────────────────────┤
-│ space toggle  a all  d deny  p preview  s sync  ? help       │
+│ space unshare  p preview  s sync  f view  / search  ? help   │
 └──────────────────────────────────────────────────────────────┘

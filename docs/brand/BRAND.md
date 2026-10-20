@@ -26,20 +26,21 @@ Painted from the bridge. The TUI theme (`internal/goldengate/tui/theme.go`) will
 
 | Token | Name | Light | Dark | Use |
 |---|---|---|---|---|
-| `--gg-orange` | International Orange | `#C0362C` | `#F0563F` | the mark, primary button, links. Identity only |
+| `--gg-orange` | International Orange | `#D03A2B` | `#F0563F` | the mark, primary button, links. Identity only |
 | `--gg-on-orange` | | `#FFFFFF` | `#1B0703` | text on orange |
 | `--gg-bg` | Fog / Night bay | `#EEF0EE` | `#0D1821` | page ground |
 | `--gg-surface` | Surface | `#FFFFFF` | `#132330` | cards, code |
-| `--gg-sunk` | | `#E3E7E5` | `#0A131A` | selected tabs, insets |
-| `--gg-line` | Cable line | `#CBD2D0` | `#233646` | borders |
+| `--gg-sunk` | | `#DCE8F0` | `#0A131A` | selected tabs, insets |
+| `--gg-line` | Cable line | `#93A3AB` | `#233646` | borders |
 | `--gg-ink` | Ink | `#13202A` | `#E5EBEE` | text, marks, redaction bars |
-| `--gg-dim` | Marine layer | `#56656D` | `#8D9DA7` | secondary text |
-| `--gg-pacific` | Pacific | `#1F5E80` | `#7FBADB` | focus ring, keys |
-| `--gg-cypress` | Cypress | `#2D6A4A` | `#72C59A` | shared, healthy, added |
-| `--gg-headland` | Headland | `#965F00` | `#E8B652` | partial, pending, changed |
-| `--gg-alarm` | Alarm | `#9B1D5A` | `#F27EB2` | failures; denied glyph only |
+| `--gg-dim` | Marine layer | `#4A5960` | `#8D9DA7` | secondary text |
+| `--gg-pacific` | Pacific | `#0B5F94` | `#7FBADB` | focus ring, keys |
+| `--gg-cypress` | Cypress | `#137A44` | `#72C59A` | shared, healthy, added |
+| `--gg-headland` | Headland | `#B05A00` | `#E8B652` | partial, pending, changed |
+| `--gg-alarm` | Alarm | `#B8165F` | `#F27EB2` | failures; denied glyph only |
+| `--gg-twilight` | Twilight | `#6A35C2` | `#B9A0E6` | chat-source tags (a kind, never a state) |
 | `--gg-term-bg` | | `#F8F9F8` | `#09131B` | terminal background |
-| `--gg-term-cur` | | `#D9E6EE` | `#1B3446` | TUI cursor row |
+| `--gg-term-cur` | | `#C6DDEE` | `#1B3446` | TUI cursor row |
 
 Rules
 - International Orange is the bridge's own paint. It never means warning or error.
@@ -113,6 +114,19 @@ The TUI uses brackets, the web uses round glyphs. Both always carry the word.
 | denied | `[-]` | `✕` | Alarm, glyph only |
 | pending | `▲ 3` | `▲ 3` | Headland |
 | redacted | ink bar | ink bar | Ink on ink |
+
+### Source tags
+
+Every session and project carries the tag of the tool it came from. The tag is
+text, so it reads without color; the color says the kind.
+
+| Tag | Source | Kind | Color |
+|---|---|---|---|
+| `CC` | Claude Code | code | Pacific |
+| `CX` | Codex | code | Pacific |
+| `OC` | OpenCode | code | Pacific |
+| `AI` | claude.ai export | chat | Twilight |
+| `GPT` | ChatGPT export | chat | Twilight |
 
 ## 6. Layout and motion
 

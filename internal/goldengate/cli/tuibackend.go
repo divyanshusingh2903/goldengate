@@ -85,10 +85,14 @@ func (b *tuiBackend) Snapshot(ctx context.Context) (tui.Snapshot, error) {
 	if err != nil {
 		return snap, err
 	}
+	stats, err := s.State.ProjectStats(ctx)
+	if err != nil {
+		return snap, err
+	}
 	perSource := map[string]int{}
 	for _, p := range res.Projects {
 		row := tui.Row{Key: p.Key, Label: pathutil.Scrub(p.Key, a.Home), Sessions: p.Sessions, Last: p.LastActivity, Pending: pending[p.Key],
-			Virtual: pathutil.IsVirtualKey(p.Key)}
+			Synced: stats[p.Key].Synced, LastSync: stats[p.Key].LastSync, Virtual: pathutil.IsVirtualKey(p.Key)}
 		if p.Root != "" {
 			row.Root = pathutil.Scrub(p.Root, a.Home)
 		}
@@ -198,19 +202,52 @@ func (b *tuiBackend) Apply(ctx context.Context, act tui.Action) (tui.ActionResul
 		if len(act.Keys) != 1 {
 			return tui.ActionResult{}, errors.New("choose one project to change its sources")
 		}
-		rule := selection.SourceRule(act.Source, a.ruleFor(act.Keys[0]))
-		on := !slices.Contains(cfg.Share.SourceDeny, rule)
-		edit = func(c *config.Config) {
-			if on {
-				c.Share.SourceDeny = append(c.Share.SourceDeny, rule)
-			} else {
-				c.Share.SourceDeny = slices.DeleteFunc(c.Share.SourceDeny, func(x string) bool { return x == rule })
+		key := act.Keys[0]
+		rule := selection.SourceRule(act.Source, a.ruleFor(key))
+		anyShared := false
+		for _, src := range append([]string{act.Source}, act.Others...) {
+			if m.Decide(key, src).Shared {
+				anyShared = true
 			}
 		}
-		if on {
-			notes = append(notes, pretty(act.Source)+" is no longer shared for this project")
-		} else {
-			notes = append(notes, pretty(act.Source)+" is shared again for this project")
+		switch {
+		case m.Denied(key):
+			err = errors.New("this project is denied; share it first (space on the project)")
+		case !anyShared:
+			// nothing here is shared yet: share the folder with this one source only
+			var allow func(*config.Config)
+			var ignored []string
+			allow, err = b.allowEdit(cfg, m, act.Keys, &ignored)
+			others := make([]string, 0, len(act.Others))
+			for _, o := range act.Others {
+				others = append(others, selection.SourceRule(o, a.ruleFor(key)))
+			}
+			edit = func(c *config.Config) {
+				if allow != nil {
+					allow(c)
+				}
+				c.Share.SourceDeny = slices.DeleteFunc(c.Share.SourceDeny, func(x string) bool { return x == rule })
+				for _, r := range others {
+					if !slices.Contains(c.Share.SourceDeny, r) {
+						c.Share.SourceDeny = append(c.Share.SourceDeny, r)
+					}
+				}
+			}
+			notes = append(notes, "shared this project's "+pretty(act.Source)+" sessions only")
+		default:
+			on := !slices.Contains(cfg.Share.SourceDeny, rule)
+			edit = func(c *config.Config) {
+				if on {
+					c.Share.SourceDeny = append(c.Share.SourceDeny, rule)
+				} else {
+					c.Share.SourceDeny = slices.DeleteFunc(c.Share.SourceDeny, func(x string) bool { return x == rule })
+				}
+			}
+			if on {
+				notes = append(notes, pretty(act.Source)+" is no longer sent for this project")
+			} else {
+				notes = append(notes, pretty(act.Source)+" is sent again for this project")
+			}
 		}
 	default:
 		return tui.ActionResult{}, errors.New("unknown action")
@@ -385,6 +422,10 @@ func (discardSink) Send(context.Context, []*model.SessionPayload) error { return
 // Sync implements tui.Backend: plan, then push project by project so progress
 // is real. A dry run goes through the same validation but sends and records
 // nothing.
+// syncStep is how many sessions the interactive sync sends per request, so
+// its progress bar moves while a big project uploads.
+const syncStep = 10
+
 func (b *tuiBackend) Sync(ctx context.Context, dry bool, emit func(tui.SyncEvent)) error {
 	cfg, err := b.a.load()
 	if err != nil {
@@ -403,7 +444,7 @@ func (b *tuiBackend) Sync(ctx context.Context, dry bool, emit func(tui.SyncEvent
 		}
 		sink = cl
 	}
-	batch, _, err := s.Plan(ctx, gsync.RunOpts{})
+	batch, _, err := s.Plan(ctx, gsync.RunOpts{OnPlanned: func() { emit(tui.SyncEvent{Kind: tui.SyncPrepared, Sessions: 1}) }})
 	if err != nil {
 		return err
 	}
@@ -427,14 +468,23 @@ func (b *tuiBackend) Sync(ctx context.Context, dry bool, emit func(tui.SyncEvent
 			continue
 		}
 		emit(tui.SyncEvent{Kind: tui.SyncProjectStart, Project: label, Sessions: part.Len()})
-		if err := gsync.Push(ctx, sink, st, part, b.a.Now()); err != nil {
-			if ctx.Err() != nil {
-				return ctx.Err()
+		failed := false
+		// small steps so the screen can follow; each step is recorded as it
+		// lands, so a retry after a failure skips what already arrived
+		for _, chunk := range part.Chunks(syncStep) {
+			if err := gsync.Push(ctx, sink, st, chunk, b.a.Now()); err != nil {
+				if ctx.Err() != nil {
+					return ctx.Err()
+				}
+				emit(tui.SyncEvent{Kind: tui.SyncProjectFailed, Project: label, Err: err.Error()})
+				failed = true
+				break
 			}
-			emit(tui.SyncEvent{Kind: tui.SyncProjectFailed, Project: label, Err: err.Error()})
-			continue
+			emit(tui.SyncEvent{Kind: tui.SyncProgress, Project: label, Sessions: chunk.Len()})
 		}
-		emit(tui.SyncEvent{Kind: tui.SyncProjectDone, Project: label, Sessions: part.Len()})
+		if !failed {
+			emit(tui.SyncEvent{Kind: tui.SyncProjectDone, Project: label, Sessions: part.Len()})
+		}
 	}
 	emit(tui.SyncEvent{Kind: tui.SyncFinished})
 	return nil
@@ -513,7 +563,8 @@ func (b *tuiBackend) Settings(ctx context.Context) (tui.Settings, error) {
 	if err != nil {
 		return tui.Settings{}, err
 	}
-	return tui.Settings{Level: cfg.Share.Level, Since: cfg.Share.Since, Sources: srcs, ExtraPatterns: slices.Clone(cfg.Redact.ExtraPatterns), EnrichGit: cfg.Enrich.Git}, nil
+	return tui.Settings{Level: cfg.Share.Level, Since: cfg.Share.Since, Sources: srcs, ExtraPatterns: slices.Clone(cfg.Redact.ExtraPatterns), EnrichGit: cfg.Enrich.Git,
+		Theme: cfg.UI.Theme}, nil
 }
 
 // SaveSettings implements tui.Backend. Nothing is written unless the whole
@@ -531,6 +582,7 @@ func (b *tuiBackend) SaveSettings(ctx context.Context, s tui.Settings) error {
 	cfg.Share.Level, cfg.Share.Since = s.Level, strings.TrimSpace(s.Since)
 	cfg.Redact.ExtraPatterns = slices.Clone(s.ExtraPatterns)
 	cfg.Enrich.Git = s.EnrichGit
+	cfg.UI.Theme = s.Theme
 	var include []string
 	for _, src := range s.Sources {
 		if src.Enabled {

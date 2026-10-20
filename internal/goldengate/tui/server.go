@@ -5,6 +5,8 @@ import (
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/divyanshusingh2903/goldengate/internal/utils/pathutil"
 )
 
 type serverState struct {
@@ -96,19 +98,38 @@ func (m *Model) viewServer() string {
 		}
 		add("")
 		add(m.th.Title.Render(fmt.Sprintf("What the server holds (%d project(s))", len(i.Projects))))
+		del := btn{m.th.ButtonBad, "D", "Delete"}
+		lw := max(w-50, 10)
 		for idx, p := range i.Projects {
 			if len(out) >= bh {
 				break
 			}
-			line := fmt.Sprintf("%s  %4d sessions  %s", fit(truncLeft(p.Label, max(w-34, 10)), max(w-34, 10)), p.Sessions, relTime(m.now(), p.Last))
-			if idx == m.sv.cursor {
-				line = m.th.Cursor.Render(fit(line, w-2))
+			y := yBody + len(out)
+			idx := idx
+			m.addZone(1, 1+w, y, func(m *Model) tea.Cmd {
+				m.sv.cursor = idx
+				return nil
+			})
+			kind := m.th.CodeTag.Render("code")
+			if pathutil.IsVirtualKey(p.Label) {
+				kind = m.th.ChatTag.Render("chat")
 			}
-			add(line)
+			cur := idx == m.sv.cursor
+			mark := " "
+			if cur {
+				mark = m.th.Accent.Render("▌")
+			}
+			line := fmt.Sprintf("%s %s  %s  %4d sessions  %-9s", mark, kind, fit(truncLeft(p.Label, lw), lw), p.Sessions, relTime(m.now(), p.Last))
+			if cur {
+				m.clickText(y, del.text(), func(m *Model) tea.Cmd { m.sv.cursor = idx; return m.press("D") })
+				line += " " + del.st.Render(del.text())
+				line = m.th.Cursor.Render(fit(line, w-1))
+			}
+			out = append(out, line)
 		}
 	}
-	f := frame{th: m.th, w: m.w, h: m.h, title: "server", right: m.serverBadge(), top: " " + strings.TrimSpace(m.sourcesLine())}
+	f := frame{th: m.th, w: m.w, h: m.h, title: m.header("server"), right: m.serverBadge(), top: " " + strings.TrimSpace(m.sourcesLine())}
 	f.left = lines(strings.Join(out, "\n"), w, bh)
-	f.hint = m.statusLine(hints(m.th, w, "↑/↓", "select", "D", "delete from server", "r", "refresh", "i", "setup", "esc", "back"))
+	f.hint = m.statusLine(m.hints(w, "↑/↓", "select", "D", "delete from server", "r", "refresh", "i", "setup", "esc", "back"))
 	return f.render()
 }

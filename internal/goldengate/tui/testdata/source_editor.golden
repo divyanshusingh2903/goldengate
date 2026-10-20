@@ -1,15 +1,15 @@
-┌ goldengate ───────────────────────────────────────────────────────────────── server: ● connected ┐
-│ Sources  ● Claude Code 142  ● Codex 37  ● OpenCode 58  ○ claude.ai                               │
+┌ goldengate [1 Projects] 2 Sync  3 Server  4 Settings  ─────────── ● connected bridge.example.com ┐
+│ [All 8]  Shared 4   To sync 3   Not shared 4                                                     │
 ├────────────────────────────────────────────────┬─────────────────────────────────────────────────┤
-│ Filter: / to search                sort:recent │ Sources of pharmfindr                           │
-│> [x] ~/code/pharmfindr                      ▲ 3│                                                 │
-│  [x] …code/pharmfindr/.claude/worktrees/fox ▲ 2│ [x] Claude Code (41)                            │
-│  [x] ~/code/forge                           ▲ 1│ [x] Codex (6)                                   │
-│  [ ] ~/code/vihayas                            │                                                 │
-│  [~] ~/code/website                   (partial)│ A source switched off here is never sent        │
-│  [-] ~/work/client-x                     denied│ for this project; the rest still is.            │
-│  [ ] ~/scratch/tmp                             │                                                 │
-│  [ ] claude-ai:Chats                           │                                                 │
+│ / search projects…        sort recent · ▤ list │ Which tools to send from pharmfindr             │
+│▌ [x] ~/code/pharmfindr              ▲ 3 to sync│                                                 │
+│  [x] …ndr/.claude/worktrees/fox     ▲ 2 to sync│ ● Shared. Untick a tool to stop sending its     │
+│  [x] ~/code/forge                   ▲ 1 to sync│ sessions; the others are still sent.            │
+│  [ ] ~/code/vihayas                  not shared│                                                 │
+│  [~] ~/code/website                ✓ synced 40h│▌[x] CC Claude Code     41 sessions  ✓ sent      │
+│  [-] ~/work/client-x                   ✕ denied│ [x] CX Codex            6 sessions  ✓ sent      │
+│  [ ] ~/scratch/tmp                   not shared│                                                 │
+│  [ ] claude-ai:Chats                 not shared│ [esc Done]                                      │
 │                                                │                                                 │
 │                                                │                                                 │
 │                                                │                                                 │
@@ -26,5 +26,5 @@
 │                                                │                                                 │
 │                                                │                                                 │
 ├────────────────────────────────────────────────┴─────────────────────────────────────────────────┤
-│ space toggle source  esc close                                                                   │
+│ ↑/↓ move  space send / don't send  esc done                                                      │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘

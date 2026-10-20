@@ -24,6 +24,7 @@ type fakeBackend struct {
 	firstRun bool
 	patterns []string
 	git      bool
+	theme    string
 
 	previews map[string]Preview
 	srvInfo  ServerInfo
@@ -59,13 +60,13 @@ func newFake() *fakeBackend {
 			{Name: "claude-ai", Installed: false, Enabled: true},
 		},
 		rows: []Row{
-			{Key: "/home/u/code/pharmfindr", Label: "~/code/pharmfindr", Sessions: 47, Last: ago(2 * time.Hour), Pending: 3, State: Shared, Reason: "allowed by ~/code/pharmfindr",
+			{Key: "/home/u/code/pharmfindr", Label: "~/code/pharmfindr", Sessions: 47, Last: ago(2 * time.Hour), Pending: 3, Synced: 44, LastSync: ago(2 * time.Hour), State: Shared, Reason: "allowed by ~/code/pharmfindr",
 				Sources: []SourceInfo{{"claude-code", 41, true}, {"codex", 6, true}}},
-			{Key: "/home/u/code/forge", Label: "~/code/forge", Sessions: 12, Last: ago(5 * time.Hour), Pending: 1, State: Shared, Reason: "allowed by ~/code/forge",
+			{Key: "/home/u/code/forge", Label: "~/code/forge", Sessions: 12, Last: ago(5 * time.Hour), Pending: 1, Synced: 11, LastSync: ago(6 * time.Hour), State: Shared, Reason: "allowed by ~/code/forge",
 				Sources: []SourceInfo{{"claude-code", 12, true}}},
 			{Key: "/home/u/code/vihayas", Label: "~/code/vihayas", Sessions: 8, Last: ago(30 * time.Hour), State: NotShared, Reason: "not selected",
 				Sources: []SourceInfo{{"claude-code", 8, false}}},
-			{Key: "/home/u/code/website", Label: "~/code/website", Sessions: 9, Last: ago(50 * time.Hour), State: Partial, Reason: "allowed by ~/code/website",
+			{Key: "/home/u/code/website", Label: "~/code/website", Sessions: 9, Last: ago(50 * time.Hour), Synced: 5, LastSync: ago(40 * time.Hour), State: Partial, Reason: "allowed by ~/code/website",
 				Sources: []SourceInfo{{"claude-code", 5, true}, {"opencode", 4, false}}},
 			{Key: "/home/u/work/client-x", Label: "~/work/client-x", Sessions: 20, Last: ago(100 * time.Hour), State: Denied, Reason: "denied by ~/work/client-x",
 				Sources: []SourceInfo{{"claude-code", 20, false}}},
@@ -152,6 +153,33 @@ func (f *fakeBackend) Apply(_ context.Context, a Action) (ActionResult, error) {
 			f.rows[i].State = NotShared
 		case ActDeny:
 			f.rows[i].State = Denied
+		case ActToggleSource:
+			r := &f.rows[i]
+			if r.State == NotShared { // share only this source
+				for j := range r.Sources {
+					r.Sources[j].Shared = r.Sources[j].Name == a.Source
+				}
+			} else {
+				for j := range r.Sources {
+					if r.Sources[j].Name == a.Source {
+						r.Sources[j].Shared = !r.Sources[j].Shared
+					}
+				}
+			}
+			n := 0
+			for _, s := range r.Sources {
+				if s.Shared {
+					n++
+				}
+			}
+			switch {
+			case n == 0:
+				r.State = NotShared
+			case n == len(r.Sources):
+				r.State = Shared
+			default:
+				r.State = Partial
+			}
 		}
 	}
 	res := ActionResult{Message: fmt.Sprintf("%d changed", len(a.Keys))}
@@ -187,6 +215,9 @@ func (f *fakeBackend) Sync(ctx context.Context, dry bool, emit func(SyncEvent)) 
 	f.mu.Lock()
 	f.syncs = append(f.syncs, dry)
 	block, fails := f.syncBlock, f.syncFail
+	if dry { // a dry pass never talks to the server, so it neither blocks nor fails on it
+		block, fails = nil, nil
+	}
 	f.mu.Unlock()
 	emit(SyncEvent{Kind: SyncPlanned, Sessions: 7, Projects: 3})
 	for _, p := range []struct {
@@ -237,7 +268,7 @@ func (f *fakeBackend) DeleteServerProject(_ context.Context, label string) error
 func (f *fakeBackend) Settings(context.Context) (Settings, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return Settings{Level: f.level, Since: f.since, Sources: append([]SourceStatus(nil), f.sources...), ExtraPatterns: append([]string(nil), f.patterns...), EnrichGit: f.git}, nil
+	return Settings{Level: f.level, Since: f.since, Sources: append([]SourceStatus(nil), f.sources...), ExtraPatterns: append([]string(nil), f.patterns...), EnrichGit: f.git, Theme: f.theme}, nil
 }
 
 func (f *fakeBackend) SaveSettings(_ context.Context, s Settings) error {
@@ -247,7 +278,7 @@ func (f *fakeBackend) SaveSettings(_ context.Context, s Settings) error {
 	if f.saveErr != nil {
 		return f.saveErr
 	}
-	f.level, f.since, f.patterns, f.git = s.Level, s.Since, s.ExtraPatterns, s.EnrichGit
+	f.level, f.since, f.patterns, f.git, f.theme = s.Level, s.Since, s.ExtraPatterns, s.EnrichGit, s.Theme
 	f.sources = append([]SourceStatus(nil), s.Sources...)
 	return nil
 }

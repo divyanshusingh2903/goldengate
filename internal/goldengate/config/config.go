@@ -27,6 +27,14 @@ type Config struct {
 	Enrich    Enrich    `toml:"enrich"`
 	Issues    Issues    `toml:"issues"`
 	Redact    Redact    `toml:"redact"`
+	UI        UI        `toml:"ui"`
+}
+
+// UI holds interface preferences.
+type UI struct {
+	// Theme is a color preset name ("goldengate-light", "gruvbox-dark", ...);
+	// empty means the default, Golden Gate Light.
+	Theme string `toml:"theme,omitempty"`
 }
 
 // Server is the bridge endpoint. The token is never stored here.

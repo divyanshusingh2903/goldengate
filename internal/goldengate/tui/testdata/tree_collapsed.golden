@@ -1,16 +1,16 @@
-┌ goldengate ───────────────────────────────────────────────────────────────── server: ● connected ┐
-│ Sources  ● Claude Code 142  ● Codex 37  ● OpenCode 58  ○ claude.ai                               │
+┌ goldengate [1 Projects] 2 Sync  3 Server  4 Settings  ─────────── ● connected bridge.example.com ┐
+│ [All 8]  Shared 4   To sync 3   Not shared 4                                                     │
 ├────────────────────────────────────────────────┬─────────────────────────────────────────────────┤
-│ Filter: / to search           sort:recent tree │ code                                            │
-│  [~] ▾ home/u                                  │ /home/u/code                                    │
-│> [~]   ▸ code                                  │                                                 │
-│  [ ]     scratch/tmp                           │ 5 project(s), 3 shared                          │
-│  [-]     work/client-x                   denied│                                                 │
-│  [ ] ▾ claude-ai:                              │ space shares this whole folder                  │
-│  [ ]     Chats                                 │ (one rule covers everything below)              │
+│ / search projects…        sort recent · ▤ tree │ code                                            │
+│  [~] ▾ home/u                       ▲ 6 to sync│ /home/u/code                                    │
+│▌ [~]   ▸ code                       ▲ 6 to sync│                                                 │
+│  [ ]     scratch/tmp         CX      not shared│ Projects  5, 4 shared                           │
+│  [-]     work/client-x       CC        ✕ denied│ To sync   ▲ 6 sessions                          │
+│  [ ] ▾ claude-ai:                    1 projects│                                                 │
+│  [ ]     Chats               AI      not shared│ [space Share folder] [enter Fold]               │
 │                                                │                                                 │
-│                                                │                                                 │
-│                                                │                                                 │
+│                                                │ One rule covers everything below this folder,   │
+│                                                │ including projects you start later.             │
 │                                                │                                                 │
 │                                                │                                                 │
 │                                                │                                                 │
@@ -26,5 +26,5 @@
 │                                                │                                                 │
 │                                                │                                                 │
 ├────────────────────────────────────────────────┴─────────────────────────────────────────────────┤
-│ space toggle  a all  d deny  p preview  s sync  / filter  t tree  u undo  ? help                 │
+│ space share  p preview  s sync  f view  / search  d deny  u undo  t tree  ? help                 │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘

@@ -1,17 +1,17 @@
-┌ goldengate ───────────────────────────────────────────────────────────────── server: ● connected ┐
-│ Sources  ● Claude Code 142  ● Codex 37  ● OpenCode 58  ○ claude.ai                               │
+┌ goldengate [1 Projects] 2 Sync  3 Server  4 Settings  ─────────── ● connected bridge.example.com ┐
+│ [All 8]  Shared 4   To sync 3   Not shared 4                                                     │
 ├────────────────────────────────────────────────┬─────────────────────────────────────────────────┤
-│ Filter: / to search           sort:recent tree │ home/u                                          │
-│> [~] ▾ home/u                                  │ /home/u                                         │
-│  [~]   ▾ code                                  │                                                 │
-│  [x]       forge                            ▲ 1│ 7 project(s), 3 shared                          │
-│  [x]     ▸ pharmfindr                       ▲ 3│                                                 │
-│  [ ]       vihayas                             │ space shares this whole folder                  │
-│  [~]       website                    (partial)│ (one rule covers everything below)              │
-│  [ ]     scratch/tmp                           │                                                 │
-│  [-]     work/client-x                   denied│                                                 │
-│  [ ] ▾ claude-ai:                              │                                                 │
-│  [ ]     Chats                                 │                                                 │
+│ / search projects…        sort recent · ▤ tree │ home/u                                          │
+│▌ [~] ▾ home/u                       ▲ 6 to sync│ /home/u                                         │
+│  [~]   ▾ code                       ▲ 6 to sync│                                                 │
+│  [x]       forge                    ▲ 1 to sync│ Projects  7, 4 shared                           │
+│  [x]     ▸ pharmfindr               ▲ 3 to sync│ To sync   ▲ 6 sessions                          │
+│  [ ]       vihayas                   not shared│                                                 │
+│  [~]       website                 ✓ synced 40h│ [space Share folder] [enter Fold]               │
+│  [ ]     scratch/tmp                 not shared│                                                 │
+│  [-]     work/client-x                 ✕ denied│ One rule covers everything below this folder,   │
+│  [ ] ▾ claude-ai:                    1 projects│ including projects you start later.             │
+│  [ ]     Chats                       not shared│                                                 │
 │                                                │                                                 │
 │                                                │                                                 │
 │                                                │                                                 │
@@ -26,5 +26,5 @@
 │                                                │                                                 │
 │                                                │                                                 │
 ├────────────────────────────────────────────────┴─────────────────────────────────────────────────┤
-│ space toggle  a all  d deny  p preview  s sync  / filter  t tree  u undo  ? help                 │
+│ space share  p preview  s sync  f view  / search  d deny  u undo  t tree  ? help                 │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘

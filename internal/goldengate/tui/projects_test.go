@@ -34,7 +34,7 @@ func TestTooSmallTerminal(t *testing.T) {
 	h := newHarness(t, 50, 12)
 	h.contains("needs at least 60x16", "50x12")
 	h.send(tea.WindowSizeMsg{Width: 100, Height: 30}) // growing back recovers
-	h.contains("Filter:")
+	h.contains("search projects")
 	h.checkGeometry(100, 30)
 }
 
@@ -80,7 +80,7 @@ func TestFuzzyFilter(t *testing.T) {
 	h := newHarness(t, 100, 30)
 	h.key("/")
 	h.typeText("pharm")
-	h.contains("Filter: /pharm_")
+	h.contains("/ pharm▏")
 	h.lacks("~/code/forge", "client-x")
 	h.contains("~/code/pharmfindr")
 	h.key("enter")
@@ -101,7 +101,7 @@ func TestFuzzyFilter(t *testing.T) {
 	h.contains("website")
 	h.key("/")
 	h.typeText("zzzz")
-	h.contains("Nothing matches the filter.")
+	h.contains("Nothing matches the search.")
 }
 
 func TestFuzzyScore(t *testing.T) {
@@ -162,7 +162,7 @@ func TestMarksRangeAndBulkActions(t *testing.T) {
 	if h.m.pk.rangeMode || len(h.m.pk.marks) != 3 {
 		t.Fatalf("v ends range mode: %v", h.m.pk.marks)
 	}
-	h.contains("3 marked", "*")
+	h.contains("3 marked", "•")
 	h.key("space")
 	a := h.be.actions[0]
 	// pharmfindr, worktree, forge are all shared: bulk space un-shares them all
@@ -234,7 +234,7 @@ func TestSortCycle(t *testing.T) {
 	if h.m.pk.sort != sortName || first() != "claude-ai:Chats" {
 		t.Fatalf("name order: %s", first())
 	}
-	h.contains("sort:name")
+	h.contains("sort name")
 	h.key("o")
 	if h.m.pk.sort != sortSize || first() != "~/code/pharmfindr" { // 47 sessions
 		t.Fatalf("size order: %s", first())
@@ -248,12 +248,14 @@ func TestSortCycle(t *testing.T) {
 func TestSourceEditor(t *testing.T) {
 	h := newHarness(t, 100, 30)
 	h.key("e")
-	h.contains("Sources of pharmfindr", "[x] Claude Code (41)", "[x] Codex (6)")
+	h.contains("Which tools to send from pharmfindr", "● Shared. Untick a tool",
+		"[x] CC Claude Code     41 sessions  ✓ sent", "[x] CX Codex            6 sessions  ✓ sent", "↑/↓ move")
 	h.golden("source_editor")
 	h.key("down", "space")
-	if a := h.be.actions[0]; a.Kind != ActToggleSource || a.Source != "codex" || a.Keys[0] != "/home/u/code/pharmfindr" {
+	if a := h.be.actions[0]; a.Kind != ActToggleSource || a.Source != "codex" || a.Keys[0] != "/home/u/code/pharmfindr" || len(a.Others) != 1 {
 		t.Fatalf("%+v", a)
 	}
+	h.contains("[ ] CX Codex            6 sessions  ✗ off")
 	h.key("esc")
 	if h.m.pk.srcOpen {
 		t.Fatal("esc closes the editor")
@@ -359,7 +361,7 @@ func TestTreeBuildsCompactFoldersAndChatGroups(t *testing.T) {
 
 func TestPendingAndStateGlyphs(t *testing.T) {
 	h := newHarness(t, 100, 30)
-	h.contains("[x]", "[ ]", "[~]", "[-]", "▲ 3", "(partial)", "denied")
+	h.contains("[x]", "[ ]", "[~]", "[-]", "▲ 3 to sync", "not shared", "✕ denied", "✓ synced 40h")
 }
 
 func TestMouse(t *testing.T) {
@@ -372,7 +374,7 @@ func TestMouse(t *testing.T) {
 	if h.m.pk.cursor != 0 {
 		t.Fatalf("wheel up: %d", h.m.pk.cursor)
 	}
-	h.send(tea.MouseMsg{X: 5, Y: 6, Button: tea.MouseButtonLeft, Action: tea.MouseActionRelease}) // third row
+	h.send(tea.MouseMsg{X: 12, Y: 6, Button: tea.MouseButtonLeft, Action: tea.MouseActionRelease}) // third row
 	if h.m.pk.cursor != 2 {
 		t.Fatalf("click selects the row under the pointer: %d", h.m.pk.cursor)
 	}
@@ -380,4 +382,35 @@ func TestMouse(t *testing.T) {
 	if h.m.pk.cursor != 2 {
 		t.Fatal("clicks outside the list do nothing")
 	}
+}
+
+func TestSourceEditorSharesOnlyThatSource(t *testing.T) {
+	be := newFake()
+	be.rows[2].Sources = []SourceInfo{{"claude-code", 8, false}, {"codex", 3, false}} // vihayas: not shared
+	h := newHarnessWith(t, be, 100, 30)
+	h.key("down", "down", "down", "e")
+	h.contains("○ Not shared yet.", "Tick a tool to share only", "not sent")
+	h.click("CX Codex")
+	if a := be.actions[0]; a.Source != "codex" || len(a.Others) != 1 || a.Others[0] != "claude-code" {
+		t.Fatalf("a click toggles that line: %+v", a)
+	}
+	h.contains("[x] CX Codex", "✓ sent", "[ ] CC Claude Code", "✗ off")
+}
+
+func TestSourceEditorOnDeniedProject(t *testing.T) {
+	be := newFake()
+	be.rows[4].Sources = append(be.rows[4].Sources, SourceInfo{"codex", 1, false}) // client-x: denied
+	h := newHarnessWith(t, be, 100, 30)
+	h.key("end")
+	for h.m.pk.cursor > 0 {
+		if it, _ := h.m.current(); it.row != nil && it.row.State == Denied {
+			break
+		}
+		h.key("up")
+	}
+	h.key("e", "space")
+	if len(be.actions) != 0 {
+		t.Fatal("a denied project's tools cannot be switched on here")
+	}
+	h.contains("this project is denied")
 }

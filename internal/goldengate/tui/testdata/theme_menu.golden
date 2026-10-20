@@ -1,0 +1,30 @@
+┌ goldengate  1 Projects  2 Sync  3 Server [4 Settings] ─────────── ● connected bridge.example.com ┐
+│ Changes are saved immediately                                                                    │
+├──────────────────────────────────────────────────────────────────────────────────────────────────┤
+│▌Theme                               Golden Gate Light  ▾  ■■■■■■                                 │
+│ Share level                       ┌ Theme ─────────────────────────────┐                         │
+│ Look back                         │ ▌✓ Golden Gate Light  ■■■■■■ light │                         │
+│ Source CC Claude Code             │    Golden Gate Dark   ■■■■■■ dark  │                         │
+│ Source CX Codex                   │ ────────────────────────────────── │                         │
+│ Source OC OpenCode                │    Catppuccin Latte   ■■■■■■ light │                         │
+│ Source AI claude.ai               │    GitHub Light       ■■■■■■ light │ter                      │
+│ + add a redaction pattern (regex) │    Gruvbox Light      ■■■■■■ light │                         │
+│ Verify commits with local git     │    Solarized Light    ■■■■■■ light │                         │
+│ Session hook / schedule           │    Catppuccin Mocha   ■■■■■■ dark  │ment support)            │
+│                                   │    Dracula            ■■■■■■ dark  │                         │
+│                                   │    GitHub Dark        ■■■■■■ dark  │                         │
+│                                   │    Gruvbox Dark       ■■■■■■ dark  │                         │
+│                                   │    Monokai            ■■■■■■ dark  │                         │
+│                                   │    Nord               ■■■■■■ dark  │                         │
+│                                   │    Solarized Dark     ■■■■■■ dark  │                         │
+│                                   │    Tokyo Night        ■■■■■■ dark  │                         │
+│                                   └────────────────────────────────────┘                         │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+├──────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ ↑/↓ preview  enter choose  esc cancel                                                            │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘

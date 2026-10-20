@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -153,7 +154,7 @@ func TestBackendToggleSourceKeepsTheRestShared(t *testing.T) {
 	demo := rowOf(t, s, "~/projects/demo")
 	_, _ = be.Apply(ctx, tui.Action{Kind: tui.ActAllow, Keys: []string{demo.Key}})
 	res, err := be.Apply(ctx, tui.Action{Kind: tui.ActToggleSource, Keys: []string{demo.Key}, Source: "claude-code"})
-	if err != nil || !strings.Contains(res.Message, "no longer shared") {
+	if err != nil || !strings.Contains(res.Message, "no longer sent") {
 		t.Fatalf("%v %q", err, res.Message)
 	}
 	s, _ = be.Snapshot(ctx)
@@ -175,6 +176,32 @@ func TestBackendToggleSourceKeepsTheRestShared(t *testing.T) {
 	}
 	if _, err := be.Apply(ctx, tui.Action{Kind: tui.ActToggleSource, Keys: []string{"a", "b"}, Source: "x"}); err == nil {
 		t.Error("source toggling takes exactly one project")
+	}
+}
+
+func TestBackendToggleSourceOnUnsharedProjectSharesOnlyIt(t *testing.T) {
+	l := newLaptop(t)
+	be := backend(l)
+	ctx := context.Background()
+	s, _ := be.Snapshot(ctx)
+	demo := rowOf(t, s, "~/projects/demo")
+	if demo.State != tui.NotShared || len(demo.Sources) == 0 {
+		t.Fatalf("fixture: %+v", demo)
+	}
+	pick := demo.Sources[0].Name
+	others := []string{"codex"} // not among the folder's sources: the rule must still keep it out
+	res, err := be.Apply(ctx, tui.Action{Kind: tui.ActToggleSource, Keys: []string{demo.Key}, Source: pick, Others: others})
+	if err != nil || !strings.Contains(res.Message, "only") {
+		t.Fatalf("%v %q", err, res.Message)
+	}
+	s, _ = be.Snapshot(ctx)
+	r := rowOf(t, s, "~/projects/demo")
+	if r.State == tui.NotShared || !r.Sources[0].Shared {
+		t.Fatalf("the project is shared with that source: %+v", r)
+	}
+	b, _ := os.ReadFile(filepath.Join(l.root, "cfg", "goldengate", "config.toml"))
+	if !strings.Contains(string(b), "codex@") {
+		t.Errorf("the other sources are switched off for this folder:\n%s", b)
 	}
 }
 
@@ -252,7 +279,9 @@ func TestBackendSyncReportsProgressAndDryRunRecordsNothing(t *testing.T) {
 	for _, e := range events {
 		kinds[e.Kind]++
 	}
-	if events[0].Kind != tui.SyncPlanned || events[0].Sessions != 2 || kinds[tui.SyncProjectStart] != 2 || kinds[tui.SyncProjectDone] != 2 || events[len(events)-1].Kind != tui.SyncFinished {
+	planned := slices.IndexFunc(events, func(e tui.SyncEvent) bool { return e.Kind == tui.SyncPlanned })
+	if kinds[tui.SyncPrepared] != 2 || planned != 2 || events[planned].Sessions != 2 || // each session reported while preparing, then the plan
+		kinds[tui.SyncProjectStart] != 2 || kinds[tui.SyncProgress] != 2 || kinds[tui.SyncProjectDone] != 2 || events[len(events)-1].Kind != tui.SyncFinished {
 		t.Fatalf("events: %+v", events)
 	}
 	ps, _ := b.st.ListProjects(ctx)
@@ -554,22 +583,20 @@ func TestFirstRunInTheTUI(t *testing.T) {
 	d.mustSee("Choose what to share")
 	// "~/projects/demo" is the most recently updated or first listed; find it and share it
 	for i := 0; i < 2; i++ {
-		if strings.Contains(d.m.View(), "> [ ] ~/projects/demo ") {
+		if strings.Contains(d.m.View(), "▌ [ ] ~/projects/demo ") {
 			break
 		}
 		d.key("j")
 	}
-	d.mustSee("> [ ] ~/projects/demo ")
+	d.mustSee("▌ [ ] ~/projects/demo ")
 	d.key("space")
-	d.mustSee("> [x] ~/projects/demo ")
+	d.mustSee("▌ [x] ~/projects/demo ")
 	d.key("tab")
 	d.mustSee("Dry run: this is exactly what the first sync would send", "1 session(s) in 1 project(s)")
 	d.key("enter")
-	d.mustSee("Sync · dry run")
-	d.key("D") // switch to a real sync
-	d.mustSee("REAL SYNC")
-	d.key("enter")
-	d.mustSee("[ok] ~/projects/demo", "1/1 sessions", "synced: 1 session(s)")
+	d.mustSee("✓ Ready to send", "nothing has left this machine yet", "[enter Send 1 session]")
+	d.key("enter") // step 2: send for real
+	d.mustSee("✓  ~/projects/demo", "✓ Sent 1 session to")
 
 	ps, _ := b.st.ListProjects(context.Background())
 	if len(ps) != 1 || ps[0].Project != "~/projects/demo" {

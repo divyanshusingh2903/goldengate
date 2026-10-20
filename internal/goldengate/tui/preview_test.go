@@ -57,7 +57,7 @@ func TestRedactionMarkersAreHighlightedAndCounted(t *testing.T) {
 	if got := h.m.highlight("key [REDACTED:aws-access-key] and [REDACTED:path]"); !strings.Contains(got, "[REDACTED:aws-access-key]") {
 		t.Errorf("markers must survive highlighting: %q", got)
 	}
-	h.contains("Redactions in preview: 2")
+	h.contains("2 secret(s) redacted")
 }
 
 func TestDiffPayload(t *testing.T) {

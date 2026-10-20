@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 type screen int
@@ -33,6 +35,10 @@ type Options struct {
 	// StaticCursor turns off cursor blinking in text fields (tests, and anyone
 	// who prefers no motion).
 	StaticCursor bool
+	// ThemeName is the configured color preset; GOLDENGATE_THEME overrides it.
+	ThemeName string
+	// SetColors paints the terminal's default colors (empty: restore them).
+	SetColors func(fg, bg string)
 }
 
 // modal is a yes/no or info box over the current screen.
@@ -45,6 +51,7 @@ type modal struct {
 // Model is the whole UI.
 type Model struct {
 	be   Backend
+	rend *lipgloss.Renderer // nil when the theme is fixed (tests)
 	ctx  context.Context
 	now  func() time.Time
 	th   Theme
@@ -59,6 +66,8 @@ type Model struct {
 
 	snap   Snapshot
 	loaded bool
+
+	ck clickState
 
 	pk picker
 	pv previewState
@@ -80,7 +89,12 @@ func New(be Backend, o Options) *Model {
 	if o.Theme != nil {
 		m.th = *o.Theme
 	} else {
-		m.th = NewTheme(defaultRenderer())
+		m.rend = defaultRenderer()
+		name := o.ThemeName
+		if env := os.Getenv("GOLDENGATE_THEME"); env != "" {
+			name = env
+		}
+		m.applyTheme(name)
 	}
 	m.pk = newPicker(!o.StaticCursor)
 	m.pv = newPreviewState()
@@ -88,6 +102,31 @@ func New(be Backend, o Options) *Model {
 	m.st = newSettingsState(!o.StaticCursor)
 	m.wz = newWizardState(!o.StaticCursor)
 	return m
+}
+
+// rendStyle is a blank style on the UI's renderer.
+func (m *Model) rendStyle() lipgloss.Style {
+	if m.rend == nil {
+		return m.th.Plain
+	}
+	return m.rend.NewStyle()
+}
+
+// applyTheme switches the color preset at once.
+func (m *Model) applyTheme(name string) {
+	if m.rend == nil {
+		m.th.Name = name // fixed styles (tests); remember the choice only
+		return
+	}
+	resolved, p := ResolveTheme(name)
+	m.th = NewThemeFrom(m.rend, resolved, p)
+	if m.opts.SetColors != nil && os.Getenv("NO_COLOR") == "" {
+		if p.Bg == "" {
+			m.opts.SetColors("", "")
+		} else {
+			m.opts.SetColors(p.Fg, p.Bg)
+		}
+	}
 }
 
 // --- messages ---
@@ -194,8 +233,7 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case planMsg:
-		m.onPlan(msg)
-		return m, nil
+		return m, m.onPlan(msg)
 	case syncEventMsg:
 		return m, m.onSyncEvent(msg)
 	case syncDoneMsg:
@@ -257,6 +295,7 @@ func (m *Model) View() string {
 	if m.tooSmall() {
 		return center(fmt.Sprintf("goldengate needs at least %dx%d (this window is %dx%d)", minW, minH, m.w, m.h), m.w, m.h)
 	}
+	m.ck.zones, m.ck.text = m.ck.zones[:0], m.ck.text[:0]
 	var out string
 	switch m.scr {
 	case scrPreview:
@@ -272,21 +311,36 @@ func (m *Model) View() string {
 	default:
 		out = m.viewProjects()
 	}
+	if m.help || m.modal != nil {
+		// an overlay takes every click; what lies under it is not clickable
+		m.ck.zones, m.ck.text = m.ck.zones[:0], m.ck.text[:0]
+	}
 	if m.help {
 		out = overlay(out, m.helpBox(), m.w, m.h)
 	}
 	if m.modal != nil {
 		out = overlay(out, m.modalBox(), m.w, m.h)
 	}
+	m.resolveZones(out)
 	return out
+}
+
+// hints is the hint bar; each single-key pair is also a click target.
+func (m *Model) hints(w int, pairs ...string) string {
+	for i := 0; i+1 < len(pairs); i += 2 {
+		if clickable(pairs[i]) {
+			m.clickKey(m.h-2, pairs[i]+" "+pairs[i+1], pairs[i])
+		}
+	}
+	return hints(m.th, w, pairs...)
 }
 
 func (m *Model) modalBox() []string {
 	lines := append([]string{}, m.modal.lines...)
 	if m.modal.yes != nil {
-		lines = append(lines, "", m.th.Key.Render("y")+" yes   "+m.th.Key.Render("n")+" no")
+		lines = append(lines, "", m.button(m.th.ButtonGo, -1, "y", "Yes")+"  "+m.button(m.th.Button, -1, "n", "No"))
 	} else {
-		lines = append(lines, "", m.th.Dim.Render("press any key"))
+		lines = append(lines, "", m.button(m.th.Button, -1, "enter", "OK"))
 	}
 	return box(m.th, m.modal.title, clipLines(lines, m.w))
 }
@@ -298,9 +352,9 @@ func (m *Model) serverBadge() string {
 	case m.snap.Server == "":
 		return m.th.Dim.Render("server: ○ not configured")
 	case m.sv.info.Configured && m.sv.info.Healthy:
-		return m.th.Good.Render("server: ● connected")
+		return m.th.Good.Render("● connected") + m.th.Dim.Render(" "+shortHost(m.snap.Server))
 	case m.sv.info.Configured && m.sv.info.Err != "":
-		return m.th.Bad.Render("server: ✗ unreachable")
+		return m.th.Bad.Render("✗ unreachable") + m.th.Dim.Render(" "+shortHost(m.snap.Server))
 	}
 	return "server: " + m.th.Dim.Render("● "+shortHost(m.snap.Server))
 }
@@ -343,20 +397,24 @@ func pretty(source string) string {
 func (m *Model) sourcesLine() string {
 	var parts []string
 	for _, s := range m.snap.Sources {
-		dot := "○"
-		if s.Installed && s.Enabled {
-			dot = "●"
+		on := s.Installed && s.Enabled
+		dot := m.th.Dim.Render("○")
+		if on {
+			dot = m.th.Accent.Render("●")
 		}
-		p := dot + " " + pretty(s.Name)
+		name := metaOf(s.Name).tag + " " + pretty(s.Name)
 		if s.Installed {
-			p += fmt.Sprintf(" %d", s.Sessions)
+			name += fmt.Sprintf(" %d", s.Sessions)
 		}
-		if !s.Installed || !s.Enabled {
-			p = m.th.Dim.Render(p)
+		if on {
+			name = m.tag(s.Name) + strings.TrimPrefix(name, metaOf(s.Name).tag)
+		} else {
+			name = m.th.Dim.Render(name)
 		}
+		p := dot + " " + name
 		parts = append(parts, p)
 	}
-	return " Sources  " + strings.Join(parts, "  ")
+	return m.th.Label.Render("Sources ") + strings.Join(parts, "  ")
 }
 
 func newInput(placeholder string, secret, blink bool) textinput.Model {

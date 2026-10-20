@@ -12,71 +12,77 @@ import (
 
 // --- sync ---
 
-func TestSyncDryRunFlow(t *testing.T) {
+func TestSyncReviewThenSend(t *testing.T) {
 	h := newHarness(t, 100, 30)
 	h.key("s")
-	if h.m.scr != scrSync || h.m.sy.phase != syncReady {
-		t.Fatalf("s opens the sync screen with a plan: scr=%v phase=%v", h.m.scr, h.m.sy.phase)
-	}
-	h.contains("7 session(s) in 3 project(s) would be sent", "120 session(s) not selected", "2 redaction(s) applied", "dry run")
-	h.checkGeometry(100, 30)
-	h.golden("sync_plan")
-	h.key("enter")
-	if h.m.sy.phase != syncDone {
-		t.Fatalf("the fake finishes immediately: %v", h.m.sy.phase)
+	if h.m.scr != scrSync || h.m.sy.phase != syncReady || !h.m.sy.checked {
+		t.Fatalf("s opens the sync screen and reviews at once: scr=%v phase=%v", h.m.scr, h.m.sy.phase)
 	}
 	if len(h.be.syncs) != 1 || !h.be.syncs[0] {
-		t.Fatalf("dry run by default: %v", h.be.syncs)
+		t.Fatalf("the review is a dry pass: %v", h.be.syncs)
 	}
-	h.contains("7/7 sessions", "[ok] ~/code/pharmfindr", "done", "dry run finished: 7 session(s)")
+	h.contains("✓ Review", "② Send", "✓ Ready to send", "nothing has left this machine yet",
+		"~/code/pharmfindr", "7 sessions · 3 projects · 2 secrets redacted", "120 sessions in projects you don't share stay on this machine",
+		"[enter Send 7 sessions]")
+	h.checkGeometry(100, 30)
+	h.golden("sync_plan")
+	h.key("enter") // step 2
+	if len(h.be.syncs) != 2 || h.be.syncs[1] {
+		t.Fatalf("enter sends for real: %v", h.be.syncs)
+	}
+	h.contains("✓ Sent 7 sessions to bridge.example.com", "[enter Done]")
 	h.golden("sync_done")
-}
-
-func TestRealSyncNeedsExplicitSwitch(t *testing.T) {
-	h := newHarness(t, 100, 30)
-	h.key("s", "D")
-	h.contains("REAL SYNC")
 	h.key("enter")
-	if len(h.be.syncs) != 1 || h.be.syncs[0] {
-		t.Fatalf("a real sync only after D: %v", h.be.syncs)
+	if h.m.scr != scrProjects {
+		t.Fatal("Done returns to the projects")
 	}
-	h.contains("synced: 7 session(s)")
 }
 
-func TestSyncWithoutServerStaysDry(t *testing.T) {
+func TestSyncNothingToSend(t *testing.T) {
+	be := newFake()
+	h := newHarnessWith(t, be, 100, 30)
+	h.m.sy.plan = PlanInfo{}
+	h.m.onPlan(planMsg{plan: PlanInfo{Unchanged: 12, Server: be.server}})
+	h.m.scr = scrSync
+	h.contains("✓ Everything is up to date", "12 sessions")
+	if len(be.syncs) != 0 {
+		t.Fatal("nothing to review, nothing run")
+	}
+}
+
+func TestSyncWithoutServerOnlyReviews(t *testing.T) {
 	be := newFake()
 	be.server = ""
 	h := newHarnessWith(t, be, 100, 30)
 	h.key("s")
-	h.contains("No server configured: only a dry run is available.")
-	h.key("D")
-	if !h.m.sy.dry {
-		t.Fatal("without a server D must not switch to a real sync")
+	h.contains("No server is connected, so this can only be a review.", "[enter Connect a server]", "nowhere yet")
+	h.key("enter")
+	if len(be.syncs) != 1 || h.m.scr != scrServer {
+		t.Fatalf("enter goes to the server screen instead of sending: %v scr=%v", be.syncs, h.m.scr)
 	}
-	h.contains("no server is configured")
 }
 
 func TestSyncFailureAndRetry(t *testing.T) {
 	be := newFake()
 	be.syncFail["~/code/forge"] = "server returned 503: try later"
 	h := newHarnessWith(t, be, 100, 30)
-	h.key("s", "D", "enter")
-	h.contains("[!!] ~/code/forge", "503", "1 project(s) failed", "6/7 sessions")
+	h.key("s", "enter")
+	h.contains("✗ 1 project could not be sent", "✗  ~/code/forge", "503", "6 sessions were sent", "[enter Retry]")
 	h.golden("sync_failed")
 	delete(be.syncFail, "~/code/forge")
-	h.key("r") // replan, then run again
-	if h.m.sy.phase != syncReady {
-		t.Fatalf("r replans: %v", h.m.sy.phase)
+	h.key("enter") // retry reviews again first
+	if !h.m.sy.canSend() {
+		t.Fatalf("retry runs the review: phase %v", h.m.sy.phase)
 	}
 	h.key("enter")
-	h.contains("7/7 sessions", "done")
+	h.contains("✓ Sent 7 sessions")
 }
 
 func TestQuitWhileSyncRunningAsksFirst(t *testing.T) {
 	be := newFake()
 	be.syncBlock = make(chan struct{})
 	h := newHarnessWith(t, be, 100, 30)
-	h.key("s")
+	h.key("s")                                           // the review finishes; the send blocks
 	_, cmd := h.m.Update(tea.KeyMsg{Type: tea.KeyEnter}) // start, but do not drain (it blocks on purpose)
 	_ = cmd
 	time.Sleep(30 * time.Millisecond)
@@ -194,7 +200,7 @@ func TestServerScreenWithoutServerAndUnreachable(t *testing.T) {
 	be2 := newFake()
 	be2.srvInfo = ServerInfo{URL: be2.server, Configured: true, Healthy: false, Err: "dial tcp: connection refused"}
 	h2 := newHarnessWith(t, be2, 100, 30)
-	h2.contains("server: ✗ unreachable")
+	h2.contains("✗ unreachable")
 	h2.key("3")
 	h2.contains("✗ unreachable", "connection refused")
 }
@@ -204,14 +210,14 @@ func TestServerScreenWithoutServerAndUnreachable(t *testing.T) {
 func TestSettingsScreen(t *testing.T) {
 	h := newHarness(t, 100, 30)
 	h.key("4")
-	h.contains("Share level", "summary", "Look back", "90d", "Source Claude Code", "on", "Source claude.ai", "on (not found)", "Verify commits with local git", "not available yet")
+	h.contains("Share level", "summary", "Look back", "90d", "Source CC Claude Code", "on", "Source AI claude.ai", "not found on this computer", "Verify commits with local git", "not available yet")
 	h.checkGeometry(100, 30)
 	h.golden("settings")
 }
 
 func TestSettingsChangesAreSavedImmediately(t *testing.T) {
 	h := newHarness(t, 100, 30)
-	h.key("4", "space") // level
+	h.key("4", "down", "space") // level
 	if len(h.be.saved) != 1 || h.be.saved[0].Level != "titles-only" {
 		t.Fatalf("level: %+v", h.be.saved)
 	}
@@ -226,7 +232,7 @@ func TestSettingsChangesAreSavedImmediately(t *testing.T) {
 	if s := h.be.saved[len(h.be.saved)-1].Sources[0]; s.Enabled {
 		t.Fatalf("source toggled: %+v", s)
 	}
-	h.contains("Source Claude Code", "off")
+	h.contains("Source CC Claude Code", "off")
 }
 
 func TestSettingsPatternsAddAndRemove(t *testing.T) {
@@ -260,14 +266,14 @@ func TestSettingsErrorsAreShownNotSwallowed(t *testing.T) {
 	be := newFake()
 	be.saveErr = fmtErr(`config: invalid since window "soon"`)
 	h := newHarnessWith(t, be, 100, 30)
-	h.key("4", "space")
+	h.key("4", "down", "space")
 	h.contains(`invalid since window "soon"`)
 	h.contains("summary") // the shown value reverts to what is really saved
 }
 
 func TestSettingsEditEscapeCancels(t *testing.T) {
 	h := newHarness(t, 100, 30)
-	h.key("4", "down", "enter")
+	h.key("4", "down", "down", "enter")
 	h.typeText("zzz")
 	h.key("esc")
 	if len(h.be.saved) != 0 || h.m.st.editing {
@@ -283,7 +289,7 @@ func TestSettingsEditEscapeCancels(t *testing.T) {
 func TestHelpOverlay(t *testing.T) {
 	h := newHarness(t, 100, 40)
 	h.key("?")
-	h.contains("Keys", "fuzzy filter", "paranoid", "[x] shared")
+	h.contains("Keys", "fuzzy search", "paranoid", "[x] shared")
 	h.golden("help")
 	h.key("x") // any key closes it and is NOT executed
 	if h.m.help || len(h.be.actions) != 0 {
@@ -439,5 +445,29 @@ func TestThemeOverride(t *testing.T) {
 		if dark, ok := themeOverride(env(c.env)); dark != c.dark || ok != c.ok {
 			t.Errorf("%s: got (%v,%v) want (%v,%v)", name, dark, ok, c.dark, c.ok)
 		}
+	}
+}
+
+func TestSyncProgressFollowsEachStep(t *testing.T) {
+	h := newHarness(t, 100, 30)
+	h.key("s", "enter") // review, then send; now replay a slow send by hand
+	m := h.m
+	m.sy.plan.Sessions = 120
+	m.sy.phase, m.sy.dry, m.sy.done, m.sy.total, m.sy.prepared = syncRunning, false, 0, 0, 0
+	m.sy.order, m.sy.proj = nil, map[string]*projProgress{}
+	m.sy.ch = make(chan tea.Msg, 1)
+	ev := func(e SyncEvent) { m.onSyncEvent(syncEventMsg{e}) }
+	for i := 0; i < 45; i++ {
+		ev(SyncEvent{Kind: SyncPrepared, Sessions: 1})
+	}
+	h.contains("preparing 45/120 sessions")
+	ev(SyncEvent{Kind: SyncPlanned, Sessions: 120})
+	ev(SyncEvent{Kind: SyncProjectStart, Project: "~/code/forge", Sessions: 116})
+	ev(SyncEvent{Kind: SyncProgress, Project: "~/code/forge", Sessions: 10})
+	ev(SyncEvent{Kind: SyncProgress, Project: "~/code/forge", Sessions: 10})
+	h.contains("sent 20/120 sessions", "20/116")
+	ev(SyncEvent{Kind: SyncProjectDone, Project: "~/code/forge", Sessions: 116})
+	if m.sy.done != 116 {
+		t.Fatalf("done counts each session once: %d", m.sy.done)
 	}
 }

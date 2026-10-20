@@ -85,7 +85,9 @@ func (m *Model) wizNext() tea.Cmd {
 	case wizReview:
 		return m.openSyncKeep()
 	case wizSync:
-		m.sy.phase = syncReady
+		if m.sy.phase != syncRunning && !m.sy.checked {
+			return m.planSync()
+		}
 		return nil
 	}
 	return nil
@@ -156,13 +158,7 @@ func (m *Model) onKeyWizard(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			w.step = wizProjects
 		}
 	case wizSync:
-		if m.sy.phase == syncReady && s == "enter" {
-			return m, m.startSync()
-		}
-		if m.sy.phase == syncDone && s == "enter" {
-			return m, m.leaveWizard()
-		}
-		return m.onKeySync(k)
+		return m.onKeySync(k) // its way out finishes the setup
 	}
 	return m, nil
 }
@@ -298,7 +294,7 @@ func (m *Model) viewWizard() string {
 	switch w.step {
 	case wizProjects:
 		out := m.viewProjects()
-		return m.replaceHint(out, hints(m.th, m.w-2, "space", "share", "t", "tree", "p", "preview", "tab", "next step", "shift+tab", "back", "?", "help"), " Setup 4/6 · Choose what to share (nothing is shared by default)")
+		return m.replaceHint(out, m.hints(m.w-2, "space", "share", "t", "tree", "p", "preview", "tab", "next step", "shift+tab", "back", "?", "help"), " Setup 4/6 · Choose what to share (nothing is shared by default)")
 	case wizSync:
 		out := m.viewSync()
 		return m.replaceHint(out, "", "")
@@ -327,7 +323,7 @@ func (m *Model) viewWizard() string {
 			}
 			add(st.Render(mark) + " " + fmt.Sprintf("%-12s %s", pretty(t.Name), note))
 		}
-		hint = hints(m.th, inner, "enter", "continue", "esc", "skip setup")
+		hint = m.hints(inner, "enter", "continue", "esc", "skip setup")
 	case wizServer:
 		hint = m.wizServerView(&out)
 	case wizLevel:
@@ -345,11 +341,11 @@ func (m *Model) viewWizard() string {
 		}
 		add("")
 		add(m.th.Dim.Render("Redaction runs either way. Raw transcripts are never sent."))
-		hint = hints(m.th, inner, "←/→", "choose", "enter", "continue", "esc", "skip setup")
+		hint = m.hints(inner, "←/→", "choose", "enter", "continue", "esc", "skip setup")
 	case wizReview:
 		add(m.th.Title.Render("Dry run: this is exactly what the first sync would send"))
 		add("")
-		if m.sy.phase == syncPlanning {
+		if m.sy.phase == syncPlanning || m.sy.phase == syncRunning {
 			add(m.th.Dim.Render("planning…"))
 		} else {
 			p := m.sy.plan
@@ -370,9 +366,9 @@ func (m *Model) viewWizard() string {
 			add("")
 			add(m.th.Dim.Render("Open any project with p on the previous step to read its payloads."))
 		}
-		hint = hints(m.th, inner, "enter", "continue", "shift+tab", "back", "esc", "finish later")
+		hint = m.hints(inner, "enter", "continue", "shift+tab", "back", "esc", "finish later")
 	}
-	f := frame{th: m.th, w: m.w, h: m.h, title: "goldengate setup", right: m.serverBadge(), top: top}
+	f := frame{th: m.th, w: m.w, h: m.h, title: m.header("setup"), right: m.serverBadge(), top: top}
 	f.left = lines(strings.Join(out, "\n"), inner, bh)
 	f.hint = m.statusLine(hint)
 	return f.render()
@@ -409,7 +405,7 @@ func (m *Model) wizServerView(out *[]string) string {
 		if w.res.OAuth {
 			add("OAuth is enabled: assistants that need it can connect without a token.")
 		}
-		return hints(m.th, inner, "enter", "continue")
+		return m.hints(inner, "enter", "continue")
 	}
 	add(m.th.Title.Render("Where do the summaries go?"))
 	add("")
@@ -442,5 +438,5 @@ func (m *Model) wizServerView(out *[]string) string {
 		add("")
 		add(m.th.Bad.Render(clip(w.err, inner-4)))
 	}
-	return hints(m.th, inner, "tab", "mode", "↑/↓", "field", "enter", "connect/continue", "esc", "back")
+	return m.hints(inner, "tab", "mode", "↑/↓", "field", "enter", "connect/continue", "esc", "back")
 }

@@ -1,24 +1,24 @@
-┌ goldengate ───────────────────────────────────────────── server: ● connected ┐
-│ Sources  ● Claude Code 142  ● Codex 37  ● OpenCode 58  ○ claude.ai           │
+┌ goldengate ────────────────────────────────── ● connected bridge.example.com ┐
+│ [All 8]  Shared 4   To sync 3   Not shared 4                                 │
 ├──────────────────────────────────────┬───────────────────────────────────────┤
-│ Filter: / to search      sort:recent │ pharmfindr                            │
-│> [x] ~/code/pharmfindr            ▲ 3│ ~/code/pharmfindr                     │
-│  [x] …findr/.claude/worktrees/fox ▲ 2│ Sources: claude-code 41, codex 6      │
-│  [x] ~/code/forge                 ▲ 1│ Last activity: 2h ago                 │
-│  [ ] ~/code/vihayas                  │ Level: summary                        │
-│  [~] ~/code/website         (partial)│ Status: shared (allowed by ~/code/pha…│
-│  [-] ~/work/client-x           denied│                                       │
-│  [ ] ~/scratch/tmp                   │ Recent sessions                       │
-│  [ ] claude-ai:Chats                 │  • Fix OAuth redirect mismatch        │
-│                                      │  • Add gRPC health checks             │
-│                                      │  • Refactor token store               │
-│                                      │ Redactions in preview: 2              │
-│                                      │ Since last sync: 1 new, 1 changed, 1 …│
+│ / search projects…                   │ pharmfindr                            │
+│▌ [x] ~/code/pharmfindr    ▲ 3 to sync│ ~/code/pharmfindr                     │
+│  [x] …aude/worktrees/fox  ▲ 2 to sync│                                       │
+│  [x] ~/code/forge         ▲ 1 to sync│ ● Shared · ▲ 3 to sync                │
+│  [ ] ~/code/vihayas        not shared│ 3 sessions waiting: 1 new, 1 changed  │
+│  [~] ~/code/website      ✓ synced 40h│ since the last sync.                  │
+│  [-] ~/work/client-x         ✕ denied│                                       │
+│  [ ] ~/scratch/tmp         not shared│ Kind      code · coding-tool sessions │
+│  [ ] claude-ai:Chats       not shared│ Sessions  47                          │
+│                                      │           CC Claude Code 41           │
+│                                      │           CX Codex 6                  │
+│                                      │ Activity  2h ago                      │
+│                                      │ Synced    2h ago · 44 on the server   │
+│                                      │ Level     summary                     │
+│                                      │ Rule      allowed by ~/code/pharmfindr│
 │                                      │                                       │
-│                                      │                                       │
-│                                      │                                       │
-│                                      │                                       │
-│                                      │                                       │
+│                                      │ [s Sync now] [space Unshare]          │
+│                                      │ [p Preview] [e Sources]               │
 ├──────────────────────────────────────┴───────────────────────────────────────┤
-│ space toggle  a all  d deny  p preview  s sync  / filter  t tree  ? help     │
+│ space unshare  p preview  s sync  f view  / search  d deny  u undo  ? help   │
 └──────────────────────────────────────────────────────────────────────────────┘

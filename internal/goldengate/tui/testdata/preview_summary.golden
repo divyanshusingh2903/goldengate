@@ -1,7 +1,7 @@
-┌ preview ──────────────────────────────────────────────────────────────────── server: ● connected ┐
+┌ goldengate [1 Projects] 2 Sync  3 Server  4 Settings  › preview ─ ● connected bridge.example.com ┐
 │ ~/code/pharmfindr · level summary · summary view · 1 new, 1 changed, 1 unchanged · 2 redactions  │
 ├──────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ ── [changed] Claude Code · 2h ago · s-0001                                                       │
+│ ── [changed] CC Claude Code · 2h ago · s-0001                                                    │
 │  Title: Fix OAuth redirect mismatch                                                              │
 │  Goal: The login redirect fails on staging                                                       │
 │  Outcome: tests passed, commit made                                                              │
@@ -15,7 +15,7 @@
 │    title: "Fix OAuth redirect" -> "Fix OAuth redirect mismatch"                                  │
 │    + file auth/redirect_test.go                                                                  │
 │                                                                                                  │
-│ ── [new] Codex · 2h ago · s-0002                                                                 │
+│ ── [new] CX Codex · 2h ago · s-0002                                                              │
 │  Title: Add gRPC health checks                                                                   │
 │  Goal: Expose /healthz over gRPC                                                                 │
 │  Outcome: tests passed, commit made                                                              │
@@ -23,7 +23,7 @@
 │  Commands: git commit, go test                                                                   │
 │  Last message: Fixed. Key was [REDACTED:aws-access-key] in the log.                              │
 │                                                                                                  │
-│ ── [unchanged] Claude Code · 2h ago · s-0003                                                     │
+│ ── [unchanged] CC Claude Code · 2h ago · s-0003                                                  │
 │  Title: Refactor token store                                                                     │
 │  Outcome: tests passed, commit made                                                              │
 │  Files: auth/redirect.go, auth/redirect_test.go                                                  │

@@ -1,18 +1,18 @@
-┌ sync ─────────────────────────────────────────────────────────────────────── server: ● connected ┐
-│ Sync · dry run (nothing is sent or recorded)                                                     │
+┌ goldengate  1 Projects [2 Sync] 3 Server  4 Settings  ─────────── ● connected bridge.example.com ┐
+│ ✓ Review ──── ✓ Send   to bridge.example.com                                                     │
 ├──────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ [################################################]  7/7 sessions                                 │
+│ ✓ Sent 7 sessions to bridge.example.com                                                          │
+│ The server is up to date with everything you share.                                              │
 │                                                                                                  │
-│ [ok] ~/code/pharmfindr  4                                                                        │
-│ [ok] ~/code/forge  1                                                                             │
-│ [ok] ~/code/pharmfindr/.claude/worktrees/fox  2                                                  │
-│ done                                                                                             │
+│ PROJECT                                                                   SESSIONS               │
+│ ✓  ~/code/pharmfindr                                                             4               │
+│ ✓  ~/code/forge                                                                  1               │
+│ ✓  ~/code/pharmfindr/.claude/worktrees/fox                                       2               │
 │                                                                                                  │
+│ 7 sessions · 3 projects · 2 secrets redacted · 1 warning                                         │
+│ 120 sessions in projects you don't share stay on this machine.                                   │
 │                                                                                                  │
-│                                                                                                  │
-│                                                                                                  │
-│                                                                                                  │
-│                                                                                                  │
+│ [enter Done]                                                                                     │
 │                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │
@@ -26,5 +26,5 @@
 │                                                                                                  │
 │                                                                                                  │
 ├──────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ dry run finished: 7 session(s)                                                                   │
+│ enter continue  r review again  esc back                                                         │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘

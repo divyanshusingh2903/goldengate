@@ -1,12 +1,12 @@
-┌ server ───────────────────────────────────────────────────────────────────── server: ● connected ┐
-│ Sources  ● Claude Code 142  ● Codex 37  ● OpenCode 58  ○ claude.ai                               │
+┌ goldengate  1 Projects  2 Sync [3 Server] 4 Settings  ─────────── ● connected bridge.example.com ┐
+│ Sources ● CC Claude Code 142  ● CX Codex 37  ● OC OpenCode 58  ○ AI claude.ai                    │
 ├──────────────────────────────────────────────────────────────────────────────────────────────────┤
 │ https://bridge.example.com                                                                       │
 │ Server ● reachable   Ingest token ● accepted (keyring)                                           │
 │                                                                                                  │
 │ What the server holds (2 project(s))                                                             │
-│ ~/code/pharmfindr                                                   44 sessions  2h ago          │
-│ ~/code/forge                                                        11 sessions  6h ago          │
+│▌ code  ~/code/pharmfindr                                   44 sessions  2h ago    [D Delete]     │
+│  code  ~/code/forge                                        11 sessions  6h ago                   │
 │                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │

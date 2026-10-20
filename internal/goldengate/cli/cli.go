@@ -99,7 +99,11 @@ func New(d Deps) *cobra.Command {
 				fmt.Fprintln(a.Stderr, "Not a terminal, so the interface cannot open. Available commands:")
 				return cmd.Help()
 			}
-			return tui.Run(a.tuiBackend(), tui.Options{Context: cmd.Context(), Now: a.Now})
+			theme := ""
+			if cfg, err := a.load(); err == nil {
+				theme = cfg.UI.Theme
+			}
+			return tui.Run(a.tuiBackend(), tui.Options{Context: cmd.Context(), Now: a.Now, ThemeName: theme})
 		},
 	}
 	root.SetOut(d.Stdout)

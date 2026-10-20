@@ -44,6 +44,23 @@ type Batch struct {
 // Len is the number of payloads in the batch.
 func (b Batch) Len() int { return len(b.items) }
 
+// Chunks splits a batch into parts of at most n payloads, in order, so a
+// caller can push in steps and report progress. Refreshes ride with the first.
+func (b Batch) Chunks(n int) []Batch {
+	if n <= 0 || len(b.items) <= n {
+		return []Batch{b}
+	}
+	var out []Batch
+	for start := 0; start < len(b.items); start += n {
+		c := Batch{items: b.items[start:min(start+n, len(b.items))]}
+		if start == 0 {
+			c.refresh = b.refresh
+		}
+		out = append(out, c)
+	}
+	return out
+}
+
 // ByProject splits a batch into one batch per server project, in order, so a
 // caller can push and report project by project. Unchanged-stat refreshes ride
 // with the first part.
@@ -138,6 +155,9 @@ type RunOpts struct {
 	Project string        // only this project (absolute path); "" = all selected
 	Source  string        // only this source
 	Since   time.Duration // 0 = use config
+	// OnPlanned, when set, is called after each session is read, summarized
+	// and redacted, so a caller can show progress while a big plan builds.
+	OnPlanned func()
 }
 
 // Report summarizes a run. Counts only: no project names or content.
@@ -264,6 +284,9 @@ func (s *Syncer) Plan(ctx context.Context, o RunOpts) (Batch, Report, error) {
 				Size: ref.SizeBytes, MTimeNS: mtime, Payload: body,
 			}})
 			rep.Planned++
+			if o.OnPlanned != nil {
+				o.OnPlanned()
+			}
 		}
 	}
 	return b, rep, nil
