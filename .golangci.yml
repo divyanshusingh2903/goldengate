@@ -1,0 +1,19 @@
+version: "2"
+linters:
+  default: standard
+  enable:
+    - errorlint
+    - gosec
+    - bodyclose
+    - noctx
+    - unconvert
+    - misspell
+  settings:
+    errcheck:
+      exclude-functions: [fmt.Fprintf, fmt.Fprintln, fmt.Fprint]
+    gosec:
+      excludes: [G304, G703]   # adapters read user-selected session paths by design
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters: [gosec, errcheck]

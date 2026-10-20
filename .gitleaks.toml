@@ -1,0 +1,13 @@
+title = "goldengate"
+
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "scrubbed fixtures use obviously fake values built or checked in at test time"
+paths = ['''testdata/''']
+
+[[allowlists]]
+description = "unit tests use fixed, throwaway admin secrets that protect nothing"
+targetRules = ["generic-api-key"]
+paths = ['''_test\.go$''']

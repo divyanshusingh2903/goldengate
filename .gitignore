@@ -1,0 +1,22 @@
+# binaries
+/goldengate
+/goldengatebridge
+/dist/
+*.exe
+# real data must never be committed
+*.jsonl
+!testdata/**/*.jsonl
+*.db
+*.db-wal
+*.db-shm
+*.sqlite*
+*.zip
+.env
+.env.*
+*.pem
+id_rsa*
+credentials*
+# local state
+.goldengate/
+coverage.out
+.claude/
