@@ -159,3 +159,60 @@ func TestPairPrintsSingleUseCode(t *testing.T) {
 		t.Error("zero ttl")
 	}
 }
+
+func TestServeOAuthFlagValidation(t *testing.T) {
+	x := newH(t)
+	x.env["GOLDENGATE_ADMIN_TOKEN"] = goodSecret
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	if err := x.run(ctx, "serve", "--addr", "127.0.0.1:0", "--oauth"); err == nil || !strings.Contains(err.Error(), "--public-url") {
+		t.Errorf("--oauth without a public URL: %v", err)
+	}
+	if err := x.run(ctx, "serve", "--addr", "127.0.0.1:0", "--oauth", "--public-url", "http://bridge.example.com"); err == nil || !strings.Contains(err.Error(), "https") {
+		t.Errorf("plain-http public URL: %v", err)
+	}
+	// OAuth needs the admin secret: a stored token alone cannot approve clients
+	y := newH(t)
+	if err := y.run(ctx, "token", "create", "--scope", "ingest"); err != nil {
+		t.Fatal(err)
+	}
+	if err := y.run(ctx, "serve", "--addr", "127.0.0.1:0", "--oauth", "--public-url", "https://bridge.example.com"); err == nil || !strings.Contains(err.Error(), "GOLDENGATE_ADMIN_TOKEN") {
+		t.Errorf("--oauth without an admin secret: %v", err)
+	}
+}
+
+func TestOAuthClientsCommands(t *testing.T) {
+	x := newH(t)
+	ctx := context.Background()
+	if err := x.run(ctx, "oauth", "clients", "create", "--name", "gemini"); err == nil {
+		t.Error("a redirect URI is required")
+	}
+	if err := x.run(ctx, "oauth", "clients", "create", "--redirect-uri", "http://evil.example/cb"); err == nil {
+		t.Error("plain http redirect must be refused")
+	}
+	if err := x.run(ctx, "oauth", "clients", "create", "--name", "gemini", "--redirect-uri", "https://a.example/cb"); err != nil {
+		t.Fatal(err)
+	}
+	out := x.out.String()
+	id := regexp.MustCompile(`client_id:\s+(\S+)`).FindStringSubmatch(out)
+	sec := regexp.MustCompile(`client_secret:\s+(\S+)`).FindStringSubmatch(out)
+	if id == nil || sec == nil || !strings.HasPrefix(sec[1], "ggs_") || strings.Contains(x.err.String(), sec[1]) {
+		t.Fatalf("create output: %q / %q", out, x.err.String())
+	}
+	if err := x.run(ctx, "oauth", "clients", "create", "--name", "pub", "--redirect-uri", "https://b.example/cb", "--public"); err != nil || strings.Contains(x.out.String(), "client_secret") {
+		t.Fatalf("public client has no secret: %v %q", err, x.out.String())
+	}
+	if err := x.run(ctx, "oauth", "clients", "list"); err != nil {
+		t.Fatal(err)
+	}
+	list := x.out.String()
+	if !strings.Contains(list, id[1]) || !strings.Contains(list, "confidential") || !strings.Contains(list, "public") || strings.Contains(list, sec[1]) {
+		t.Fatalf("list:\n%s", list)
+	}
+	if err := x.run(ctx, "oauth", "clients", "delete", id[1]); err != nil || !strings.Contains(x.out.String(), "deleted client") {
+		t.Fatalf("%v %s", err, x.out.String())
+	}
+	if err := x.run(ctx, "oauth", "clients", "delete", id[1]); err == nil {
+		t.Error("deleting twice must fail")
+	}
+}

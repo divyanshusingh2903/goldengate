@@ -51,7 +51,7 @@ func New(d Deps) *cobra.Command {
 	root.SetOut(d.Stdout)
 	root.SetErr(d.Stderr)
 	root.PersistentFlags().StringVar(&a.dbPath, "db", "", "SQLite database path (default $GOLDENGATE_DB or ./goldengatebridge.db)")
-	root.AddCommand(a.serveCmd(), a.pairCmd(), a.tokenCmd(), &cobra.Command{
+	root.AddCommand(a.serveCmd(), a.pairCmd(), a.tokenCmd(), a.oauthCmd(), &cobra.Command{
 		Use: "version", Short: "Print the version",
 		Run: func(*cobra.Command, []string) {
 			fmt.Fprintln(a.Stdout, "goldengatebridge", Version, runtime.GOOS+"/"+runtime.GOARCH)
@@ -75,8 +75,9 @@ func (a *app) open(ctx context.Context) (store.Store, error) { return store.Open
 // --- serve ---
 
 func (a *app) serveCmd() *cobra.Command {
-	var addr, cert, key string
-	var behindProxy bool
+	var addr, cert, key, publicURL string
+	var behindProxy, enableOAuth bool
+	var redirectHosts []string
 	var hops, perProject, total int
 	var retention time.Duration
 	cmd := &cobra.Command{
@@ -87,7 +88,17 @@ func (a *app) serveCmd() *cobra.Command {
 			if !cmd.Flags().Changed("addr") && a.Getenv("PORT") != "" { // Cloud Run and similar
 				addr = ":" + a.Getenv("PORT")
 			}
+			if enableOAuth && publicURL == "" {
+				publicURL = a.Getenv("GOLDENGATE_PUBLIC_URL")
+			}
+			if enableOAuth && publicURL == "" {
+				return errors.New("--oauth needs --public-url (or GOLDENGATE_PUBLIC_URL): the externally visible https URL of this server")
+			}
+			if !enableOAuth {
+				publicURL, redirectHosts = "", nil
+			}
 			return a.serve(cmd.Context(), serveOpts{addr: addr, cert: cert, key: key, behindProxy: behindProxy, hops: hops,
+				publicURL: publicURL, redirectHosts: redirectHosts,
 				limits: store.Limits{MaxSessionsPerProject: perProject, MaxSessionsTotal: total}, retention: retention})
 		},
 	}
@@ -99,6 +110,9 @@ func (a *app) serveCmd() *cobra.Command {
 	f.IntVar(&hops, "proxy-hops", 1, "number of proxies in front, for X-Forwarded-For")
 	f.IntVar(&perProject, "max-sessions-per-project", 5000, "storage quota per project")
 	f.IntVar(&total, "max-sessions-total", 100000, "storage quota overall")
+	f.BoolVar(&enableOAuth, "oauth", false, "enable the built-in OAuth 2.1 server so OAuth-only assistants (e.g. Gemini) can connect")
+	f.StringVar(&publicURL, "public-url", "", "with --oauth: the externally visible https URL of this server (env GOLDENGATE_PUBLIC_URL)")
+	f.StringSliceVar(&redirectHosts, "oauth-redirect-host", nil, "with --oauth: only allow https redirect URIs on these hosts (repeatable)")
 	f.DurationVar(&retention, "audit-retention", 90*24*time.Hour, "how long to keep the audit log")
 	return cmd
 }
@@ -109,6 +123,8 @@ type serveOpts struct {
 	hops            int
 	limits          store.Limits
 	retention       time.Duration
+	publicURL       string
+	redirectHosts   []string
 }
 
 func (a *app) serve(ctx context.Context, o serveOpts) error {
@@ -139,7 +155,8 @@ func (a *app) serve(ctx context.Context, o serveOpts) error {
 
 	log := slog.New(slog.NewJSONHandler(a.Stderr, nil))
 	srv, err := server.New(server.Config{Store: st, Auth: au, Log: log, Now: a.Now, Version: Version, Limits: o.limits,
-		BehindProxy: o.behindProxy, ProxyHops: o.hops, AuditRetention: o.retention})
+		BehindProxy: o.behindProxy, ProxyHops: o.hops, AuditRetention: o.retention,
+		PublicURL: o.publicURL, OAuthRedirectHosts: o.redirectHosts})
 	if err != nil {
 		return err
 	}
@@ -164,7 +181,7 @@ func (a *app) serve(ctx context.Context, o serveOpts) error {
 			errc <- hs.Serve(ln)
 		}
 	}()
-	fmt.Fprintf(a.Stderr, "listening on %s (tls=%v, admin=%v, tokens=%d)\n", ln.Addr(), o.cert != "", au.HasAdmin(), active)
+	fmt.Fprintf(a.Stderr, "listening on %s (tls=%v, admin=%v, tokens=%d, oauth=%v)\n", ln.Addr(), o.cert != "", au.HasAdmin(), active, o.publicURL != "")
 	select {
 	case <-ctx.Done():
 		sctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -299,4 +316,99 @@ func day(t time.Time) string {
 		return "-"
 	}
 	return strings.TrimSuffix(t.UTC().Format("2006-01-02 15:04"), " 00:00")
+}
+
+// --- oauth clients ---
+
+func (a *app) oauthCmd() *cobra.Command {
+	cmd := &cobra.Command{Use: "oauth", Short: "Manage OAuth clients (assistants that connected with OAuth)"}
+	clients := &cobra.Command{Use: "clients", Short: "List, create and delete OAuth clients"}
+
+	list := &cobra.Command{
+		Use: "list", Short: "List registered clients", Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			st, err := a.open(cmd.Context())
+			if err != nil {
+				return err
+			}
+			defer func() { _ = st.Close() }()
+			cs, err := st.ListOAuthClients(cmd.Context())
+			if err != nil {
+				return err
+			}
+			w := tabwriter.NewWriter(a.Stdout, 0, 4, 2, ' ', 0)
+			fmt.Fprintln(w, "ID\tNAME\tREDIRECT\tTYPE\tCREATED\tLAST USED")
+			for _, c := range cs {
+				kind := "public"
+				if c.SecretHash != "" {
+					kind = "confidential"
+				}
+				fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", c.ID, c.Name, strings.Join(c.RedirectURIs, ","), kind, day(c.CreatedAt), day(c.LastUsedAt))
+			}
+			return w.Flush()
+		},
+	}
+
+	var name string
+	var redirects []string
+	var public bool
+	create := &cobra.Command{
+		Use: "create", Short: "Register a client by hand (for assistants that ask you to type a client ID and secret)", Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if len(redirects) == 0 {
+				return errors.New("at least one --redirect-uri is required (your assistant shows the address to register)")
+			}
+			for _, u := range redirects {
+				if !strings.HasPrefix(u, "https://") && !strings.HasPrefix(u, "http://localhost") && !strings.HasPrefix(u, "http://127.0.0.1") {
+					return fmt.Errorf("redirect URI %q must be https (or http on loopback)", u)
+				}
+			}
+			st, err := a.open(cmd.Context())
+			if err != nil {
+				return err
+			}
+			defer func() { _ = st.Close() }()
+			c := store.OAuthClient{ID: auth.RandomSecret("gg_", 18), Name: name, RedirectURIs: redirects, CreatedAt: a.Now().UTC()}
+			secret := ""
+			if !public {
+				secret = auth.RandomSecret("ggs_", 32)
+				c.SecretHash = auth.HashToken(secret)
+			}
+			if err := st.CreateOAuthClient(cmd.Context(), c); err != nil {
+				return err
+			}
+			fmt.Fprintf(a.Stdout, "client_id:     %s\n", c.ID)
+			if secret != "" {
+				fmt.Fprintf(a.Stdout, "client_secret: %s\n", secret)
+				fmt.Fprintln(a.Stderr, "The client secret is shown only now and cannot be recovered.")
+			}
+			return nil
+		},
+	}
+	create.Flags().StringVar(&name, "name", "manual client", "name shown on the consent page")
+	create.Flags().StringSliceVar(&redirects, "redirect-uri", nil, "allowed redirect URI (repeatable)")
+	create.Flags().BoolVar(&public, "public", false, "public client (PKCE only, no client secret)")
+
+	del := &cobra.Command{
+		Use: "delete <client-id>", Short: "Delete a client and revoke everything it was granted", Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			st, err := a.open(cmd.Context())
+			if err != nil {
+				return err
+			}
+			defer func() { _ = st.Close() }()
+			n, err := st.DeleteOAuthClient(cmd.Context(), args[0], a.Now())
+			if errors.Is(err, store.ErrNotFound) {
+				return fmt.Errorf("no client with id %s", args[0])
+			}
+			if err != nil {
+				return err
+			}
+			fmt.Fprintf(a.Stdout, "deleted client %s and revoked %d access token(s)\n", args[0], n)
+			return nil
+		},
+	}
+	clients.AddCommand(list, create, del)
+	cmd.AddCommand(clients)
+	return cmd
 }
