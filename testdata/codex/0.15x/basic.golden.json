@@ -1,0 +1,282 @@
+{
+  "Project": "/home/user/projects/demo",
+  "Branch": "main",
+  "Remote": "https://github.com/example/demo.git",
+  "Version": "0.135.0",
+  "ToolsUsed": {
+    "apply_patch": 1,
+    "exec_command": 21
+  },
+  "FilesTouched": [
+    "src/file0.go"
+  ],
+  "Warnings": null,
+  "Turns": [
+    {
+      "Role": "user",
+      "Text": "scrubbed text"
+    },
+    {
+      "Role": "user",
+      "Text": "scrubbed text"
+    },
+    {
+      "Role": "assistant",
+      "Text": "scrubbed text\n\nscrubbed text\n\nscrubbed text",
+      "Tools": [
+        {
+          "Name": "exec_command",
+          "Kind": "shell",
+          "Command": "git status",
+          "Path": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": 0
+        },
+        {
+          "Name": "exec_command",
+          "Kind": "shell",
+          "Command": "echo scrubbed",
+          "Path": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": 0
+        },
+        {
+          "Name": "exec_command",
+          "Kind": "shell",
+          "Command": "echo scrubbed",
+          "Path": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": 0
+        },
+        {
+          "Name": "exec_command",
+          "Kind": "shell",
+          "Command": "echo scrubbed",
+          "Path": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": 0
+        },
+        {
+          "Name": "exec_command",
+          "Kind": "shell",
+          "Command": "echo scrubbed",
+          "Path": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": 0
+        },
+        {
+          "Name": "exec_command",
+          "Kind": "shell",
+          "Command": "echo scrubbed",
+          "Path": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": 0
+        },
+        {
+          "Name": "exec_command",
+          "Kind": "shell",
+          "Command": "echo scrubbed",
+          "Path": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": 0
+        }
+      ]
+    },
+    {
+      "Role": "user",
+      "Text": "scrubbed text"
+    },
+    {
+      "Role": "assistant",
+      "Text": "scrubbed text"
+    },
+    {
+      "Role": "user",
+      "Text": "scrubbed text"
+    },
+    {
+      "Role": "assistant",
+      "Text": "scrubbed text\n\nscrubbed text\n\nscrubbed text\n\nscrubbed text\n\nscrubbed text\n\nscrubbed text",
+      "Tools": [
+        {
+          "Name": "exec_command",
+          "Kind": "shell",
+          "Command": "echo scrubbed",
+          "Path": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": 0
+        },
+        {
+          "Name": "exec_command",
+          "Kind": "shell",
+          "Command": "echo scrubbed",
+          "Path": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": 0
+        },
+        {
+          "Name": "exec_command",
+          "Kind": "shell",
+          "Command": "echo scrubbed",
+          "Path": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": 0
+        },
+        {
+          "Name": "exec_command",
+          "Kind": "shell",
+          "Command": "echo scrubbed",
+          "Path": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": 0
+        },
+        {
+          "Name": "exec_command",
+          "Kind": "shell",
+          "Command": "echo scrubbed",
+          "Path": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": 0
+        },
+        {
+          "Name": "exec_command",
+          "Kind": "shell",
+          "Command": "echo scrubbed",
+          "Path": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": 0
+        },
+        {
+          "Name": "exec_command",
+          "Kind": "shell",
+          "Command": "echo scrubbed",
+          "Path": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": 0
+        },
+        {
+          "Name": "exec_command",
+          "Kind": "shell",
+          "Command": "echo scrubbed",
+          "Path": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": 0
+        },
+        {
+          "Name": "apply_patch",
+          "Kind": "file_write",
+          "Command": "",
+          "Path": "src/file0.go",
+          "Created": true,
+          "Known": true,
+          "OK": true,
+          "Exit": 0
+        },
+        {
+          "Name": "exec_command",
+          "Kind": "shell",
+          "Command": "echo scrubbed",
+          "Path": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": 0
+        },
+        {
+          "Name": "exec_command",
+          "Kind": "shell",
+          "Command": "git status",
+          "Path": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": 0
+        },
+        {
+          "Name": "exec_command",
+          "Kind": "shell",
+          "Command": "echo scrubbed",
+          "Path": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": 0
+        }
+      ]
+    },
+    {
+      "Role": "user",
+      "Text": "scrubbed text"
+    },
+    {
+      "Role": "user",
+      "Text": "scrubbed text"
+    },
+    {
+      "Role": "assistant",
+      "Text": "scrubbed text\n\nscrubbed text",
+      "Tools": [
+        {
+          "Name": "exec_command",
+          "Kind": "shell",
+          "Command": "git status",
+          "Path": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": 0
+        },
+        {
+          "Name": "exec_command",
+          "Kind": "shell",
+          "Command": "echo scrubbed",
+          "Path": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": 0
+        },
+        {
+          "Name": "exec_command",
+          "Kind": "shell",
+          "Command": "echo scrubbed",
+          "Path": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": 0
+        }
+      ]
+    }
+  ]
+}

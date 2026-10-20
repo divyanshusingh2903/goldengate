@@ -1,0 +1,8 @@
+garbage
+{"timestamp":"x","type":"session_meta","payload":{"id":"00000000-0000-4000-8000-0000000000cc","cwd":"/home/user/projects/demo","cli_version":"9.9.9"}}
+{"type":"response_item","payload":"not an object"}
+{"type":"response_item","payload":{"type":"message","role":"user","content":"a bare string"}}
+{"type":"response_item","payload":{"type":"function_call","name":"exec_command","arguments":"{not json","call_id":"c1"}}
+{"type":"response_item","payload":{"type":"function_call_output","call_id":"c1","output":12345}}
+{"type":"brand_new_event","payload":{}}
+{"timestamp":"2026-01-05T09:00:03.000Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"a real prompt after the noise"}]}}

@@ -1,0 +1,141 @@
+{
+  "Project": "/home/user/projects/demo",
+  "Branch": "main",
+  "Remote": "https://github.com/example/demo.git",
+  "Version": "0.150.0",
+  "ToolsUsed": {
+    "apply_patch": 3,
+    "exec": 1,
+    "exec_command": 5,
+    "shell": 1,
+    "web_search": 1
+  },
+  "FilesTouched": [
+    "src/new.go",
+    "src/a.go",
+    ".env"
+  ],
+  "Warnings": null,
+  "Turns": [
+    {
+      "Role": "user",
+      "Text": "please ship the widget"
+    },
+    {
+      "Role": "assistant",
+      "Text": "Earlier I mentioned commit deadbee1 and PR #12.\n\nAll done.",
+      "Tools": [
+        {
+          "Name": "exec_command",
+          "Kind": "shell",
+          "Command": "git add -A \u0026\u0026 git commit -m \"feat: widget\"",
+          "Path": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": 0
+        },
+        {
+          "Name": "exec_command",
+          "Kind": "shell",
+          "Command": "git commit -m \"oops\"",
+          "Path": "",
+          "Created": false,
+          "Known": true,
+          "OK": false,
+          "Exit": 1
+        },
+        {
+          "Name": "exec_command",
+          "Kind": "shell",
+          "Command": "git commit -m slow",
+          "Path": "",
+          "Created": false,
+          "Known": false,
+          "OK": false,
+          "Exit": null
+        },
+        {
+          "Name": "shell",
+          "Kind": "shell",
+          "Command": "git commit -m legacy",
+          "Path": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": 0
+        },
+        {
+          "Name": "exec_command",
+          "Kind": "shell",
+          "Command": "gh pr create --title \"Add widget\" --body x",
+          "Path": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": 0
+        },
+        {
+          "Name": "exec_command",
+          "Kind": "shell",
+          "Command": "gh pr merge 7 --squash",
+          "Path": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": 0
+        },
+        {
+          "Name": "apply_patch",
+          "Kind": "file_write",
+          "Command": "",
+          "Path": "src/new.go",
+          "Created": true,
+          "Known": true,
+          "OK": true,
+          "Exit": 0
+        },
+        {
+          "Name": "apply_patch",
+          "Kind": "file_edit",
+          "Command": "",
+          "Path": "src/a.go",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": 0
+        },
+        {
+          "Name": "apply_patch",
+          "Kind": "file_write",
+          "Command": "",
+          "Path": "src/bad.go",
+          "Created": true,
+          "Known": true,
+          "OK": false,
+          "Exit": 1
+        },
+        {
+          "Name": "apply_patch",
+          "Kind": "file_write",
+          "Command": "",
+          "Path": ".env",
+          "Created": true,
+          "Known": true,
+          "OK": true,
+          "Exit": 0
+        },
+        {
+          "Name": "exec",
+          "Kind": "other",
+          "Command": "",
+          "Path": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": null
+        }
+      ]
+    }
+  ]
+}
