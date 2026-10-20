@@ -1,0 +1,236 @@
+{
+  "ID": "ses_main",
+  "Project": "/home/user/projects/demo",
+  "Title": "Fix the widget",
+  "Version": "1.18.30",
+  "ToolsUsed": {
+    "apply_patch": 2,
+    "bash": 6,
+    "edit": 1,
+    "github_issue_read": 1,
+    "github_issue_write": 3,
+    "read": 1,
+    "write": 3
+  },
+  "FilesTouched": [
+    "src/new.go",
+    "src/old.go",
+    ".env",
+    "src/a.go",
+    "src/p.go",
+    "src/q.go"
+  ],
+  "Warnings": null,
+  "Turns": [
+    {
+      "Role": "user",
+      "Text": "please ship the widget",
+      "LastText": ""
+    },
+    {
+      "Role": "assistant",
+      "Text": "working on it\n\nDone. I also looked at PR #12 and commit deadbee1.",
+      "LastText": "Done. I also looked at PR #12 and commit deadbee1.",
+      "Tools": [
+        {
+          "Name": "bash",
+          "Kind": "shell",
+          "Command": "git add -A \u0026\u0026 git commit -m \"feat: widget\"",
+          "Path": "",
+          "Input": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": 0
+        },
+        {
+          "Name": "bash",
+          "Kind": "shell",
+          "Command": "git commit -m \"oops\"",
+          "Path": "",
+          "Input": "",
+          "Created": false,
+          "Known": true,
+          "OK": false,
+          "Exit": 1
+        },
+        {
+          "Name": "bash",
+          "Kind": "shell",
+          "Command": "git commit -m \"errored\"",
+          "Path": "",
+          "Input": "",
+          "Created": false,
+          "Known": true,
+          "OK": false,
+          "Exit": null
+        },
+        {
+          "Name": "bash",
+          "Kind": "shell",
+          "Command": "git commit -m \"no exit code\"",
+          "Path": "",
+          "Input": "",
+          "Created": false,
+          "Known": false,
+          "OK": false,
+          "Exit": null
+        },
+        {
+          "Name": "bash",
+          "Kind": "shell",
+          "Command": "gh pr create --title \"Add widget\" --body x",
+          "Path": "",
+          "Input": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": 0
+        },
+        {
+          "Name": "bash",
+          "Kind": "shell",
+          "Command": "gh pr merge 7 --squash",
+          "Path": "",
+          "Input": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": 0
+        },
+        {
+          "Name": "write",
+          "Kind": "file_write",
+          "Command": "",
+          "Path": "/home/user/projects/demo/src/new.go",
+          "Input": "",
+          "Created": true,
+          "Known": true,
+          "OK": true,
+          "Exit": null
+        },
+        {
+          "Name": "write",
+          "Kind": "file_write",
+          "Command": "",
+          "Path": "/home/user/projects/demo/src/old.go",
+          "Input": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": null
+        },
+        {
+          "Name": "write",
+          "Kind": "file_write",
+          "Command": "",
+          "Path": "/home/user/projects/demo/.env",
+          "Input": "",
+          "Created": true,
+          "Known": true,
+          "OK": true,
+          "Exit": null
+        },
+        {
+          "Name": "edit",
+          "Kind": "file_edit",
+          "Command": "",
+          "Path": "/home/user/projects/demo/src/a.go",
+          "Input": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": null
+        },
+        {
+          "Name": "apply_patch",
+          "Kind": "file_write",
+          "Command": "",
+          "Path": "src/p.go",
+          "Input": "",
+          "Created": true,
+          "Known": true,
+          "OK": true,
+          "Exit": null
+        },
+        {
+          "Name": "apply_patch",
+          "Kind": "file_edit",
+          "Command": "",
+          "Path": "src/q.go",
+          "Input": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": null
+        },
+        {
+          "Name": "apply_patch",
+          "Kind": "file_write",
+          "Command": "",
+          "Path": "src/failed.go",
+          "Input": "",
+          "Created": true,
+          "Known": true,
+          "OK": false,
+          "Exit": null
+        },
+        {
+          "Name": "github_issue_write",
+          "Kind": "issue",
+          "Command": "",
+          "Path": "",
+          "Input": "{\"method\":\"create\",\"owner\":\"example\",\"repo\":\"demo\",\"title\":\"Track widget\"}",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": null
+        },
+        {
+          "Name": "github_issue_write",
+          "Kind": "issue",
+          "Command": "",
+          "Path": "",
+          "Input": "{\"issue_number\":3,\"method\":\"update\",\"owner\":\"example\",\"repo\":\"demo\",\"state\":\"closed\",\"state_reason\":\"completed\"}",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": null
+        },
+        {
+          "Name": "github_issue_write",
+          "Kind": "issue",
+          "Command": "",
+          "Path": "",
+          "Input": "{\"method\":\"create\",\"owner\":\"example\",\"repo\":\"demo\",\"title\":\"never created\"}",
+          "Created": false,
+          "Known": true,
+          "OK": false,
+          "Exit": null
+        },
+        {
+          "Name": "github_issue_read",
+          "Kind": "issue",
+          "Command": "",
+          "Path": "",
+          "Input": "{\"issue_number\":4,\"method\":\"get\",\"owner\":\"example\",\"repo\":\"demo\"}",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": null
+        },
+        {
+          "Name": "read",
+          "Kind": "file_read",
+          "Command": "",
+          "Path": "/home/user/projects/demo/README.md",
+          "Input": "",
+          "Created": false,
+          "Known": false,
+          "OK": false,
+          "Exit": null
+        }
+      ]
+    }
+  ]
+}
