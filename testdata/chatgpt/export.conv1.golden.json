@@ -1,0 +1,28 @@
+{
+  "Title": "Fix the redirect",
+  "Tools": {
+    "python": 1
+  },
+  "Turns": [
+    {
+      "Role": "user",
+      "Text": "How do I fix the redirect? PR https://github.com/example/demo/pull/7 and commit abc1234 are related.",
+      "Last": ""
+    },
+    {
+      "Role": "assistant",
+      "Text": "Let me check.",
+      "Last": "Let me check."
+    },
+    {
+      "Role": "user",
+      "Text": "What does this screenshot show?",
+      "Last": ""
+    },
+    {
+      "Role": "assistant",
+      "Text": "It shows the login page.",
+      "Last": "It shows the login page."
+    }
+  ]
+}

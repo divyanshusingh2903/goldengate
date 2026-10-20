@@ -1,0 +1,570 @@
+[
+ {
+  "id": "gpt-conv-0001",
+  "conversation_id": "gpt-conv-0001",
+  "title": "Fix the redirect",
+  "create_time": 1767603600.0,
+  "update_time": 1767603609.0,
+  "current_node": "a2",
+  "mapping": {
+   "root": {
+    "id": "root",
+    "message": null,
+    "parent": null,
+    "children": [
+     "sys"
+    ]
+   },
+   "sys": {
+    "id": "sys",
+    "message": {
+     "id": "sys",
+     "author": {
+      "role": "system",
+      "name": null,
+      "metadata": {}
+     },
+     "create_time": 1767603600.0,
+     "update_time": 1767603600.0,
+     "content": {
+      "content_type": "text",
+      "parts": [
+       ""
+      ]
+     },
+     "status": "finished_successfully",
+     "end_turn": true,
+     "weight": 1.0,
+     "metadata": {
+      "is_visually_hidden_from_conversation": true
+     },
+     "recipient": "all"
+    },
+    "parent": "root",
+    "children": [
+     "u1",
+     "u1_edit"
+    ]
+   },
+   "u1": {
+    "id": "u1",
+    "message": {
+     "id": "u1",
+     "author": {
+      "role": "user",
+      "name": null,
+      "metadata": {}
+     },
+     "create_time": 1767603601.0,
+     "update_time": 1767603601.0,
+     "content": {
+      "content_type": "text",
+      "parts": [
+       "Original wording of my question"
+      ]
+     },
+     "status": "finished_successfully",
+     "end_turn": true,
+     "weight": 1.0,
+     "metadata": {},
+     "recipient": "all"
+    },
+    "parent": "sys",
+    "children": [
+     "a_old"
+    ]
+   },
+   "a_old": {
+    "id": "a_old",
+    "message": {
+     "id": "a_old",
+     "author": {
+      "role": "assistant",
+      "name": null,
+      "metadata": {}
+     },
+     "create_time": 1767603602.0,
+     "update_time": 1767603602.0,
+     "content": {
+      "content_type": "text",
+      "parts": [
+       "OLD BRANCH ANSWER"
+      ]
+     },
+     "status": "finished_successfully",
+     "end_turn": true,
+     "weight": 1.0,
+     "metadata": {},
+     "recipient": "all"
+    },
+    "parent": "u1",
+    "children": []
+   },
+   "u1_edit": {
+    "id": "u1_edit",
+    "message": {
+     "id": "u1_edit",
+     "author": {
+      "role": "user",
+      "name": null,
+      "metadata": {}
+     },
+     "create_time": 1767603603.0,
+     "update_time": 1767603603.0,
+     "content": {
+      "content_type": "text",
+      "parts": [
+       "How do I fix the redirect? PR https://github.com/example/demo/pull/7 and commit abc1234 are related."
+      ]
+     },
+     "status": "finished_successfully",
+     "end_turn": true,
+     "weight": 1.0,
+     "metadata": {},
+     "recipient": "all"
+    },
+    "parent": "sys",
+    "children": [
+     "a1"
+    ]
+   },
+   "a1": {
+    "id": "a1",
+    "message": {
+     "id": "a1",
+     "author": {
+      "role": "assistant",
+      "name": null,
+      "metadata": {}
+     },
+     "create_time": 1767603604.0,
+     "update_time": 1767603604.0,
+     "content": {
+      "content_type": "text",
+      "parts": [
+       "Let me check."
+      ]
+     },
+     "status": "finished_successfully",
+     "end_turn": true,
+     "weight": 1.0,
+     "metadata": {},
+     "recipient": "all"
+    },
+    "parent": "u1_edit",
+    "children": [
+     "h1"
+    ]
+   },
+   "think": {
+    "id": "think",
+    "message": {
+     "id": "think",
+     "author": {
+      "role": "assistant",
+      "name": null,
+      "metadata": {}
+     },
+     "create_time": 1767603605.0,
+     "update_time": 1767603605.0,
+     "content": {
+      "content_type": "thoughts",
+      "parts": [],
+      "thoughts": [
+       {
+        "summary": "PRIVATE THOUGHTS"
+       }
+      ]
+     },
+     "status": "finished_successfully",
+     "end_turn": true,
+     "weight": 1.0,
+     "metadata": {},
+     "recipient": "all"
+    },
+    "parent": "h1",
+    "children": [
+     "call"
+    ]
+   },
+   "call": {
+    "id": "call",
+    "message": {
+     "id": "call",
+     "author": {
+      "role": "assistant",
+      "name": null,
+      "metadata": {}
+     },
+     "create_time": 1767603606.0,
+     "update_time": 1767603606.0,
+     "content": {
+      "content_type": "code",
+      "parts": [
+       "print('SECRET-CODE')"
+      ],
+      "text": "print('SECRET-CODE')"
+     },
+     "status": "finished_successfully",
+     "end_turn": true,
+     "weight": 1.0,
+     "metadata": {},
+     "recipient": "python"
+    },
+    "parent": "think",
+    "children": [
+     "out"
+    ]
+   },
+   "out": {
+    "id": "out",
+    "message": {
+     "id": "out",
+     "author": {
+      "role": "tool",
+      "name": null,
+      "metadata": {}
+     },
+     "create_time": 1767603607.0,
+     "update_time": 1767603607.0,
+     "content": {
+      "content_type": "execution_output",
+      "parts": [
+       "SECRET-TOOL-OUTPUT"
+      ],
+      "text": "SECRET-TOOL-OUTPUT"
+     },
+     "status": "finished_successfully",
+     "end_turn": true,
+     "weight": 1.0,
+     "metadata": {},
+     "recipient": "all"
+    },
+    "parent": "call",
+    "children": [
+     "mm"
+    ]
+   },
+   "mm": {
+    "id": "mm",
+    "message": {
+     "id": "mm",
+     "author": {
+      "role": "user",
+      "name": null,
+      "metadata": {}
+     },
+     "create_time": 1767603608.0,
+     "update_time": 1767603608.0,
+     "content": {
+      "content_type": "multimodal_text",
+      "parts": [
+       {
+        "content_type": "image_asset_pointer",
+        "asset_pointer": "file-service://file-SECRET"
+       },
+       "What does this screenshot show?"
+      ]
+     },
+     "status": "finished_successfully",
+     "end_turn": true,
+     "weight": 1.0,
+     "metadata": {},
+     "recipient": "all"
+    },
+    "parent": "out",
+    "children": [
+     "ctx"
+    ]
+   },
+   "ctx": {
+    "id": "ctx",
+    "message": {
+     "id": "ctx",
+     "author": {
+      "role": "user",
+      "name": null,
+      "metadata": {}
+     },
+     "create_time": 1767603608.5,
+     "update_time": 1767603608.5,
+     "content": {
+      "content_type": "user_editable_context",
+      "parts": [
+       "INJECTED PROFILE TEXT"
+      ]
+     },
+     "status": "finished_successfully",
+     "end_turn": true,
+     "weight": 1.0,
+     "metadata": {},
+     "recipient": "all"
+    },
+    "parent": "mm",
+    "children": [
+     "a2"
+    ]
+   },
+   "a2": {
+    "id": "a2",
+    "message": {
+     "id": "a2",
+     "author": {
+      "role": "assistant",
+      "name": null,
+      "metadata": {}
+     },
+     "create_time": 1767603609.0,
+     "update_time": 1767603609.0,
+     "content": {
+      "content_type": "text",
+      "parts": [
+       "It shows the login page."
+      ]
+     },
+     "status": "finished_successfully",
+     "end_turn": true,
+     "weight": 1.0,
+     "metadata": {},
+     "recipient": "all"
+    },
+    "parent": "ctx",
+    "children": []
+   },
+   "h1": {
+    "id": "h1",
+    "parent": "a1",
+    "children": [
+     "think"
+    ],
+    "message": {
+     "id": "h1",
+     "author": {
+      "role": "assistant",
+      "name": null,
+      "metadata": {}
+     },
+     "create_time": 1767603604.5,
+     "update_time": 1767603604.5,
+     "content": {
+      "content_type": "text",
+      "parts": [
+       "HIDDEN ASSISTANT NOTE"
+      ]
+     },
+     "status": "finished_successfully",
+     "end_turn": false,
+     "weight": 1.0,
+     "metadata": {
+      "is_visually_hidden_from_conversation": true
+     },
+     "recipient": "all"
+    }
+   }
+  },
+  "default_model_slug": "gpt-4o",
+  "gizmo_id": null,
+  "is_archived": false
+ },
+ {
+  "id": "gpt-conv-0002",
+  "title": "Project chat",
+  "create_time": 1767603500.0,
+  "update_time": 1767603550.0,
+  "current_node": "p2",
+  "gizmo_id": "g-p-0123456789abcdef-demo-project",
+  "mapping": {
+   "r": {
+    "id": "r",
+    "message": null,
+    "parent": null,
+    "children": [
+     "p1"
+    ]
+   },
+   "p1": {
+    "id": "p1",
+    "message": {
+     "id": "p1",
+     "author": {
+      "role": "user",
+      "name": null,
+      "metadata": {}
+     },
+     "create_time": 1767603501.0,
+     "update_time": 1767603501.0,
+     "content": {
+      "content_type": "text",
+      "parts": [
+       "project question"
+      ]
+     },
+     "status": "finished_successfully",
+     "end_turn": true,
+     "weight": 1.0,
+     "metadata": {},
+     "recipient": "all"
+    },
+    "parent": "r",
+    "children": [
+     "p2"
+    ]
+   },
+   "p2": {
+    "id": "p2",
+    "message": {
+     "id": "p2",
+     "author": {
+      "role": "assistant",
+      "name": null,
+      "metadata": {}
+     },
+     "create_time": 1767603502.0,
+     "update_time": 1767603502.0,
+     "content": {
+      "content_type": "text",
+      "parts": [
+       "project answer"
+      ]
+     },
+     "status": "finished_successfully",
+     "end_turn": true,
+     "weight": 1.0,
+     "metadata": {},
+     "recipient": "all"
+    },
+    "parent": "p1",
+    "children": []
+   }
+  }
+ },
+ {
+  "id": "gpt-conv-0003",
+  "title": null,
+  "create_time": "1767600000",
+  "update_time": null,
+  "gizmo_id": "g-abcdef123456",
+  "mapping": {
+   "x1": {
+    "id": "x1",
+    "message": {
+     "id": "x1",
+     "author": {
+      "role": "user",
+      "name": null,
+      "metadata": {}
+     },
+     "create_time": 1767603400.0,
+     "update_time": 1767603400.0,
+     "content": {
+      "content_type": "text",
+      "parts": [
+       "no current_node here"
+      ]
+     },
+     "status": "finished_successfully",
+     "end_turn": true,
+     "weight": 1.0,
+     "metadata": {},
+     "recipient": "all"
+    },
+    "parent": null,
+    "children": [
+     "x2"
+    ]
+   },
+   "x2": {
+    "id": "x2",
+    "message": {
+     "id": "x2",
+     "author": {
+      "role": "assistant",
+      "name": null,
+      "metadata": {}
+     },
+     "create_time": 1767603401.0,
+     "update_time": 1767603401.0,
+     "content": {
+      "content_type": "text",
+      "parts": [
+       "picked the newest leaf"
+      ]
+     },
+     "status": "finished_successfully",
+     "end_turn": true,
+     "weight": 1.0,
+     "metadata": {},
+     "recipient": "all"
+    },
+    "parent": "x1",
+    "children": []
+   }
+  }
+ },
+ {
+  "id": "gpt-conv-0004",
+  "title": "Cyclic",
+  "create_time": 1767603600.0,
+  "update_time": 1767603600.0,
+  "current_node": "c1",
+  "mapping": {
+   "c1": {
+    "id": "c1",
+    "message": {
+     "id": "c1",
+     "author": {
+      "role": "user",
+      "name": null,
+      "metadata": {}
+     },
+     "create_time": 1767603600.0,
+     "update_time": 1767603600.0,
+     "content": {
+      "content_type": "text",
+      "parts": [
+       "loop a"
+      ]
+     },
+     "status": "finished_successfully",
+     "end_turn": true,
+     "weight": 1.0,
+     "metadata": {},
+     "recipient": "all"
+    },
+    "parent": "c2",
+    "children": []
+   },
+   "c2": {
+    "id": "c2",
+    "message": {
+     "id": "c2",
+     "author": {
+      "role": "assistant",
+      "name": null,
+      "metadata": {}
+     },
+     "create_time": 1767603601.0,
+     "update_time": 1767603601.0,
+     "content": {
+      "content_type": "text",
+      "parts": [
+       "loop b"
+      ]
+     },
+     "status": "finished_successfully",
+     "end_turn": true,
+     "weight": 1.0,
+     "metadata": {},
+     "recipient": "all"
+    },
+    "parent": "c1",
+    "children": []
+   }
+  }
+ },
+ "not an object",
+ {
+  "title": "no id",
+  "mapping": {}
+ }
+]

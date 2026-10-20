@@ -1,0 +1,61 @@
+{
+  "Title": "Fix the login redirect",
+  "Tools": {
+    "artifacts": 2,
+    "upload": 3,
+    "web_search": 1
+  },
+  "Turns": [
+    {
+      "Role": "user",
+      "Text": "Why does our OAuth redirect fail on staging? See https://github.com/example/demo/pull/7 and commit abc1234.",
+      "Last": "",
+      "Tools": [
+        {
+          "Name": "upload",
+          "Kind": "artifact",
+          "Input": "{\"command\":\"create\",\"id\":\"upload:notes.md\",\"title\":\"notes.md\"}"
+        },
+        {
+          "Name": "upload",
+          "Kind": "artifact",
+          "Input": "{\"command\":\"create\",\"id\":\"upload:.env\",\"title\":\".env\"}"
+        },
+        {
+          "Name": "upload",
+          "Kind": "artifact",
+          "Input": "{\"command\":\"create\",\"id\":\"upload:screenshot.png\",\"title\":\"screenshot.png\"}"
+        }
+      ]
+    },
+    {
+      "Role": "assistant",
+      "Text": "Check the redirect URI. Here is a fix.",
+      "Last": "Check the redirect URI. Here is a fix.",
+      "Tools": [
+        {
+          "Name": "artifacts",
+          "Kind": "artifact",
+          "Input": "{\"id\":\"art-1\",\"title\":\"redirect.go\",\"command\":\"create\",\"type\":\"application/vnd.ant.code\"}"
+        }
+      ]
+    },
+    {
+      "Role": "user",
+      "Text": "Thanks, update it please.",
+      "Last": ""
+    },
+    {
+      "Role": "assistant",
+      "Text": "Updated.",
+      "Last": "Updated.",
+      "Tools": [
+        {
+          "Name": "artifacts",
+          "Kind": "artifact",
+          "Input": "{\"id\":\"art-1\",\"title\":\"redirect.go\",\"command\":\"update\",\"type\":\"\"}"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,193 @@
+[
+ {
+  "uuid": "c0000000-0000-4000-8000-000000000001",
+  "name": "Fix the login redirect",
+  "summary": "",
+  "created_at": "2026-01-05T09:00:00.000000Z",
+  "updated_at": "2026-01-05T09:30:00.000000Z",
+  "account": {
+   "uuid": "acct"
+  },
+  "chat_messages": [
+   {
+    "uuid": "m1",
+    "text": "Why does our OAuth redirect fail on staging? See https://github.com/example/demo/pull/7 and commit abc1234.",
+    "sender": "human",
+    "created_at": "2026-01-05T09:00:01.000000Z",
+    "updated_at": "2026-01-05T09:00:01.000000Z",
+    "content": [
+     {
+      "type": "text",
+      "text": "Why does our OAuth redirect fail on staging? See https://github.com/example/demo/pull/7 and commit abc1234."
+     }
+    ],
+    "attachments": [
+     {
+      "file_name": "notes.md",
+      "file_size": 10,
+      "file_type": "text/markdown",
+      "extracted_content": "SECRET-ATTACHMENT-CONTENT"
+     },
+     {
+      "file_name": ".env",
+      "file_size": 3,
+      "file_type": "text/plain",
+      "extracted_content": "SECRET=1"
+     }
+    ],
+    "files": [
+     {
+      "file_name": "screenshot.png"
+     }
+    ]
+   },
+   {
+    "uuid": "m2",
+    "text": "Check the redirect URI. Here is a fix.",
+    "sender": "assistant",
+    "created_at": "2026-01-05T09:00:20.000000Z",
+    "updated_at": "2026-01-05T09:00:20.000000Z",
+    "content": [
+     {
+      "type": "thinking",
+      "thinking": "PRIVATE THOUGHTS"
+     },
+     {
+      "type": "text",
+      "text": "Check the redirect URI. Here is a fix."
+     },
+     {
+      "type": "tool_use",
+      "name": "artifacts",
+      "input": {
+       "id": "art-1",
+       "type": "application/vnd.ant.code",
+       "title": "redirect.go",
+       "command": "create",
+       "content": "SECRET-ARTIFACT-CONTENT"
+      }
+     },
+     {
+      "type": "tool_use",
+      "name": "web_search",
+      "input": {
+       "query": "q"
+      }
+     }
+    ],
+    "attachments": [],
+    "files": []
+   },
+   {
+    "uuid": "m3",
+    "text": "Thanks, update it please.",
+    "sender": "human",
+    "created_at": "2026-01-05T09:10:00.000000Z",
+    "updated_at": "2026-01-05T09:10:00.000000Z",
+    "content": [
+     {
+      "type": "text",
+      "text": "Thanks, update it please."
+     }
+    ],
+    "attachments": [],
+    "files": []
+   },
+   {
+    "uuid": "m4",
+    "text": "Updated.",
+    "sender": "assistant",
+    "created_at": "2026-01-05T09:30:00.000000Z",
+    "updated_at": "2026-01-05T09:30:00.000000Z",
+    "content": [
+     {
+      "type": "text",
+      "text": "Updated."
+     },
+     {
+      "type": "tool_use",
+      "name": "artifacts",
+      "input": {
+       "id": "art-1",
+       "title": "redirect.go",
+       "command": "update",
+       "content": "SECRET-ARTIFACT-CONTENT-2"
+      }
+     }
+    ],
+    "attachments": [],
+    "files": []
+   }
+  ],
+  "project_uuid": "p0000000-0000-4000-8000-0000000000aa"
+ },
+ {
+  "uuid": "c0000000-0000-4000-8000-000000000002",
+  "name": "Recipe ideas",
+  "created_at": "2026-01-04T10:00:00.000000Z",
+  "updated_at": "2026-01-04T10:05:00.000000Z",
+  "chat_messages": [
+   {
+    "uuid": "m5",
+    "text": "Give me a pasta recipe",
+    "sender": "human",
+    "created_at": "2026-01-04T10:00:01.000000Z",
+    "updated_at": "2026-01-04T10:00:01.000000Z",
+    "content": [
+     {
+      "type": "text",
+      "text": "Give me a pasta recipe"
+     }
+    ],
+    "attachments": [],
+    "files": []
+   },
+   {
+    "uuid": "m6",
+    "text": "Try cacio e pepe.",
+    "sender": "assistant",
+    "created_at": "2026-01-04T10:05:00.000000Z",
+    "updated_at": "2026-01-04T10:05:00.000000Z",
+    "content": [
+     {
+      "type": "text",
+      "text": "Try cacio e pepe."
+     }
+    ],
+    "attachments": [],
+    "files": []
+   }
+  ]
+ },
+ {
+  "uuid": "c0000000-0000-4000-8000-000000000003",
+  "name": "*[odd]* {name}",
+  "created_at": "2026-01-03T10:00:00Z",
+  "chat_messages": [
+   {
+    "uuid": "m7",
+    "text": "hi there",
+    "sender": "human",
+    "created_at": "2026-01-03T10:00:01Z",
+    "updated_at": "2026-01-03T10:00:01Z",
+    "content": [
+     {
+      "type": "text",
+      "text": "hi there"
+     }
+    ],
+    "attachments": [],
+    "files": []
+   }
+  ],
+  "project": {
+   "uuid": "p0000000-0000-4000-8000-0000000000bb",
+   "name": "Side *project* [x]"
+  }
+ },
+ "this element is not an object",
+ {
+  "name": "no uuid",
+  "chat_messages": []
+ }
+]
