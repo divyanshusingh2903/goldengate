@@ -8,7 +8,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/OWNER/goldengate/internal/bridgecli"
+	"github.com/divyanshusingh2903/goldengate/internal/goldengatebridge/bridgecli"
 )
 
 func main() {

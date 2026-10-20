@@ -7,7 +7,7 @@ import (
 	"os"
 	"os/signal"
 
-	"github.com/OWNER/goldengate/internal/cli"
+	"github.com/divyanshusingh2903/goldengate/internal/goldengate/cli"
 )
 
 func main() {

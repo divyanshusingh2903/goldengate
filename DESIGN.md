@@ -44,31 +44,29 @@ Two binaries, one module:
 ## 3. Repository layout
 
 ```
-cmd/goldengate/            # CLI + TUI entry (cobra or urfave/cli)
-cmd/goldengatebridge/     # server entry
+cmd/goldengate/           # CLI + TUI entry (thin main)
+cmd/goldengatebridge/     # server entry (thin main)
 internal/
-  adapters/               # one package per source tool
-    adapter.go            # Adapter interface + registry
-    claudecode/
-    codex/
-    opencode/
-    claudeai/             # data-export importer
-  model/                  # Session, Project, Summary types (shared client/server)
-  discover/               # find projects across adapters, group by folder
-  selection/              # allow/deny rules, persistence, matching
-  redact/                 # secret + path scrubbing
-  summarize/              # heuristic summarizer, optional LLM summarizer
-  sync/                   # idempotent push, state db, retry
-  tui/                    # Bubble Tea models, views, styles
-  server/
-    mcp/                  # MCP tools
-    ingest/               # ingest handler, validation
-    auth/                 # bearer (hashed tokens), later OAuth
-    store/                # Store interface + firestore, sqlite, postgres, memory
-  config/                 # TOML config, XDG paths, keyring
+  goldengate/             # code that ships only in the local tool
+    adapters/             # one package per source tool (+ Adapter interface, registry)
+      claudecode/ codex/ opencode/ claudeai/ chatgpt/
+    cli/ tui/             # cobra commands; Bubble Tea models, views, styles
+    client/ config/       # bridge HTTP client; TOML config, XDG paths
+    discover/ project/    # find projects across adapters, group by folder
+    selection/            # allow/deny rules, persistence, matching
+    secrets/              # keyring / token storage
+    summarize/ sync/      # summarizers; idempotent push, state db, retry
+  goldengatebridge/       # code that ships only in the server
+    bridgecli/            # server CLI (serve, token, pair)
+    server/               # ingest + MCP handlers
+      auth/ oauth/ bridgemcp/ store/
+  model/                  # wire types shared by both tools
+  utils/                  # shared helpers: pathutil, redact, shellcmd, workitems
+  tests/e2e/              # cross-tool end-to-end tests (unit tests sit beside their packages)
 testdata/                 # fixtures per adapter, per format version
-deploy/                   # Dockerfile, cloudrun.md, firebase.json example
-docs/
+scripts/                  # secret checks, fixture scrubbers
+deploy/                   # (M5) Dockerfile, cloudrun.md, firebase.json example
+docs/                     # (M6)
 ```
 
 ## 4. Source adapters
@@ -352,7 +350,7 @@ Token types: `admin` (mints/lists/revokes tokens, nothing else), `ingest` (write
 
 Pipeline per session: `Load -> redact -> summarize -> redact again -> push`.
 
-Redaction (`internal/redact`)
+Redaction (`internal/utils/redact`)
 - Pattern rules for common secrets (cloud keys, API tokens, private key blocks, JWTs, connection strings, `Authorization:` headers) plus high-entropy-string detection. Allow user `extra_patterns`.
 - Strip `.env`-style content and never include file contents from files whose names match secret patterns (`.env*`, `*.pem`, `id_rsa*`, `credentials*`).
 - Path scrubbing: replace the home directory with `~`, drop absolute paths outside shared projects.
@@ -360,7 +358,7 @@ Redaction (`internal/redact`)
 - Redactions are logged locally as counts and kinds only, never the secret.
 - State plainly in docs that regex redaction is best-effort, not a guarantee.
 
-Summarization (`internal/summarize`)
+Summarization (`internal/goldengate/summarize`)
 - **Default: heuristic, fully local.** Title (first user prompt, trimmed), goal, files touched (top N), tools used, commands run (names only), last assistant message (trimmed), outcome guess (tests passed, commit made), duration, turn count.
 - **Opt-in: LLM summarizer**, behind an interface, provider-agnostic (local command, Ollama, or an API key the user supplies). Off by default and the TUI must say clearly that transcript text will go to that model.
 - Hard size caps per summary (e.g. 2 KB) so MCP responses stay small. Work items (see 4.1) are carried as separate structured records alongside the summary, with their own caps, and are shown in the preview exactly as they will be sent.

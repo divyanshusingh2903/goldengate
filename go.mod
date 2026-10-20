@@ -1,4 +1,4 @@
-module github.com/OWNER/goldengate
+module github.com/divyanshusingh2903/goldengate
 
 go 1.26.0
 

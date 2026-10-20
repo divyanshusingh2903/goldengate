@@ -16,7 +16,7 @@ done <<<"$staged"
 
 # Added lines only. Captured into a variable: piping into `grep -q` under
 # pipefail would fail open (SIGPIPE makes the pipeline "fail", skipping the check).
-added=$(git diff --cached -U0 -- . ':(exclude)scripts/check-secrets.sh' ':(exclude)internal/redact/*_test.go' | grep -E '^\+' | grep -vE '^\+\+\+' || true)
+added=$(git diff --cached -U0 -- . ':(exclude)scripts/check-secrets.sh' ':(exclude)internal/utils/redact/*_test.go' | grep -E '^\+' | grep -vE '^\+\+\+' || true)
 
 # 2. secret-shaped strings in added lines (testdata is scanned too: fixtures must stay fake-by-construction)
 patterns='AKIA[0-9A-Z]{16}|ghp_[A-Za-z0-9]{36}|github_pat_[A-Za-z0-9_]{40,}|sk-[A-Za-z0-9]{32,}|sk-ant-[A-Za-z0-9_-]{20,}|xox[baprs]-[A-Za-z0-9-]{10,}|-----BEGIN [A-Z ]*PRIVATE KEY-----|AIza[0-9A-Za-z_-]{35}|ggb_(read|ingest|admin)_[A-Za-z0-9_-]{20,}'
