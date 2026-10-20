@@ -195,6 +195,7 @@ func (a *app) runInit(ctx context.Context, serverURL, pairCode string, stdinTok,
 	}
 	fmt.Fprintf(a.Stdout, "Ingest token stored in the %s. The admin token was not saved anywhere.\n", store.Kind())
 
+	oauth := probe.OAuthEnabled(ctx)
 	if readSecret != "" {
 		fmt.Fprintf(a.Stdout, `
 Your assistant's read token (shown ONCE; it cannot be recovered, rotate it with 'goldengate token rotate read'):
@@ -202,12 +203,20 @@ Your assistant's read token (shown ONCE; it cannot be recovered, rotate it with 
     %s
 
 Connector URL: %s/mcp
-Paste the URL and the token into your assistant's custom MCP connector, as an
-"Authorization: Bearer <token>" header if it offers one. Some assistants
-(including Gemini's consumer app) only support OAuth; that arrives in a later release.
+For assistants that let you set a header, paste the URL and send the token as "Authorization: Bearer <token>".
 `, readSecret, serverURL)
 	} else {
 		fmt.Fprintf(a.Stdout, "\nCreate the assistant's read token on the server with:\n    goldengatebridge token create --scope read\n")
+	}
+	if oauth {
+		fmt.Fprintf(a.Stdout, `
+This server has OAuth enabled, so assistants that connect with OAuth need no token:
+add %s/mcp as the connector URL (Gemini: Settings > Connected Apps > Add a custom app).
+A consent page opens in your browser; approve it with your admin secret. If the assistant asks
+for a client ID and secret instead, create them with 'goldengatebridge oauth clients create'.
+`, serverURL)
+	} else {
+		fmt.Fprint(a.Stdout, "\nAssistants that only support OAuth (Gemini's custom apps are one) need the server started with --oauth.\n")
 	}
 	fmt.Fprint(a.Stdout, `
 Next:

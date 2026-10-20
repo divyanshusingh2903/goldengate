@@ -228,3 +228,9 @@ func Pair(ctx context.Context, serverURL, code string, hc *http.Client, userAgen
 	}
 	return out.Token, nil
 }
+
+// OAuthEnabled reports whether the server runs its built-in OAuth server
+// (it then publishes authorization server metadata).
+func (c *Client) OAuthEnabled(ctx context.Context) bool {
+	return c.do(ctx, http.MethodGet, "/.well-known/oauth-authorization-server", nil, nil) == nil
+}

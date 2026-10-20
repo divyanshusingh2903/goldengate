@@ -45,7 +45,9 @@ type bridge struct {
 	dbPath string
 }
 
-func startBridge(t *testing.T) *bridge {
+func startBridge(t *testing.T) *bridge { return startBridgeOpts(t, false) }
+
+func startBridgeOpts(t *testing.T, withOAuth bool) *bridge {
 	t.Helper()
 	dbPath := filepath.Join(t.TempDir(), "bridge.db")
 	st, err := store.OpenSQLite(context.Background(), dbPath)
@@ -57,12 +59,18 @@ func startBridge(t *testing.T) *bridge {
 	if err != nil {
 		t.Fatal(err)
 	}
-	s, err := server.New(server.Config{Store: st, Auth: au, Now: func() time.Time { return fakeNow }, BehindProxy: true})
+	var handler http.Handler
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { handler.ServeHTTP(w, r) }))
+	t.Cleanup(ts.Close)
+	cfg := server.Config{Store: st, Auth: au, Now: func() time.Time { return fakeNow }, BehindProxy: true}
+	if withOAuth {
+		cfg.PublicURL = ts.URL
+	}
+	s, err := server.New(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
-	ts := httptest.NewServer(s)
-	t.Cleanup(ts.Close)
+	handler = s
 	return &bridge{ts: ts, st: st, au: au, dbPath: dbPath}
 }
 
@@ -486,5 +494,22 @@ func TestAdminTokenFromStdin(t *testing.T) {
 	}
 	if !readTokenRe.MatchString(l.out.String()) {
 		t.Errorf("no read token:\n%s", l.out)
+	}
+}
+
+func TestInitExplainsOAuthOnlyWhenTheServerHasIt(t *testing.T) {
+	plain := newLaptop(t).must(newLaptop(t).initEnv(startBridgeOpts(t, false)), "init", "--non-interactive")
+	if strings.Contains(plain, "This server has OAuth enabled") || !strings.Contains(plain, "--oauth") {
+		t.Errorf("without OAuth the output should say how to enable it:\n%s", plain)
+	}
+	b := startBridgeOpts(t, true)
+	l := newLaptop(t)
+	out := l.must(l.initEnv(b), "init", "--non-interactive")
+	if !strings.Contains(out, "This server has OAuth enabled") || !strings.Contains(out, b.ts.URL+"/mcp") ||
+		!strings.Contains(out, "Connected Apps") || !strings.Contains(out, "oauth clients create") {
+		t.Errorf("OAuth guidance missing:\n%s", out)
+	}
+	if !readTokenRe.MatchString(out) {
+		t.Errorf("the read token is still offered for header-capable clients:\n%s", out)
 	}
 }
