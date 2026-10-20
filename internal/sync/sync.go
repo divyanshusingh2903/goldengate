@@ -44,6 +44,33 @@ type Batch struct {
 // Len is the number of payloads in the batch.
 func (b Batch) Len() int { return len(b.items) }
 
+// ByProject splits a batch into one batch per server project, in order, so a
+// caller can push and report project by project. Unchanged-stat refreshes ride
+// with the first part.
+func (b Batch) ByProject() []Batch {
+	var order []string
+	by := map[string]*Batch{}
+	for _, it := range b.items {
+		k := it.payload.Project
+		if _, ok := by[k]; !ok {
+			by[k] = &Batch{}
+			order = append(order, k)
+		}
+		by[k].items = append(by[k].items, it)
+	}
+	out := make([]Batch, 0, len(order)+1)
+	for _, k := range order {
+		out = append(out, *by[k])
+	}
+	if len(b.refresh) > 0 {
+		if len(out) == 0 {
+			out = append(out, Batch{})
+		}
+		out[0].refresh = append(out[0].refresh, b.refresh...)
+	}
+	return out
+}
+
 // Payloads returns copies of the payload pointers, for previews.
 func (b Batch) Payloads() []*model.SessionPayload {
 	out := make([]*model.SessionPayload, len(b.items))
@@ -231,9 +258,10 @@ func (s *Syncer) Plan(ctx context.Context, o RunOpts) (Batch, Report, error) {
 				rep.Redactions[k] += n
 			}
 			s.log().Debug("planned", "adapter", a.Name(), "session", ref.ID, "redactions", p.Redactions)
+			body, _ := json.Marshal(p)
 			b.items = append(b.items, planned{payload: p, entry: Entry{
 				Source: ref.Source, SessionID: ref.ID, Project: ref.ProjectKey, ContentHash: p.ContentHash,
-				Size: ref.SizeBytes, MTimeNS: mtime,
+				Size: ref.SizeBytes, MTimeNS: mtime, Payload: body,
 			}})
 			rep.Planned++
 		}

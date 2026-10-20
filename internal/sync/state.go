@@ -21,12 +21,16 @@ type Entry struct {
 	Size                                    int64
 	MTimeNS                                 int64
 	SyncedAt                                time.Time
+	// Payload is the JSON that was pushed (already redacted, exactly what the
+	// server received). It lets the TUI show what changed since the last sync.
+	Payload []byte
 }
 
 const schema = `
 CREATE TABLE IF NOT EXISTS sessions(
   source TEXT NOT NULL, session_id TEXT NOT NULL, project TEXT NOT NULL,
   content_hash TEXT NOT NULL, size INTEGER NOT NULL, mtime_ns INTEGER NOT NULL, synced_at INTEGER NOT NULL,
+  payload TEXT NOT NULL DEFAULT '',
   PRIMARY KEY(source, session_id));
 CREATE INDEX IF NOT EXISTS sessions_project ON sessions(project);
 CREATE TABLE IF NOT EXISTS tombstones(project TEXT PRIMARY KEY, created_at INTEGER NOT NULL);
@@ -60,7 +64,41 @@ func OpenState(path string) (*State, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("state: schema: %w", err)
 	}
+	if err := migrateState(context.Background(), db); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
 	return &State{db: db}, nil
+}
+
+// migrateState upgrades state databases created before payloads were kept.
+func migrateState(ctx context.Context, db *sql.DB) error {
+	rows, err := db.QueryContext(ctx, `PRAGMA table_info(sessions)`)
+	if err != nil {
+		return fmt.Errorf("state: migrate: %w", err)
+	}
+	have := false
+	for rows.Next() {
+		var cid, notnull, pk int
+		var name, typ string
+		var dflt sql.NullString
+		if err := rows.Scan(&cid, &name, &typ, &notnull, &dflt, &pk); err != nil {
+			_ = rows.Close()
+			return fmt.Errorf("state: migrate: %w", err)
+		}
+		if name == "payload" {
+			have = true
+		}
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("state: migrate: %w", err)
+	}
+	if !have {
+		if _, err := db.ExecContext(ctx, `ALTER TABLE sessions ADD COLUMN payload TEXT NOT NULL DEFAULT ''`); err != nil {
+			return fmt.Errorf("state: migrate: %w", err)
+		}
+	}
+	return nil
 }
 
 // Close closes the database.
@@ -70,9 +108,10 @@ func (s *State) Close() error { return s.db.Close() }
 func (s *State) Get(ctx context.Context, source, id string) (Entry, bool, error) {
 	var e Entry
 	var at int64
+	var payload string
 	err := s.db.QueryRowContext(ctx,
-		`SELECT source, session_id, project, content_hash, size, mtime_ns, synced_at FROM sessions WHERE source=? AND session_id=?`,
-		source, id).Scan(&e.Source, &e.SessionID, &e.Project, &e.ContentHash, &e.Size, &e.MTimeNS, &at)
+		`SELECT source, session_id, project, content_hash, size, mtime_ns, synced_at, payload FROM sessions WHERE source=? AND session_id=?`,
+		source, id).Scan(&e.Source, &e.SessionID, &e.Project, &e.ContentHash, &e.Size, &e.MTimeNS, &at, &payload)
 	if err == sql.ErrNoRows {
 		return Entry{}, false, nil
 	}
@@ -80,16 +119,17 @@ func (s *State) Get(ctx context.Context, source, id string) (Entry, bool, error)
 		return Entry{}, false, fmt.Errorf("state: get: %w", err)
 	}
 	e.SyncedAt = time.Unix(at, 0)
+	e.Payload = []byte(payload)
 	return e, true, nil
 }
 
 // Put records a pushed session.
 func (s *State) Put(ctx context.Context, e Entry) error {
 	_, err := s.db.ExecContext(ctx,
-		`INSERT INTO sessions(source, session_id, project, content_hash, size, mtime_ns, synced_at) VALUES(?,?,?,?,?,?,?)
+		`INSERT INTO sessions(source, session_id, project, content_hash, size, mtime_ns, synced_at, payload) VALUES(?,?,?,?,?,?,?,?)
 		 ON CONFLICT(source, session_id) DO UPDATE SET project=excluded.project, content_hash=excluded.content_hash,
-		   size=excluded.size, mtime_ns=excluded.mtime_ns, synced_at=excluded.synced_at`,
-		e.Source, e.SessionID, e.Project, e.ContentHash, e.Size, e.MTimeNS, e.SyncedAt.Unix())
+		   size=excluded.size, mtime_ns=excluded.mtime_ns, synced_at=excluded.synced_at, payload=excluded.payload`,
+		e.Source, e.SessionID, e.Project, e.ContentHash, e.Size, e.MTimeNS, e.SyncedAt.Unix(), string(e.Payload))
 	if err != nil {
 		return fmt.Errorf("state: put: %w", err)
 	}
@@ -211,4 +251,14 @@ func (s *State) SessionKeys(ctx context.Context, project string) ([][2]string, e
 		out = append(out, k)
 	}
 	return out, rows.Err()
+}
+
+// ForgetUnder drops the remembered sessions of a project and of everything
+// filed beneath it (its worktrees), after the server project was deleted.
+func (s *State) ForgetUnder(ctx context.Context, project string) error {
+	prefix := project + "/"
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE project=? OR substr(project,1,?)=?`, project, len(prefix), prefix); err != nil {
+		return fmt.Errorf("state: forget under: %w", err)
+	}
+	return nil
 }

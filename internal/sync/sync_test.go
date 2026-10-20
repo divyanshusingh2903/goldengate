@@ -34,7 +34,9 @@ func (f *fake) ListSessions(_ context.Context, _ adapters.ListOpts) iter.Seq2[mo
 	return func(yield func(model.SessionRef, error) bool) {
 		for _, s := range f.sessions {
 			r := s.Ref
-			r.UpdatedAt = f.mtime
+			if r.UpdatedAt.IsZero() {
+				r.UpdatedAt = f.mtime
+			}
 			if !yield(r, nil) {
 				return
 			}
@@ -296,5 +298,117 @@ func TestWorktreesAreFiledUnderTheirRepositoryOnlyWhenItIsSelected(t *testing.T)
 	_, _ = e.s.Run(context.Background(), gsync.RunOpts{}, sink, true)
 	if len(sink.got) != 1 || sink.got[0].Project != "~/code/app-feature" {
 		t.Errorf("deny on the root: %+v", sink.got)
+	}
+}
+
+func TestPreviewWorksBeforeSharingAndTracksChanges(t *testing.T) {
+	secret := "AKIA" + "IOSFODNN7EXAMPLE"
+	a := sess("a", "/home/u/code/app", "use key "+secret)
+	b := sess("b", "/home/u/code/app", "second session")
+	b.Ref.UpdatedAt = t0.Add(time.Hour)
+	e := setup(t, selection.Policy{}, a, b, sess("x", "/home/u/code/other", "unrelated"))
+	ctx := context.Background()
+
+	// nothing is shared: preview still shows exactly what sharing would send
+	pr, err := e.s.Preview(ctx, "/home/u/code/app", 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pr.Total != 2 || len(pr.Items) != 2 || pr.Items[0].Ref.ID != "b" {
+		t.Fatalf("newest first, only this project: %+v", pr)
+	}
+	for _, it := range pr.Items {
+		if it.Status != gsync.PreviewNew || it.Prev != nil {
+			t.Errorf("never pushed: %+v", it)
+		}
+		if strings.Contains(fmtJSON(t, it.Payload), "IOSFODNN7") {
+			t.Error("the preview must show the redacted payload")
+		}
+	}
+	if pr.Redactions["aws-access-key"] == 0 {
+		t.Errorf("redaction counts: %v", pr.Redactions)
+	}
+	if got, _ := e.s.Preview(ctx, "/home/u/code/app", 1); len(got.Items) != 1 || got.Total != 2 {
+		t.Errorf("limit: %+v", got)
+	}
+	if e.f.loads["/home/u/code/other"] != 0 {
+		t.Error("other projects must not be parsed")
+	}
+	if n, _ := e.st.Count(ctx); n != 0 {
+		t.Error("preview must write nothing")
+	}
+
+	// after a real sync the same preview says "unchanged"; edit a session and it says "changed" with the old payload
+	m, _ := selection.New(selection.Policy{Allow: []string{"~/code/app"}}, selection.Options{Home: "/home/u"})
+	e.s.Matcher = m
+	if _, err := e.s.Run(ctx, gsync.RunOpts{}, &capture{}, false); err != nil {
+		t.Fatal(err)
+	}
+	pr, _ = e.s.Preview(ctx, "/home/u/code/app", 10)
+	for _, it := range pr.Items {
+		if it.Status != gsync.PreviewUnchanged || it.Prev == nil || it.Prev.ContentHash != it.Payload.ContentHash {
+			t.Errorf("after sync: %+v", it)
+		}
+	}
+	e.f.sessions[1].Turns[0].Text = "second session, now different"
+	pr, _ = e.s.Preview(ctx, "/home/u/code/app", 10)
+	var changed *gsync.PreviewItem
+	for i := range pr.Items {
+		if pr.Items[i].Ref.ID == "b" {
+			changed = &pr.Items[i]
+		}
+	}
+	if changed == nil || changed.Status != gsync.PreviewChanged || changed.Prev == nil || changed.Prev.Summary.Title != "second session" {
+		t.Errorf("changed session must carry the previously pushed payload: %+v", changed)
+	}
+}
+
+func TestPendingCounts(t *testing.T) {
+	e := setup(t, selection.Policy{Allow: []string{"~/code/app"}}, sess("a", "/home/u/code/app", "one"), sess("b", "/home/u/code/app", "two"), sess("x", "/home/u/code/other", "three"))
+	ctx := context.Background()
+	got, err := e.s.PendingCounts(ctx)
+	if err != nil || got["/home/u/code/app"] != 2 || len(got) != 1 {
+		t.Fatalf("unselected projects have no pending count: %v %v", got, err)
+	}
+	if _, err := e.s.Run(ctx, gsync.RunOpts{}, &capture{}, false); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ = e.s.PendingCounts(ctx); len(got) != 0 {
+		t.Errorf("nothing pending after a sync: %v", got)
+	}
+	e.f.mtime = t0.Add(time.Hour) // files changed
+	if got, _ = e.s.PendingCounts(ctx); got["/home/u/code/app"] != 2 {
+		t.Errorf("changed files are pending again: %v", got)
+	}
+}
+
+func TestBatchByProject(t *testing.T) {
+	e := setup(t, selection.Policy{Default: "allow"}, sess("a", "/home/u/code/a", "1"), sess("b", "/home/u/code/b", "2"), sess("c", "/home/u/code/a", "3"))
+	b, _, err := e.s.Plan(context.Background(), gsync.RunOpts{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	parts := b.ByProject()
+	if len(parts) != 2 || parts[0].Len()+parts[1].Len() != 3 {
+		t.Fatalf("parts: %d", len(parts))
+	}
+	for _, p := range parts {
+		seen := map[string]bool{}
+		for _, pl := range p.Payloads() {
+			seen[pl.Project] = true
+		}
+		if len(seen) != 1 {
+			t.Errorf("a part mixes projects: %v", seen)
+		}
+	}
+	// pushing part by part records state exactly like pushing the whole
+	sink := &capture{}
+	for _, p := range parts {
+		if err := gsync.Push(context.Background(), sink, e.st, p, t0); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if n, _ := e.st.Count(context.Background()); n != 3 || len(sink.got) != 3 {
+		t.Errorf("state=%d sent=%d", n, len(sink.got))
 	}
 }
