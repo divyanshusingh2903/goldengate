@@ -342,3 +342,27 @@ func (l *Limiter) Allow(key string) bool {
 
 // Blocked reports whether ip is currently locked out after repeated failures.
 func (a *Authenticator) Blocked(ip string) bool { return a.fails.blocked(ip, a.now()) }
+
+// --- OAuth-issued credentials ---
+
+// MintOAuthAccess creates a short-lived read token for an OAuth grant. It is
+// an ordinary read token (same prefix, same checks) tied to a client and grant
+// family so that deleting the client or revoking the family kills it at once.
+func (a *Authenticator) MintOAuthAccess(ctx context.Context, clientID, family, label string, ttl time.Duration) (string, store.Token, error) {
+	if ttl <= 0 {
+		return "", store.Token{}, errors.New("auth: oauth access token needs a positive ttl")
+	}
+	secret := "ggb_" + ScopeRead + "_" + base64.RawURLEncoding.EncodeToString(randomBytes(32))
+	now := a.now().UTC()
+	t := store.Token{ID: "tok_" + hex.EncodeToString(randomBytes(4)), Hash: HashToken(secret), Scope: ScopeRead, Label: label,
+		CreatedAt: now, ExpiresAt: now.Add(ttl), ClientID: clientID, Family: family}
+	if err := a.st.CreateToken(ctx, t); err != nil {
+		return "", store.Token{}, fmt.Errorf("auth: store oauth token: %w", err)
+	}
+	return secret, t, nil
+}
+
+// RandomSecret returns n random bytes, base64url encoded, with a prefix.
+func RandomSecret(prefix string, n int) string {
+	return prefix + base64.RawURLEncoding.EncodeToString(randomBytes(n))
+}
