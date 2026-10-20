@@ -37,8 +37,9 @@ type Matcher struct {
 
 type rule struct {
 	raw     string
-	pattern string // folded, slash-separated, absolute
+	pattern string // folded, slash-separated, absolute (or the literal key for virtual rules)
 	isGlob  bool
+	virtual bool // matches chat-export keys like "claude-ai:Chats"; never folders
 }
 
 // Options tune a Matcher; the zero value uses the platform defaults.
@@ -78,6 +79,13 @@ func (m *Matcher) compile(raw []string) ([]rule, error) {
 		if r == "" {
 			continue
 		}
+		if pathutil.IsVirtualKey(r) {
+			if !doublestar.ValidatePattern(r) {
+				return nil, fmt.Errorf("invalid pattern %q", r)
+			}
+			out = append(out, rule{raw: r, pattern: r, isGlob: strings.ContainsAny(r, "*?[{"), virtual: true})
+			continue
+		}
 		expanded := pathutil.ExpandHome(r, m.home)
 		isGlob := strings.ContainsAny(expanded, "*?[{")
 		var pat string
@@ -107,6 +115,13 @@ func normalizeGlob(g string) string {
 }
 
 func (r rule) matches(path string) bool {
+	if r.virtual {
+		if !r.isGlob {
+			return path == r.pattern
+		}
+		ok, _ := doublestar.Match(r.pattern, path)
+		return ok
+	}
 	if !r.isGlob {
 		return pathutil.Within(path, r.pattern)
 	}
@@ -123,16 +138,24 @@ func (m *Matcher) Decide(projectKey, source string) Decision {
 	if len(m.sources) > 0 && source != "" && !slices.Contains(m.sources, source) {
 		return Decision{Reason: "source not included"}
 	}
-	path := pathutil.Fold(pathutil.Normalize(projectKey), m.caseInsensitive)
+	virtual := pathutil.IsVirtualKey(projectKey)
+	path := projectKey
+	if !virtual {
+		path = pathutil.Fold(pathutil.Normalize(projectKey), m.caseInsensitive)
+	}
 	for _, r := range m.deny {
-		if r.matches(path) {
+		if r.virtual == virtual && r.matches(path) {
 			return Decision{Reason: "denied by " + r.raw}
 		}
 	}
 	for _, r := range m.allow {
-		if r.matches(path) {
+		if r.virtual == virtual && r.matches(path) {
 			return Decision{Shared: true, Reason: "allowed by " + r.raw}
 		}
+	}
+	if virtual {
+		// Chat history is personal: it is shared only by an explicit rule, even when default = "allow".
+		return Decision{Reason: "chat projects need an explicit allow rule"}
 	}
 	if m.defaultAllow {
 		return Decision{Shared: true, Reason: "default allow"}
@@ -142,9 +165,13 @@ func (m *Matcher) Decide(projectKey, source string) Decision {
 
 // Denied reports whether an explicit deny rule matches, regardless of allow.
 func (m *Matcher) Denied(projectKey string) bool {
-	path := pathutil.Fold(pathutil.Normalize(projectKey), m.caseInsensitive)
+	virtual := pathutil.IsVirtualKey(projectKey)
+	path := projectKey
+	if !virtual {
+		path = pathutil.Fold(pathutil.Normalize(projectKey), m.caseInsensitive)
+	}
 	for _, r := range m.deny {
-		if r.matches(path) {
+		if r.virtual == virtual && r.matches(path) {
 			return true
 		}
 	}

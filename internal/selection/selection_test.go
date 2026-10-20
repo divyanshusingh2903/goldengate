@@ -128,3 +128,41 @@ func TestPropertyDenyAlwaysWins(t *testing.T) {
 		}
 	}
 }
+
+func TestVirtualChatProjects(t *testing.T) {
+	// even default=allow must not share chat history without an explicit rule
+	open := mustNew(t, Policy{Default: "allow"}, false)
+	if open.Decide("claude-ai:Chats", "claude-ai").Shared || open.Decide("chatgpt:Chats", "chatgpt").Shared {
+		t.Fatal("chat projects must need an explicit allow rule")
+	}
+	if !open.Decide("/home/u/code/app", "").Shared {
+		t.Fatal("folders keep default=allow")
+	}
+	m := mustNew(t, Policy{
+		Allow: []string{"claude-ai:Chats", "chatgpt:*", "~/code"},
+		Deny:  []string{"chatgpt:private-*"},
+	}, false)
+	for key, want := range map[string]bool{
+		"claude-ai:Chats":       true,
+		"claude-ai:Other":       false, // only the exact bucket was allowed
+		"chatgpt:Chats":         true,
+		"chatgpt:private-diary": false, // deny beats allow
+		"/home/u/code/x":        true,
+	} {
+		if got := m.Decide(key, "").Shared; got != want {
+			t.Errorf("%s: got %v want %v", key, got, want)
+		}
+	}
+	// virtual rules never match folders and folder rules never match virtual keys
+	f := mustNew(t, Policy{Allow: []string{"claude-ai:*"}}, false)
+	if f.Decide("/home/u/code", "").Shared {
+		t.Error("a chat rule shared a folder")
+	}
+	g := mustNew(t, Policy{Allow: []string{"/"}}, false)
+	if g.Decide("claude-ai:Chats", "").Shared {
+		t.Error("a folder rule shared a chat project")
+	}
+	if !m.Denied("chatgpt:private-x") || m.Denied("chatgpt:Chats") {
+		t.Error("Denied() must follow the same rules")
+	}
+}
