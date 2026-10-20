@@ -1,0 +1,8 @@
+not json at all
+{"type":"user","message":{"role":"user","content":12345},"cwd":"/home/user/projects/demo","sessionId":"x","timestamp":"2026-01-05T09:00:01.000Z"}
+{"type":"assistant","message":{"role":"assistant","content":{"unexpected":"object"}}}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"nope","content":42}]}}
+{"type":"brand-new-event-type","payload":[1,2,3]}
+{"type":"user","timestamp":12345,"cwd":"/home/user/projects/demo"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Bash","input":"not-an-object"},{"type":"mystery","x":1}]},"cwd":"/home/user/projects/demo","version":"9.9.9","timestamp":"2026-01-05T09:00:02.000Z"}
+{"type":"user","message":{"role":"user","content":"a real prompt after all the noise"},"cwd":"/home/user/projects/demo","timestamp":"2026-01-05T09:00:03.000Z"}

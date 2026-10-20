@@ -1,0 +1,144 @@
+[
+  {
+    "Kind": "commit",
+    "Provider": "",
+    "Key": "example/demo@abc1234",
+    "Title": "feat: add widget",
+    "URL": "",
+    "Status": "created",
+    "RawState": "",
+    "Evidence": [
+      "tool_result",
+      "text"
+    ]
+  },
+  {
+    "Kind": "commit",
+    "Provider": "",
+    "Key": "example/demo@deadbee1",
+    "Title": "",
+    "URL": "",
+    "Status": "mentioned",
+    "RawState": "",
+    "Evidence": [
+      "text"
+    ]
+  },
+  {
+    "Kind": "file",
+    "Provider": "",
+    "Key": "src/a.go",
+    "Title": "a.go",
+    "URL": "",
+    "Status": "updated",
+    "RawState": "",
+    "Evidence": [
+      "tool_result"
+    ]
+  },
+  {
+    "Kind": "file",
+    "Provider": "",
+    "Key": "src/new.go",
+    "Title": "new.go",
+    "URL": "",
+    "Status": "created",
+    "RawState": "",
+    "Evidence": [
+      "tool_result"
+    ]
+  },
+  {
+    "Kind": "issue",
+    "Provider": "github",
+    "Key": "github:example/demo#3",
+    "Title": "Track widget",
+    "URL": "https://github.com/example/demo/issues/3",
+    "Status": "updated",
+    "RawState": "",
+    "Evidence": [
+      "tool_result",
+      "tool_result",
+      "tool_result"
+    ]
+  },
+  {
+    "Kind": "issue",
+    "Provider": "linear",
+    "Key": "linear:ENG-5",
+    "Title": "Linear thing",
+    "URL": "https://linear.app/acme/issue/ENG-5/linear-thing",
+    "Status": "updated",
+    "RawState": "In Progress",
+    "Evidence": [
+      "tool_result",
+      "tool_result",
+      "tool_result",
+      "tool_result",
+      "text"
+    ]
+  },
+  {
+    "Kind": "issue",
+    "Provider": "linear",
+    "Key": "linear:ENG-6",
+    "Title": "",
+    "URL": "",
+    "Status": "mentioned",
+    "RawState": "",
+    "Evidence": [
+      "text"
+    ]
+  },
+  {
+    "Kind": "pull_request",
+    "Provider": "github",
+    "Key": "example/demo#12",
+    "Title": "",
+    "URL": "",
+    "Status": "mentioned",
+    "RawState": "",
+    "Evidence": [
+      "text"
+    ]
+  },
+  {
+    "Kind": "pull_request",
+    "Provider": "github",
+    "Key": "example/demo#7",
+    "Title": "Add widget",
+    "URL": "https://github.com/example/demo/pull/7",
+    "Status": "merged",
+    "RawState": "",
+    "Evidence": [
+      "tool_result",
+      "tool_result",
+      "text",
+      "harness_event"
+    ]
+  },
+  {
+    "Kind": "pull_request",
+    "Provider": "github",
+    "Key": "example/demo#8",
+    "Title": "",
+    "URL": "https://github.com/example/demo/pull/8",
+    "Status": "mentioned",
+    "RawState": "",
+    "Evidence": [
+      "harness_event"
+    ]
+  },
+  {
+    "Kind": "pull_request",
+    "Provider": "github",
+    "Key": "other/repo#99",
+    "Title": "",
+    "URL": "https://github.com/other/repo/pull/99",
+    "Status": "mentioned",
+    "RawState": "",
+    "Evidence": [
+      "text"
+    ]
+  }
+]

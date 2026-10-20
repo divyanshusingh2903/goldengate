@@ -1,0 +1,88 @@
+{
+  "ID": "\u003cid\u003e",
+  "Project": "/home/user/projects/demo",
+  "Title": "scrubbed title",
+  "Branch": "main",
+  "Version": "2.1.227",
+  "ToolsUsed": {
+    "Bash": 5,
+    "Write": 1
+  },
+  "FilesTouched": [
+    "src/file0.go"
+  ],
+  "Events": null,
+  "Warnings": null,
+  "Turns": [
+    {
+      "Role": "user",
+      "Text": "scrubbed text"
+    },
+    {
+      "Role": "assistant",
+      "Text": "scrubbed text\n\nscrubbed text",
+      "Tools": [
+        {
+          "Name": "Bash",
+          "Kind": "shell",
+          "Command": "echo scrubbed",
+          "Path": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": null
+        },
+        {
+          "Name": "Bash",
+          "Kind": "shell",
+          "Command": "echo scrubbed",
+          "Path": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": null
+        },
+        {
+          "Name": "Bash",
+          "Kind": "shell",
+          "Command": "echo scrubbed",
+          "Path": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": null
+        },
+        {
+          "Name": "Bash",
+          "Kind": "shell",
+          "Command": "echo scrubbed",
+          "Path": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": null
+        },
+        {
+          "Name": "Bash",
+          "Kind": "shell",
+          "Command": "echo scrubbed",
+          "Path": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": null
+        },
+        {
+          "Name": "Write",
+          "Kind": "file_write",
+          "Command": "",
+          "Path": "/home/user/projects/demo/src/file0.go",
+          "Created": true,
+          "Known": true,
+          "OK": true,
+          "Exit": null
+        }
+      ]
+    }
+  ]
+}

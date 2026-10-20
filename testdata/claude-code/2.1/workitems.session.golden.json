@@ -1,0 +1,218 @@
+{
+  "ID": "\u003cid\u003e",
+  "Project": "/home/user/projects/demo",
+  "Title": "",
+  "Branch": "main",
+  "Version": "2.1.260",
+  "ToolsUsed": {
+    "Bash": 8,
+    "Edit": 1,
+    "Write": 4,
+    "mcp__00000000-0000-4000-8000-00000000aaaa__get_issue": 1,
+    "mcp__00000000-0000-4000-8000-00000000aaaa__save_issue": 3
+  },
+  "FilesTouched": [
+    "src/new.go",
+    "src/a.go",
+    ".env"
+  ],
+  "Events": [
+    {
+      "Kind": "pr_link",
+      "URL": "https://github.com/example/demo/pull/7",
+      "Number": 7,
+      "Repo": "example/demo",
+      "Time": "2026-01-05T09:00:09Z"
+    },
+    {
+      "Kind": "pr_link",
+      "URL": "https://github.com/example/demo/pull/8",
+      "Number": 8,
+      "Repo": "example/demo",
+      "Time": "2026-01-05T09:00:10Z"
+    }
+  ],
+  "Warnings": null,
+  "Turns": [
+    {
+      "Role": "user",
+      "Text": "please ship the widget"
+    },
+    {
+      "Role": "assistant",
+      "Text": "Earlier commit deadbee1 and PR #12 and https://github.com/other/repo/pull/99 are unrelated. UTF-8, SHA-256, ISO-8601 and CVE-2024-1234 are fine. ABC-77 is unknown to me.\n\nPR #7 is already merged, nothing more to do. See commit abc1234.\n\nENG-5 again, plus ENG-6 which I only mention.",
+      "Tools": [
+        {
+          "Name": "Bash",
+          "Kind": "shell",
+          "Command": "git add -A \u0026\u0026 git commit -m \"feat: add widget\"",
+          "Path": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": null
+        },
+        {
+          "Name": "Bash",
+          "Kind": "shell",
+          "Command": "git commit -m \"oops\"",
+          "Path": "",
+          "Created": false,
+          "Known": true,
+          "OK": false,
+          "Exit": 1
+        },
+        {
+          "Name": "Bash",
+          "Kind": "shell",
+          "Command": "gh pr create --title \"Add widget\" --body \"x\"",
+          "Path": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": null
+        },
+        {
+          "Name": "Bash",
+          "Kind": "shell",
+          "Command": "gh pr merge 7 --squash",
+          "Path": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": null
+        },
+        {
+          "Name": "Bash",
+          "Kind": "shell",
+          "Command": "gh pr create --title \"dup\" --body \"x\"",
+          "Path": "",
+          "Created": false,
+          "Known": true,
+          "OK": false,
+          "Exit": 1
+        },
+        {
+          "Name": "Write",
+          "Kind": "file_write",
+          "Command": "",
+          "Path": "/home/user/projects/demo/src/new.go",
+          "Created": true,
+          "Known": true,
+          "OK": true,
+          "Exit": null
+        },
+        {
+          "Name": "Edit",
+          "Kind": "file_edit",
+          "Command": "",
+          "Path": "/home/user/projects/demo/src/a.go",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": null
+        },
+        {
+          "Name": "Write",
+          "Kind": "file_write",
+          "Command": "",
+          "Path": "/home/user/projects/demo/src/fail.go",
+          "Created": false,
+          "Known": true,
+          "OK": false,
+          "Exit": null
+        },
+        {
+          "Name": "Write",
+          "Kind": "file_write",
+          "Command": "",
+          "Path": "/home/user/projects/demo/.env",
+          "Created": true,
+          "Known": true,
+          "OK": true,
+          "Exit": null
+        },
+        {
+          "Name": "Write",
+          "Kind": "file_write",
+          "Command": "",
+          "Path": "/etc/other/outside.conf",
+          "Created": true,
+          "Known": true,
+          "OK": true,
+          "Exit": null
+        },
+        {
+          "Name": "Bash",
+          "Kind": "shell",
+          "Command": "gh issue create --title \"Track widget\" --body \"x\"",
+          "Path": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": null
+        },
+        {
+          "Name": "Bash",
+          "Kind": "shell",
+          "Command": "gh issue close 3",
+          "Path": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": null
+        },
+        {
+          "Name": "Bash",
+          "Kind": "shell",
+          "Command": "gh issue reopen 3",
+          "Path": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": null
+        },
+        {
+          "Name": "mcp__00000000-0000-4000-8000-00000000aaaa__save_issue",
+          "Kind": "issue",
+          "Command": "",
+          "Path": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": null
+        },
+        {
+          "Name": "mcp__00000000-0000-4000-8000-00000000aaaa__save_issue",
+          "Kind": "issue",
+          "Command": "",
+          "Path": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": null
+        },
+        {
+          "Name": "mcp__00000000-0000-4000-8000-00000000aaaa__get_issue",
+          "Kind": "issue",
+          "Command": "",
+          "Path": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": null
+        },
+        {
+          "Name": "mcp__00000000-0000-4000-8000-00000000aaaa__save_issue",
+          "Kind": "issue",
+          "Command": "",
+          "Path": "",
+          "Created": false,
+          "Known": true,
+          "OK": true,
+          "Exit": null
+        }
+      ]
+    }
+  ]
+}
