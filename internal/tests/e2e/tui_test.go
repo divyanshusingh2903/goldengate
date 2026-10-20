@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -279,8 +278,8 @@ func TestBackendSyncReportsProgressAndDryRunRecordsNothing(t *testing.T) {
 	for _, e := range events {
 		kinds[e.Kind]++
 	}
-	planned := slices.IndexFunc(events, func(e tui.SyncEvent) bool { return e.Kind == tui.SyncPlanned })
-	if kinds[tui.SyncPrepared] != 2 || planned != 2 || events[planned].Sessions != 2 || // each session reported while preparing, then the plan
+	// right after the review the reviewed sessions are sent as they are: nothing is read again
+	if kinds[tui.SyncPrepared] != 0 || events[0].Kind != tui.SyncPlanned || events[0].Sessions != 2 ||
 		kinds[tui.SyncProjectStart] != 2 || kinds[tui.SyncProgress] != 2 || kinds[tui.SyncProjectDone] != 2 || events[len(events)-1].Kind != tui.SyncFinished {
 		t.Fatalf("events: %+v", events)
 	}
@@ -294,6 +293,47 @@ func TestBackendSyncReportsProgressAndDryRunRecordsNothing(t *testing.T) {
 	// the unselected project never reached the server
 	if held := everythingTheServerHolds(t, b); strings.Contains(held, "client-secret") || strings.Contains(held, "TOPSECRET") {
 		t.Error("an unselected project reached the server through the UI's sync")
+	}
+}
+
+func TestBackendSendReusesTheReviewOnlyWhileItIsValid(t *testing.T) {
+	b := startBridge(t)
+	l := newLaptop(t)
+	l.must(l.initEnv(b), "init", "--non-interactive")
+	l.must(nil, "share", "add", "~/projects/demo")
+	be := backend(l)
+	ctx := context.Background()
+	prepared := 0
+	count := func(e tui.SyncEvent) {
+		if e.Kind == tui.SyncPrepared {
+			prepared++
+		}
+	}
+	// a change to what is shared after the review makes the send read everything again
+	if err := be.Sync(ctx, true, count); err != nil {
+		t.Fatal(err)
+	}
+	s, _ := be.Snapshot(ctx)
+	if _, err := be.Apply(ctx, tui.Action{Kind: tui.ActAllow, Keys: []string{rowOf(t, s, "~/projects/client-secret").Key}}); err != nil {
+		t.Fatal(err)
+	}
+	prepared = 0
+	if err := be.Sync(ctx, false, count); err != nil {
+		t.Fatal(err)
+	}
+	if prepared == 0 {
+		t.Fatal("the review was built under other share rules; the send must prepare afresh")
+	}
+	if ps, _ := b.st.ListProjects(ctx); len(ps) != 2 {
+		t.Fatalf("the newly shared project is sent too: %+v", ps)
+	}
+	// a review is sent once: the next send plans again (and finds nothing)
+	prepared = 0
+	if err := be.Sync(ctx, false, count); err != nil {
+		t.Fatal(err)
+	}
+	if plan, _ := be.Plan(ctx); plan.Sessions != 0 {
+		t.Fatalf("nothing left: %+v", plan)
 	}
 }
 

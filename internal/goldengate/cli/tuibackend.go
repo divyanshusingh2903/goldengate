@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"reflect"
 	"regexp"
 	"slices"
 	"sort"
@@ -29,6 +30,34 @@ type tuiBackend struct {
 	a    *app
 	mu   sync.Mutex
 	undo []shareRules
+
+	// reviewed is what the last clean review (dry run) prepared, so that
+	// sending right after it sends exactly that, without reading and redacting
+	// everything again. It is used once, and only while the configuration it
+	// was built under is unchanged and it is fresh.
+	reviewed *reviewedBatch
+}
+
+type reviewedBatch struct {
+	batch gsync.Batch
+	cfg   config.Config
+	at    time.Time
+}
+
+// reviewMaxAge bounds how stale a review may be and still be sent as is.
+const reviewMaxAge = 15 * time.Minute
+
+// takeReview returns the reviewed batch if it may be sent under cfg, and
+// forgets it either way: a review is sent at most once.
+func (b *tuiBackend) takeReview(cfg config.Config) (gsync.Batch, bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	r := b.reviewed
+	b.reviewed = nil
+	if r == nil || b.a.Now().Sub(r.at) > reviewMaxAge || !reflect.DeepEqual(r.cfg, cfg) {
+		return gsync.Batch{}, false
+	}
+	return r.batch, true
 }
 
 // shareRules is the part of the config the share actions edit, kept for undo.
@@ -444,10 +473,28 @@ func (b *tuiBackend) Sync(ctx context.Context, dry bool, emit func(tui.SyncEvent
 		}
 		sink = cl
 	}
-	batch, _, err := s.Plan(ctx, gsync.RunOpts{OnPlanned: func() { emit(tui.SyncEvent{Kind: tui.SyncPrepared, Sessions: 1}) }})
-	if err != nil {
-		return err
+	batch, reused := gsync.Batch{}, false
+	if !dry {
+		batch, reused = b.takeReview(cfg)
+	} else {
+		b.mu.Lock()
+		b.reviewed = nil // a new review replaces the old one
+		b.mu.Unlock()
 	}
+	if !reused {
+		batch, _, err = s.Plan(ctx, gsync.RunOpts{OnPlanned: func() { emit(tui.SyncEvent{Kind: tui.SyncPrepared, Sessions: 1}) }})
+		if err != nil {
+			return err
+		}
+	}
+	clean, finished := true, false // a review is kept only if it ran to the end without failures
+	defer func() {
+		if dry && clean && finished && ctx.Err() == nil {
+			b.mu.Lock()
+			b.reviewed = &reviewedBatch{batch: batch, cfg: cfg, at: b.a.Now()}
+			b.mu.Unlock()
+		}
+	}()
 	emit(tui.SyncEvent{Kind: tui.SyncPlanned, Sessions: batch.Len()})
 	st := s.State
 	if dry {
@@ -477,7 +524,7 @@ func (b *tuiBackend) Sync(ctx context.Context, dry bool, emit func(tui.SyncEvent
 					return ctx.Err()
 				}
 				emit(tui.SyncEvent{Kind: tui.SyncProjectFailed, Project: label, Err: err.Error()})
-				failed = true
+				failed, clean = true, false
 				break
 			}
 			emit(tui.SyncEvent{Kind: tui.SyncProgress, Project: label, Sessions: chunk.Len()})
@@ -486,6 +533,7 @@ func (b *tuiBackend) Sync(ctx context.Context, dry bool, emit func(tui.SyncEvent
 			emit(tui.SyncEvent{Kind: tui.SyncProjectDone, Project: label, Sessions: part.Len()})
 		}
 	}
+	finished = true
 	emit(tui.SyncEvent{Kind: tui.SyncFinished})
 	return nil
 }
