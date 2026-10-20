@@ -1,13 +1,14 @@
 <svg xmlns="http://www.w3.org/2000/svg" style="display:none">
   <!-- 24px grid, 1.75 stroke, round caps/joins, currentColor, no fills -->
   <symbol id="gg-project" viewBox="0 0 24 24"><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
-  <symbol id="gg-shared" viewBox="0 0 24 24"><path d="M6 4v16M18 4v16M2 15l4-8q6 9 12 0l4 8M2 20h20"/></symbol>
-  <symbol id="gg-denied" viewBox="0 0 24 24"><path d="M6 4v16M18 4v16M2 15l4-8q6 9 12 0l4 8M2 20h7M15 20h7"/></symbol>
+  <symbol id="gg-shared" viewBox="0 0 24 24"><path d="M7 4v16M17 4v16"/><path d="M1 14Q5 12 7 5Q12 18 17 5Q19 12 23 14"/></symbol>
+  <symbol id="gg-denied" viewBox="0 0 24 24"><path d="M7 4v16M17 4v16"/><path d="M1 14Q5 12 7 5Q9 10.2 11 11.24M13 11.24Q15 10.2 17 5Q19 12 23 14"/></symbol>
   <symbol id="gg-redact" viewBox="0 0 24 24"><path d="M4 7h16M4 17h6M14 17h6"/><rect x="4" y="11" width="16" height="2.5" rx="1"/></symbol>
   <symbol id="gg-preview" viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="2.5"/></symbol>
   <symbol id="gg-sync" viewBox="0 0 24 24"><path d="M4 9h13l-3-3M20 15H7l3 3"/></symbol>
   <symbol id="gg-server" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="6" rx="1.5"/><rect x="3" y="14" width="18" height="6" rx="1.5"/><path d="M7 7h.01M7 17h.01"/></symbol>
   <symbol id="gg-token" viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l9-9M16 7l3 3"/></symbol>
   <symbol id="gg-source" viewBox="0 0 24 24"><path d="M8 7l-5 5 5 5M16 7l5 5-5 5M14 5l-4 14"/></symbol>
+  <symbol id="gg-laptop" viewBox="0 0 24 24"><rect x="4" y="5" width="16" height="11" rx="1.5"/><path d="M2 19h20"/></symbol>
   <symbol id="gg-assistant" viewBox="0 0 24 24"><path d="M4 5h16v11H9l-5 4z"/></symbol>
 </svg>

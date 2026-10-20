@@ -1,6 +1,6 @@
 # Golden Gate — Design Philosophy
 
-> A bridge you can see across, with a gate you control.
+> A bridge you can see across.
 
 Golden Gate moves private work between two places. The design has one job: make
 the user feel **in control of what crosses**. Everything below follows from that.
@@ -8,7 +8,7 @@ the user feel **in control of what crosses**. Everything below follows from that
 ## 1. Principles
 
 1. **Consent is visible.** State (shared, denied, pending) is always shown, never
-   implied. The gate icon is open or closed; it is never ambiguous.
+   implied. The shared icon is the full cable, denied is the cable cut; never ambiguous.
 2. **Show the payload.** Prefer the real thing over a description of it. Page
    mockups use real previews with real redaction marks, not stock screenshots.
 3. **Quiet by default.** Low saturation, generous space, one accent. Color
@@ -16,54 +16,71 @@ the user feel **in control of what crosses**. Everything below follows from that
 4. **Nothing relies on color alone.** Every status pairs color with a glyph or
    label (matches the TUI's `NO_COLOR` promise). Contrast is AA at minimum.
 5. **Terminal-native, not terminal-cosplay.** Monospace for commands, keys and
-   data; a humanist sans for prose. No fake window chrome, no neon, no matrix rain.
+   data; Art Deco faces for words (Federo, Josefin Sans). No fake window chrome, no neon, no matrix rain.
 6. **Honest and plain.** Say what leaves the machine. No "seamless", no
    "supercharge". Security copy is as prominent as feature copy.
 
 ## 2. Color
 
-Fog, ink and one orange. The TUI theme (`internal/goldengate/tui/theme.go`) will
-be updated to follow these tokens.
+Painted from the bridge. The TUI theme (`internal/goldengate/tui/theme.go`) will follow these tokens.
 
-| Token | Light | Dark | Use |
-|---|---|---|---|
-| `--gg-bg` | `#F3F4F1` Fog | `#0C1116` Night | page background |
-| `--gg-surface` | `#FFFFFF` | `#141B22` | cards, code blocks |
-| `--gg-line` | `#D6DAD3` | `#26303A` | borders, dividers |
-| `--gg-ink` | `#10161B` | `#E8ECEF` | text, marks, redaction bars |
-| `--gg-dim` | `#58625E` | `#8F9A9F` | secondary text |
-| `--gg-gate` | `#C8371A` | `#FF6A3D` | logo dot, primary button, links. Identity only |
-| `--gg-on-gate` | `#FFFFFF` | `#1A0A04` | text on gate orange |
-| `--gg-bay` | `#1D5C85` | `#78B6E3` | focus ring, keys, selection |
-| `--gg-shared` | `#0F766E` | `#3CC9B5` | shared, healthy, added |
-| `--gg-pending` | `#9A5B00` | `#F2B84B` | partial, changed |
-| `--gg-error` | `#B3173B` | `#FF7A93` | failures only |
+| Token | Name | Light | Dark | Use |
+|---|---|---|---|---|
+| `--gg-orange` | International Orange | `#C0362C` | `#F0563F` | the mark, primary button, links. Identity only |
+| `--gg-on-orange` | | `#FFFFFF` | `#1B0703` | text on orange |
+| `--gg-bg` | Fog / Night bay | `#EEF0EE` | `#0D1821` | page ground |
+| `--gg-surface` | Surface | `#FFFFFF` | `#132330` | cards, code |
+| `--gg-sunk` | | `#E3E7E5` | `#0A131A` | selected tabs, insets |
+| `--gg-line` | Cable line | `#CBD2D0` | `#233646` | borders |
+| `--gg-ink` | Ink | `#13202A` | `#E5EBEE` | text, marks, redaction bars |
+| `--gg-dim` | Marine layer | `#56656D` | `#8D9DA7` | secondary text |
+| `--gg-pacific` | Pacific | `#1F5E80` | `#7FBADB` | focus ring, keys |
+| `--gg-cypress` | Cypress | `#2D6A4A` | `#72C59A` | shared, healthy, added |
+| `--gg-headland` | Headland | `#965F00` | `#E8B652` | partial, pending, changed |
+| `--gg-alarm` | Alarm | `#9B1D5A` | `#F27EB2` | failures; denied glyph only |
+| `--gg-term-bg` | | `#F8F9F8` | `#09131B` | terminal background |
+| `--gg-term-cur` | | `#D9E6EE` | `#1B3446` | TUI cursor row |
 
 Rules
-- Gate orange appears once per screen as a call to action, plus the logo dot.
-  It never means warning or error.
-- **Redaction is a black bar** (ink on ink), not red text. Red is for errors.
-- **Denied is not an error.** It is struck through in ink, not flagged red.
-- Light and dark are both designed. Flat backgrounds: no gradients, no glow.
+- International Orange is the bridge's own paint. It never means warning or error.
+- Redaction is an ink bar (ink on ink), not red text.
+- Denied is a decision: Alarm on the glyph only, the row stays in ink.
 
 ## 3. Typography
 
-- Prose and headings: **Schibsted Grotesk** (fallback `system-ui`): 800 display
-  with tight tracking, 700 headings, 400 body.
-- Commands, keys, paths, payloads: **IBM Plex Mono** (fallback `ui-monospace`).
-- Scale (rem): 0.875 / 1 / 1.25 / 1.75 / 2.5 / 3.5. Line height 1.65 prose, 1.4 code. Measure 65ch.
-- Keys render as `<kbd>`: mono, 1px `--gg-line` border with a 2px bottom edge, `--gg-bay` text.
+Art Deco, from the era the bridge opened in (1937).
+
+| Role | Face | Weights | Fallback |
+|---|---|---|---|
+| Display: wordmark, h1–h3 | **Federo** | 400 (its only weight; never fake bold) | `"Josefin Sans", system-ui, sans-serif` |
+| Text: body, UI labels, buttons | **Josefin Sans** | 400 body, 600 emphasis and buttons | `system-ui, sans-serif` |
+| Mono: commands, keys, paths, payloads | **IBM Plex Mono** | 400, 500 | `ui-monospace, Menlo, monospace` |
+
+```html
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Federo&family=Josefin+Sans:wght@400;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+```
+
+Rules
+- Federo is for display only, at 1.1rem and up, letter-spacing `+0.02em`. Never set
+  body text, long paragraphs or anything under 16px in it.
+- Josefin Sans has a small x-height: set body at 17px minimum, line height 1.65,
+  measure 65ch. Use 600 for emphasis instead of bold 700.
+- Uppercase labels and eyebrows use Plex Mono 500, 0.72rem, tracking `0.12em`.
+- Scale (rem): 0.875 / 1 / 1.1 / 1.8 / 2.6 / 4. Code line height 1.4.
+- Keys render as `<kbd>`: mono, 1px `--gg-line` border with a 2px bottom edge, `--gg-pacific` text.
+- The TUI uses the terminal's own font; these faces apply to the web, docs and graphics.
 
 ## 4. Logo
 
-The mark is a suspension bridge reduced to two towers, one cable and a deck.
-The deck has a **gap in the middle with a single orange dot**: the gate, and the
-one payload that crosses it. Files: `logo-mark.svg` (uses `currentColor` plus the
-orange dot). Wordmark: "Golden Gate" in Schibsted Grotesk 800, mark to the left at cap-height x 1.6.
+Two towers and the suspension cable, curved in all three spans (side spans sag
+to anchors, main span dips between the towers). No deck, no dot. File:
+`logo-mark.svg` (64x48 box, towers at x=20 and x=44).
+Wordmark: "Golden Gate" in Federo, mark to the left at 1.6x the cap height.
 
-- Clear space: one tower-width on all sides. Minimum size 16px.
-- Mono version: dot takes `currentColor`. Never recolor the towers orange.
-- Don't: add gold gradients, rotate, outline, or put the mark in a circle.
+- Primary in International Orange; mono in the current text color; reversed on orange.
+- One stroke weight for towers and cable, round caps: 3.2 at 48px, 2 at 16px.
+- Clear space: one tower-width. Minimum 16px.
+- Don't add a deck, a gold gradient, a circle, an outline, or two colors.
 
 ## 5. Iconography
 
@@ -74,8 +91,8 @@ Set in `icons.svg` (sprite; use `<svg><use href="icons.svg#gg-shared"/></svg>`).
 
 | Icon | Meaning |
 |---|---|
-| `gg-shared` | project is shared (deck continuous, gate closed over it) |
-| `gg-denied` | project denied (deck broken, gate open) |
+| `gg-shared` | project is shared (the full cable) |
+| `gg-denied` | project denied (the cable cut in the middle) |
 | `gg-redact` | a redaction / what was removed |
 | `gg-preview` | exact outgoing payload |
 | `gg-sync` | push to server |
@@ -84,27 +101,30 @@ Set in `icons.svg` (sprite; use `<svg><use href="icons.svg#gg-shared"/></svg>`).
 Pair state icons with text: "Shared", "Denied". Icon-only is allowed only with an
 `aria-label` and tooltip.
 
-### Terminal glyphs (page + TUI)
+### State glyphs
 
-| State | Glyph | ASCII fallback |
-|---|---|---|
-| shared | `●` | `[x]` |
-| not shared | `○` | `[ ]` |
-| partial | `◐` | `[-]` |
-| denied | `✕` | `[!]` |
-| redacted | ink bar `█` | `###` |
+The TUI uses brackets, the web uses round glyphs. Both always carry the word.
+
+| State | TUI | Web | Color |
+|---|---|---|---|
+| shared | `[x]` | `●` | Cypress |
+| not shared | `[ ]` | `○` | Ink |
+| partial | `[~]` | `◐` | Headland |
+| denied | `[-]` | `✕` | Alarm, glyph only |
+| pending | `▲ 3` | `▲ 3` | Headland |
+| redacted | ink bar | ink bar | Ink on ink |
 
 ## 6. Layout and motion
 
 - Single column up to 72ch for prose; 1120px max for hero and feature grids.
-- 8px spacing scale. Radius 6px (cards), 4px (kbd, chips). 1px borders, no shadows.
-- Motion is functional only: the hero shows one dot crossing the gap, once, 1.4s,
-  ease-out. Respect `prefers-reduced-motion` (static dot in the gap).
+- 8px spacing scale. Radius 8px (cards), 4px (kbd, chips). 1px borders, no shadows.
+- Motion: on the project page the cable draws itself once (under 2s) and fog drifts
+  slowly through the towers. Nothing else moves. Respect `prefers-reduced-motion`.
 
 ## 7. Project page outline
 
 1. **Hero:** headline "Choose what your assistant knows." Sub: one sentence on
-   what it does. Primary button (gate orange) "Quickstart", secondary "Read SECURITY.md".
+   what it does. Primary button (International Orange) "Quickstart", secondary "Read SECURITY.md".
 2. **How it works:** laptop -> redact -> your server -> assistant, drawn with the
    bridge motif. Emphasize "your server".
 3. **See exactly what is sent:** real preview payload with redaction marks.
