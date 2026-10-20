@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" role="img" aria-label="Golden Gate">
+  <path d="M18 10V56M46 10V56"/>
+  <path d="M4 40L18 14Q32 50 46 14L60 40"/>
+  <path d="M4 48H25M39 48H60"/>
+  <circle cx="32" cy="48" r="3" fill="#C8371A" stroke="none"/>
+</svg>
