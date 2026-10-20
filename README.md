@@ -5,7 +5,7 @@ Let a remote AI assistant know what you have been working on in your coding tool
 - `goldengate` (laptop): reads your local session history, applies your allow/deny choices, redacts and summarizes, and pushes to your own server.
 - `goldengatebridge` (server you run): stores the summaries and serves them read-only over MCP (streamable HTTP, stateless JSON).
 
-Status: pre-release (M3). Sources: Claude Code, Codex, OpenCode, and claude.ai / ChatGPT data exports. The TUI and deployment scripts are on the roadmap in [DESIGN.md](DESIGN.md). See [SECURITY.md](SECURITY.md) before connecting an assistant.
+Status: pre-release (M4). Sources: Claude Code, Codex, OpenCode, and claude.ai / ChatGPT data exports. Deployment scripts and release packaging are on the roadmap in [DESIGN.md](DESIGN.md). See [SECURITY.md](SECURITY.md) before connecting an assistant.
 
 ## Quickstart (about ten minutes)
 
@@ -38,6 +38,21 @@ Status: pre-release (M3). Sources: Claude Code, Codex, OpenCode, and claude.ai /
    - Revoke a connected assistant with `goldengatebridge oauth clients delete <id>`.
 
 Un-share with `goldengate share remove ~/code/myproject --purge-remote`. Rotate the assistant's token with `goldengate token rotate read`.
+
+## The interactive UI
+
+Run `goldengate` in a terminal. The first run starts a short setup (find your tools, connect to your server, choose the share level, pick projects, see a dry run, first sync); after that it opens the project picker.
+
+| Screen | Keys |
+|---|---|
+| Projects (`1`) | `space` share/un-share · `v` range · `a`/`A` mark all/none · `d` deny · `u` undo · `e` choose sources · `/` fuzzy filter · `t` folder tree (space on a folder shares everything below it) · `o` sort · `p` preview · `P` paranoid (raw payloads) |
+| Sync (`2`, or `s`) | plan, `enter` start, `D` dry run / real, `c` cancel, `r` retry or replan |
+| Server (`3`) | health, token check, what the server holds, `D` delete a project from it |
+| Settings (`4`) | share level, look-back window, sources, redaction patterns, commit verification |
+
+`?` shows every key. The preview is the exact outgoing payload, redactions highlighted, with what changed since the last sync. Sync is a dry run until you press `D`. It works at 80x24, follows resizes, supports the mouse (wheel, click), and honors `NO_COLOR` (nothing relies on color alone). `GOLDENGATE_THEME=light|dark` overrides background detection. Everything the UI does is also available as a command.
+
+A source can be switched off for one project (`e`) without un-sharing the rest; that is stored as `deny_source = ["codex@~/code/app"]` in the config.
 
 ## Sources
 
