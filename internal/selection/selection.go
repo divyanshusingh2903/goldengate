@@ -18,6 +18,9 @@ type Policy struct {
 	Allow          []string // folders or globs; a plain folder covers its children
 	Deny           []string
 	IncludeSources []string // empty means all sources
+	// SourceDeny excludes one source from a folder or chat project while the
+	// rest of it stays shared. Entries look like "codex@~/code/app".
+	SourceDeny []string
 }
 
 // Decision is the outcome for one (project, source) pair.
@@ -30,9 +33,15 @@ type Decision struct {
 type Matcher struct {
 	defaultAllow    bool
 	allow, deny     []rule
+	sourceDeny      []sourceRule
 	sources         []string
 	caseInsensitive bool
 	home            string
+}
+
+type sourceRule struct {
+	source string
+	rule
 }
 
 type rule struct {
@@ -68,6 +77,19 @@ func New(p Policy, o Options) (*Matcher, error) {
 	}
 	if m.deny, err = m.compile(p.Deny); err != nil {
 		return nil, fmt.Errorf("selection: deny rules: %w", err)
+	}
+	for _, sd := range p.SourceDeny {
+		src, pat, ok := SplitSourceRule(sd)
+		if !ok {
+			return nil, fmt.Errorf("selection: source rule %q must look like source@path", sd)
+		}
+		rs, err := m.compile([]string{pat})
+		if err != nil {
+			return nil, fmt.Errorf("selection: source rule %q: %w", sd, err)
+		}
+		if len(rs) == 1 {
+			m.sourceDeny = append(m.sourceDeny, sourceRule{source: src, rule: rs[0]})
+		}
 	}
 	return m, nil
 }
@@ -148,6 +170,11 @@ func (m *Matcher) Decide(projectKey, source string) Decision {
 			return Decision{Reason: "denied by " + r.raw}
 		}
 	}
+	for _, r := range m.sourceDeny {
+		if source != "" && r.source == source && r.virtual == virtual && r.matches(path) {
+			return Decision{Reason: source + " excluded by " + r.raw}
+		}
+	}
 	for _, r := range m.allow {
 		if r.virtual == virtual && r.matches(path) {
 			return Decision{Shared: true, Reason: "allowed by " + r.raw}
@@ -177,3 +204,20 @@ func (m *Matcher) Denied(projectKey string) bool {
 	}
 	return false
 }
+
+// SplitSourceRule parses "source@pattern".
+func SplitSourceRule(s string) (source, pattern string, ok bool) {
+	source, pattern, ok = strings.Cut(s, "@")
+	if !ok || source == "" || pattern == "" {
+		return "", "", false
+	}
+	for _, r := range source {
+		if (r < 'a' || r > 'z') && (r < '0' || r > '9') && r != '-' {
+			return "", "", false
+		}
+	}
+	return source, pattern, true
+}
+
+// SourceRule formats "source@pattern".
+func SourceRule(source, pattern string) string { return source + "@" + pattern }

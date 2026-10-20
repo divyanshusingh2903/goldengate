@@ -166,3 +166,28 @@ func TestVirtualChatProjects(t *testing.T) {
 		t.Error("Denied() must follow the same rules")
 	}
 }
+
+func TestSourceDenyExcludesOneToolOnly(t *testing.T) {
+	m := mustNew(t, Policy{Allow: []string{"~/code/app", "claude-ai:Chats"}, SourceDeny: []string{"codex@~/code/app", "claude-ai@claude-ai:Chats"}}, false)
+	for _, c := range []struct {
+		path, source string
+		want         bool
+	}{
+		{"/home/u/code/app", "claude-code", true},
+		{"/home/u/code/app", "codex", false},
+		{"/home/u/code/app/sub", "codex", false}, // covers children like any folder rule
+		{"/home/u/code/app", "", true},           // no source asked: the folder is still shared
+		{"/home/u/code/other", "codex", false},
+		{"claude-ai:Chats", "claude-ai", false},
+		{"claude-ai:Chats", "chatgpt", true},
+	} {
+		if got := m.Decide(c.path, c.source).Shared; got != c.want {
+			t.Errorf("%s/%s: got %v want %v", c.path, c.source, got, c.want)
+		}
+	}
+	for _, bad := range []string{"nosep", "@x", "codex@", "Co dex@x", "codex/x@y"} {
+		if _, err := New(Policy{SourceDeny: []string{bad}}, Options{}); err == nil {
+			t.Errorf("%q accepted", bad)
+		}
+	}
+}

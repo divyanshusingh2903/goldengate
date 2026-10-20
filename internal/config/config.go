@@ -16,6 +16,7 @@ import (
 	"github.com/pelletier/go-toml/v2"
 
 	"github.com/OWNER/goldengate/internal/model"
+	"github.com/OWNER/goldengate/internal/selection"
 )
 
 // Config mirrors DESIGN.md section 5.
@@ -39,8 +40,11 @@ type Share struct {
 	Allow          []string `toml:"allow"`
 	Deny           []string `toml:"deny"`
 	IncludeSources []string `toml:"include_sources"`
-	Since          string   `toml:"since"`
-	Level          string   `toml:"level"`
+	// SourceDeny excludes one source from a folder ("codex@~/code/app") while
+	// the rest of the folder stays shared.
+	SourceDeny []string `toml:"deny_source"`
+	Since      string   `toml:"since"`
+	Level      string   `toml:"level"`
 }
 
 // Artifacts controls whether contents (not just metadata) may be sent.
@@ -101,6 +105,11 @@ func (c Config) Validate() error {
 	}
 	if _, err := ParseSince(c.Share.Since); err != nil {
 		return err
+	}
+	for _, sd := range c.Share.SourceDeny {
+		if _, _, ok := selection.SplitSourceRule(sd); !ok {
+			return fmt.Errorf("config: share.deny_source entry %q must look like source@path", sd)
+		}
 	}
 	if c.Server.URL != "" {
 		if err := CheckServerURL(c.Server.URL); err != nil {
