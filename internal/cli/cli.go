@@ -29,6 +29,7 @@ import (
 	"github.com/OWNER/goldengate/internal/secrets"
 	"github.com/OWNER/goldengate/internal/selection"
 	gsync "github.com/OWNER/goldengate/internal/sync"
+	"github.com/OWNER/goldengate/internal/tui"
 )
 
 // Version is set at build time.
@@ -94,8 +95,11 @@ func New(d Deps) *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			fmt.Fprintln(a.Stderr, "The interactive TUI arrives in a later milestone. Available commands:")
-			return cmd.Help()
+			if !a.Interactive {
+				fmt.Fprintln(a.Stderr, "Not a terminal, so the interface cannot open. Available commands:")
+				return cmd.Help()
+			}
+			return tui.Run(a.tuiBackend(), tui.Options{Context: cmd.Context(), Now: a.Now})
 		},
 	}
 	root.SetOut(d.Stdout)
@@ -124,7 +128,7 @@ func (a *app) load() (config.Config, error) { return config.Load(a.cfgPath()) }
 
 func (a *app) matcher(c config.Config) (*selection.Matcher, error) {
 	return selection.New(selection.Policy{
-		Default: c.Share.Default, Allow: c.Share.Allow, Deny: c.Share.Deny, IncludeSources: c.Share.IncludeSources,
+		Default: c.Share.Default, Allow: c.Share.Allow, Deny: c.Share.Deny, IncludeSources: c.Share.IncludeSources, SourceDeny: c.Share.SourceDeny,
 	}, selection.Options{Home: a.Home})
 }
 
@@ -357,36 +361,7 @@ func (a *app) shareDeny(ctx context.Context, p, purge string) error {
 // that was shared before and is not after is tombstoned locally, so it is
 // never re-pushed.
 func (a *app) change(ctx context.Context, before config.Config, edit func(*config.Config), msg, purge string) error {
-	after := before
-	after.Share.Allow = append([]string(nil), before.Share.Allow...)
-	after.Share.Deny = append([]string(nil), before.Share.Deny...)
-	edit(&after)
-
-	mBefore, err := a.matcher(before)
-	if err != nil {
-		return err
-	}
-	mAfter, err := a.matcher(after)
-	if err != nil {
-		return err
-	}
-	reg, err := a.registry(ctx)
-	if err != nil {
-		return err
-	}
-	found, err := discover.Projects(ctx, reg, mBefore, time.Time{}, a.resolver(before))
-	if err != nil {
-		return err
-	}
-	if err := config.Save(a.cfgPath(), after); err != nil {
-		return err
-	}
-	st, err := a.openState()
-	if err != nil {
-		return err
-	}
-	defer func() { _ = st.Close() }()
-	targets, err := a.unshare(ctx, st, found.Projects, mBefore, mAfter)
+	targets, err := a.applyChange(ctx, before, edit)
 	if err != nil {
 		return err
 	}
@@ -396,6 +371,51 @@ func (a *app) change(ctx context.Context, before config.Config, edit func(*confi
 	}
 	fmt.Fprintf(a.Stdout, "%d project(s) un-shared; they will never be sent again.\n", len(targets))
 	return a.offerRemoteDelete(ctx, before, targets, purge)
+}
+
+// applyChange edits the share rules, saves the config and does the local
+// bookkeeping: projects that stop being shared are tombstoned, projects that
+// start being shared lose any tombstone. It prints nothing; the returned
+// targets are what the server may still hold for the un-shared projects.
+func (a *app) applyChange(ctx context.Context, before config.Config, edit func(*config.Config)) ([]remoteTarget, error) {
+	after := before
+	after.Share.Allow = append([]string(nil), before.Share.Allow...)
+	after.Share.Deny = append([]string(nil), before.Share.Deny...)
+	after.Share.SourceDeny = append([]string(nil), before.Share.SourceDeny...)
+	edit(&after)
+
+	mBefore, err := a.matcher(before)
+	if err != nil {
+		return nil, err
+	}
+	mAfter, err := a.matcher(after)
+	if err != nil {
+		return nil, err
+	}
+	reg, err := a.registry(ctx)
+	if err != nil {
+		return nil, err
+	}
+	found, err := discover.Projects(ctx, reg, mBefore, time.Time{}, a.resolver(before))
+	if err != nil {
+		return nil, err
+	}
+	if err := config.Save(a.cfgPath(), after); err != nil {
+		return nil, err
+	}
+	st, err := a.openState()
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = st.Close() }()
+	for _, p := range found.Projects { // newly shared projects are eligible to upload again
+		if !mBefore.Decide(p.Key, "").Shared && mAfter.Decide(p.Key, "").Shared {
+			if err := st.ClearTombstone(ctx, p.Key); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return a.unshare(ctx, st, found.Projects, mBefore, mAfter)
 }
 
 // remoteTarget is what to delete from the server for one un-shared project.
@@ -475,31 +495,38 @@ func (a *app) offerRemoteDelete(ctx context.Context, cfg config.Config, targets 
 		fmt.Fprintln(a.Stdout, "Data already on the server was left in place.")
 		return nil
 	}
+	_ = a.deleteTargets(ctx, cfg, targets, a.Stdout, a.Stderr) // reported; the local un-share already happened
+	return nil
+}
+
+// deleteTargets removes un-shared projects from the server, reporting each
+// outcome to out/errOut. Failures are reported, not fatal.
+func (a *app) deleteTargets(ctx context.Context, cfg config.Config, targets []remoteTarget, out, errOut io.Writer) error {
 	cl, err := a.ingestClient(cfg)
 	if err != nil {
-		fmt.Fprintf(a.Stderr, "could not delete remote data: %v\n", err)
-		return nil
+		fmt.Fprintf(errOut, "could not delete remote data: %v\n", err)
+		return err
 	}
 	for _, t := range targets {
 		if t.Project != "" {
 			n, err := cl.DeleteProject(ctx, t.Project)
 			if err != nil {
-				fmt.Fprintf(a.Stderr, "could not delete %s from the server: %v\n", t.Label, err)
+				fmt.Fprintf(errOut, "could not delete %s from the server: %v\n", t.Label, err)
 				continue
 			}
-			fmt.Fprintf(a.Stdout, "deleted %s from the server (%d sessions)\n", t.Label, n)
+			fmt.Fprintf(out, "deleted %s from the server (%d sessions)\n", t.Label, n)
 			continue
 		}
 		n := 0
 		for _, k := range t.Sessions {
 			d, err := cl.DeleteSession(ctx, k[0], k[1])
 			if err != nil {
-				fmt.Fprintf(a.Stderr, "could not delete a session of %s: %v\n", t.Label, err)
+				fmt.Fprintf(errOut, "could not delete a session of %s: %v\n", t.Label, err)
 				continue
 			}
 			n += d
 		}
-		fmt.Fprintf(a.Stdout, "deleted %s from the server (%d sessions)\n", t.Label, n)
+		fmt.Fprintf(out, "deleted %s from the server (%d sessions)\n", t.Label, n)
 	}
 	return nil
 }

@@ -127,6 +127,70 @@ memory only and is never written to disk.`,
 	return cmd
 }
 
+// connectResult is what connecting to a server produced.
+type connectResult struct {
+	ServerURL  string
+	ReadSecret string // shown once; empty when pairing was used
+	OAuth      bool
+	StoreKind  string
+}
+
+// connect checks the server, obtains an ingest token (and, with the admin
+// token, a read token), stores the ingest token and records the server URL.
+// The admin token is used for these calls only and is never stored.
+func (a *app) connect(ctx context.Context, serverURL, pairCode, adminToken string) (connectResult, error) {
+	serverURL = strings.TrimRight(strings.TrimSpace(serverURL), "/")
+	if err := config.CheckServerURL(serverURL); err != nil { // refuses plain http except loopback
+		return connectResult{}, err
+	}
+	cfg, err := a.load()
+	if err != nil {
+		return connectResult{}, err
+	}
+	probe, err := client.New(serverURL, "", a.HTTP, a.userAgent())
+	if err != nil {
+		return connectResult{}, err
+	}
+	if err := probe.Health(ctx); err != nil {
+		return connectResult{}, fmt.Errorf("server is not reachable at %s: %w", serverURL, err)
+	}
+	store := a.secretStore()
+	res := connectResult{ServerURL: serverURL, StoreKind: store.Kind()}
+	var ingestSecret string
+	if pairCode != "" {
+		if ingestSecret, err = client.Pair(ctx, serverURL, pairCode, a.HTTP, a.userAgent()); err != nil {
+			return connectResult{}, fmt.Errorf("pairing failed: %w", err)
+		}
+	} else {
+		ac, err := client.New(serverURL, adminToken, a.HTTP, a.userAgent())
+		if err != nil {
+			return connectResult{}, err
+		}
+		host := "unknown"
+		if a.Hostname != nil {
+			host = a.Hostname()
+		}
+		in, err := ac.MintToken(ctx, "ingest", "goldengate@"+host, "")
+		if err != nil {
+			return connectResult{}, fmt.Errorf("could not create the ingest token (is the admin token right?): %w", err)
+		}
+		rd, err := ac.MintToken(ctx, "read", "assistant", "")
+		if err != nil {
+			return connectResult{}, fmt.Errorf("could not create the read token: %w", err)
+		}
+		ingestSecret, res.ReadSecret = in.Secret, rd.Secret
+	}
+	if err := store.Set(secretName(serverURL), ingestSecret); err != nil {
+		return connectResult{}, fmt.Errorf("could not store the ingest token: %w", err)
+	}
+	cfg.Server.URL = serverURL
+	if err := config.Save(a.cfgPath(), cfg); err != nil {
+		return connectResult{}, err
+	}
+	res.OAuth = probe.OAuthEnabled(ctx)
+	return res, nil
+}
+
 func (a *app) runInit(ctx context.Context, serverURL, pairCode string, stdinTok, nonInteractive bool) error {
 	var err error
 	if serverURL == "" {
@@ -140,62 +204,19 @@ func (a *app) runInit(ctx context.Context, serverURL, pairCode string, stdinTok,
 	if serverURL == "" {
 		return fmt.Errorf("server URL required: pass --server or set %s", envServer)
 	}
-	serverURL = strings.TrimRight(strings.TrimSpace(serverURL), "/")
-	if err := config.CheckServerURL(serverURL); err != nil { // refuses plain http except loopback
-		return err
+	admin := ""
+	if pairCode == "" {
+		if admin, err = a.adminToken(stdinTok, nonInteractive); err != nil {
+			return err
+		}
 	}
-	cfg, err := a.load()
+	res, err := a.connect(ctx, serverURL, pairCode, admin)
 	if err != nil {
 		return err
 	}
-	probe, err := client.New(serverURL, "", a.HTTP, a.userAgent())
-	if err != nil {
-		return err
-	}
-	if err := probe.Health(ctx); err != nil {
-		return fmt.Errorf("server is not reachable at %s: %w", serverURL, err)
-	}
+	serverURL, readSecret, oauth := res.ServerURL, res.ReadSecret, res.OAuth
 	fmt.Fprintf(a.Stdout, "Server %s is up.\n", serverURL)
-
-	store := a.secretStore()
-	var ingestSecret, readSecret string
-	if pairCode != "" {
-		if ingestSecret, err = client.Pair(ctx, serverURL, pairCode, a.HTTP, a.userAgent()); err != nil {
-			return fmt.Errorf("pairing failed: %w", err)
-		}
-	} else {
-		admin, err := a.adminToken(stdinTok, nonInteractive)
-		if err != nil {
-			return err
-		}
-		ac, err := client.New(serverURL, admin, a.HTTP, a.userAgent())
-		if err != nil {
-			return err
-		}
-		host := "unknown"
-		if a.Hostname != nil {
-			host = a.Hostname()
-		}
-		in, err := ac.MintToken(ctx, "ingest", "goldengate@"+host, "")
-		if err != nil {
-			return fmt.Errorf("could not create the ingest token (is the admin token right?): %w", err)
-		}
-		rd, err := ac.MintToken(ctx, "read", "assistant", "")
-		if err != nil {
-			return fmt.Errorf("could not create the read token: %w", err)
-		}
-		ingestSecret, readSecret = in.Secret, rd.Secret
-	}
-	if err := store.Set(secretName(serverURL), ingestSecret); err != nil {
-		return fmt.Errorf("could not store the ingest token: %w", err)
-	}
-	cfg.Server.URL = serverURL
-	if err := config.Save(a.cfgPath(), cfg); err != nil {
-		return err
-	}
-	fmt.Fprintf(a.Stdout, "Ingest token stored in the %s. The admin token was not saved anywhere.\n", store.Kind())
-
-	oauth := probe.OAuthEnabled(ctx)
+	fmt.Fprintf(a.Stdout, "Ingest token stored in the %s. The admin token was not saved anywhere.\n", res.StoreKind)
 	if readSecret != "" {
 		fmt.Fprintf(a.Stdout, `
 Your assistant's read token (shown ONCE; it cannot be recovered, rotate it with 'goldengate token rotate read'):
@@ -384,4 +405,8 @@ func (a *app) doctorServer(ctx context.Context, cfg config.Config) int {
 	}
 	fmt.Fprintf(w, "server  ok    %s (token ok, %d project(s) stored)\n", cfg.Server.URL, len(ps))
 	return 0
+}
+
+func newProbe(a *app, serverURL string) (*client.Client, error) {
+	return client.New(serverURL, "", a.HTTP, a.userAgent())
 }

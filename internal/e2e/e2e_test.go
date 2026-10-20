@@ -122,13 +122,12 @@ func newLaptop(t *testing.T) *laptop {
 	return l
 }
 
-func (l *laptop) run(env map[string]string, args ...string) error {
-	l.out, l.errOut = &bytes.Buffer{}, &bytes.Buffer{}
+func (l *laptop) deps(env map[string]string) cli.Deps {
 	e := map[string]string{"XDG_CONFIG_HOME": filepath.Join(l.root, "cfg"), "XDG_STATE_HOME": filepath.Join(l.root, "state")}
 	for k, v := range env {
 		e[k] = v
 	}
-	cmd := cli.New(cli.Deps{
+	return cli.Deps{
 		Stdout: l.out, Stderr: l.errOut, Home: l.home, Getenv: func(k string) string { return e[k] },
 		NewRegistry: func(string, func(string) string) (*adapters.Registry, error) {
 			var r adapters.Registry
@@ -136,7 +135,12 @@ func (l *laptop) run(env map[string]string, args ...string) error {
 		},
 		Now: func() time.Time { return fakeNow }, HTTP: l.http, Hostname: func() string { return "testbox" },
 		SecretStore: func(string, func(string)) secrets.Store { return l.secrets },
-	})
+	}
+}
+
+func (l *laptop) run(env map[string]string, args ...string) error {
+	l.out, l.errOut = &bytes.Buffer{}, &bytes.Buffer{}
+	cmd := cli.New(l.deps(env))
 	cmd.SetArgs(args)
 	return cmd.ExecuteContext(context.Background())
 }
