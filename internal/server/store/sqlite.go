@@ -41,7 +41,17 @@ CREATE TABLE IF NOT EXISTS work_item_sessions(
 CREATE INDEX IF NOT EXISTS wis_session ON work_item_sessions(source, session_id);
 CREATE TABLE IF NOT EXISTS tokens(
   id TEXT PRIMARY KEY, hash TEXT NOT NULL UNIQUE, scope TEXT NOT NULL, label TEXT NOT NULL,
-  created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, revoked_at INTEGER NOT NULL, last_used_at INTEGER NOT NULL);
+  created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, revoked_at INTEGER NOT NULL, last_used_at INTEGER NOT NULL,
+  client_id TEXT NOT NULL DEFAULT '', family TEXT NOT NULL DEFAULT '');
+CREATE TABLE IF NOT EXISTS oauth_clients(
+  id TEXT PRIMARY KEY, name TEXT NOT NULL, secret_hash TEXT NOT NULL, redirect_uris TEXT NOT NULL,
+  created_at INTEGER NOT NULL, last_used_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS oauth_txns(hash TEXT PRIMARY KEY, data TEXT NOT NULL, client_id TEXT NOT NULL, expires_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS oauth_codes(
+  hash TEXT PRIMARY KEY, data TEXT NOT NULL, client_id TEXT NOT NULL, family TEXT NOT NULL, expires_at INTEGER NOT NULL, used INTEGER NOT NULL DEFAULT 0);
+CREATE TABLE IF NOT EXISTS oauth_refresh(
+  hash TEXT PRIMARY KEY, data TEXT NOT NULL, client_id TEXT NOT NULL, family TEXT NOT NULL, expires_at INTEGER NOT NULL, used INTEGER NOT NULL DEFAULT 0);
+CREATE INDEX IF NOT EXISTS oauth_refresh_family ON oauth_refresh(family);
 CREATE TABLE IF NOT EXISTS pairings(
   hash TEXT PRIMARY KEY, expires_at INTEGER NOT NULL, failures INTEGER NOT NULL DEFAULT 0, burned INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS audit(
@@ -69,7 +79,42 @@ func OpenSQLite(ctx context.Context, path string) (*SQLite, error) {
 		_ = db.Close()
 		return nil, fmt.Errorf("sqlite store: schema: %w", err)
 	}
+	if err := migrate(ctx, db); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
 	return &SQLite{db: db}, nil
+}
+
+// migrate upgrades databases created before OAuth support existed.
+func migrate(ctx context.Context, db *sql.DB) error {
+	rows, err := db.QueryContext(ctx, `PRAGMA table_info(tokens)`)
+	if err != nil {
+		return fmt.Errorf("sqlite store: migrate: %w", err)
+	}
+	have := map[string]bool{}
+	for rows.Next() {
+		var cid int
+		var name, typ string
+		var notnull, pk int
+		var dflt sql.NullString
+		if err := rows.Scan(&cid, &name, &typ, &notnull, &dflt, &pk); err != nil {
+			_ = rows.Close()
+			return fmt.Errorf("sqlite store: migrate: %w", err)
+		}
+		have[name] = true
+	}
+	if err := rows.Close(); err != nil {
+		return fmt.Errorf("sqlite store: migrate: %w", err)
+	}
+	for _, col := range []string{"client_id", "family"} {
+		if !have[col] {
+			if _, err := db.ExecContext(ctx, `ALTER TABLE tokens ADD COLUMN `+col+` TEXT NOT NULL DEFAULT ''`); err != nil { //nolint:gosec // G202: column names are constants
+				return fmt.Errorf("sqlite store: migrate: %w", err)
+			}
+		}
+	}
+	return nil
 }
 
 // Close implements Store.
@@ -486,8 +531,8 @@ func isUnique(err error) bool {
 
 // CreateToken implements AuthStore.
 func (s *SQLite) CreateToken(ctx context.Context, t Token) error {
-	_, err := s.db.ExecContext(ctx, `INSERT INTO tokens(id, hash, scope, label, created_at, expires_at, revoked_at, last_used_at) VALUES(?,?,?,?,?,?,?,?)`,
-		t.ID, t.Hash, t.Scope, t.Label, nano(t.CreatedAt), nano(t.ExpiresAt), nano(t.RevokedAt), nano(t.LastUsedAt))
+	_, err := s.db.ExecContext(ctx, `INSERT INTO tokens(id, hash, scope, label, created_at, expires_at, revoked_at, last_used_at, client_id, family) VALUES(?,?,?,?,?,?,?,?,?,?)`,
+		t.ID, t.Hash, t.Scope, t.Label, nano(t.CreatedAt), nano(t.ExpiresAt), nano(t.RevokedAt), nano(t.LastUsedAt), t.ClientID, t.Family)
 	if isUnique(err) {
 		return ErrDuplicate
 	}
@@ -497,14 +542,14 @@ func (s *SQLite) CreateToken(ctx context.Context, t Token) error {
 	return nil
 }
 
-const tokenCols = `id, hash, scope, label, created_at, expires_at, revoked_at, last_used_at` //nolint:gosec // G101: column names, not a credential
+const tokenCols = `id, hash, scope, label, created_at, expires_at, revoked_at, last_used_at, client_id, family` //nolint:gosec // G101: column names, not a credential
 
 type rowScanner interface{ Scan(...any) error }
 
 func scanToken(r rowScanner) (Token, error) {
 	var t Token
 	var c, e, rv, lu int64
-	if err := r.Scan(&t.ID, &t.Hash, &t.Scope, &t.Label, &c, &e, &rv, &lu); err != nil {
+	if err := r.Scan(&t.ID, &t.Hash, &t.Scope, &t.Label, &c, &e, &rv, &lu, &t.ClientID, &t.Family); err != nil {
 		return Token{}, err
 	}
 	t.CreatedAt, t.ExpiresAt, t.RevokedAt, t.LastUsedAt = fromNano(c), fromNano(e), fromNano(rv), fromNano(lu)

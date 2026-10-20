@@ -44,6 +44,7 @@ func Run(t *testing.T, newStore func(t *testing.T) store.Store) {
 		"audit":       audit,
 		"unicode":     unicode,
 		"concurrency": concurrency,
+		"oauth":       oauth,
 	} {
 		t.Run(name, func(t *testing.T) {
 			s := newStore(t)
@@ -401,5 +402,125 @@ func concurrency(t *testing.T, s store.Store) {
 	items, _ := s.WorkItems(ctx, store.WorkItemQuery{})
 	if len(items) != 1 || len(items[0].Sessions) != 20 {
 		t.Fatalf("concurrent merge lost links: %d items, %d sessions", len(items), len(items[0].Sessions))
+	}
+}
+
+func oauth(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	now := t0
+	c := store.OAuthClient{ID: "c1", Name: "Gemini", SecretHash: "", RedirectURIs: []string{"https://a.example/cb", "http://localhost:1/cb"}, CreatedAt: now}
+	must(t, s.CreateOAuthClient(ctx, c))
+	if err := s.CreateOAuthClient(ctx, c); !errors.Is(err, store.ErrDuplicate) {
+		t.Fatalf("duplicate client: %v", err)
+	}
+	got, err := s.OAuthClient(ctx, "c1")
+	must(t, err)
+	if got.Name != "Gemini" || len(got.RedirectURIs) != 2 || got.RedirectURIs[1] != "http://localhost:1/cb" {
+		t.Fatalf("%+v", got)
+	}
+	if _, err := s.OAuthClient(ctx, "nope"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatal(err)
+	}
+	must(t, s.CreateOAuthClient(ctx, store.OAuthClient{ID: "c2", Name: "unused", RedirectURIs: []string{"https://b.example/cb"}, CreatedAt: now.Add(-48 * time.Hour)}))
+	if n, _ := s.CountOAuthClients(ctx); n != 2 {
+		t.Fatalf("count %d", n)
+	}
+	must(t, s.TouchOAuthClient(ctx, "c1", now.Add(time.Minute)))
+	if l, _ := s.ListOAuthClients(ctx); len(l) != 2 || l[0].ID != "c2" || !l[1].LastUsedAt.Equal(now.Add(time.Minute)) {
+		t.Fatalf("list/touch: %+v", l)
+	}
+
+	// pending consent: single use, expires
+	txn := store.OAuthTxn{ClientID: "c1", RedirectURI: "https://a.example/cb", State: "st", Challenge: "ch", Resource: "https://h/mcp", Scope: "read"}
+	must(t, s.PutOAuthTxn(ctx, "t1", txn, now.Add(10*time.Minute)))
+	back, err := s.TakeOAuthTxn(ctx, "t1", now)
+	must(t, err)
+	if *back != txn {
+		t.Fatalf("txn round trip: %+v", back)
+	}
+	if _, err := s.TakeOAuthTxn(ctx, "t1", now); !errors.Is(err, store.ErrNotFound) {
+		t.Fatal("a pending request must be single use")
+	}
+	must(t, s.PutOAuthTxn(ctx, "t2", txn, now.Add(time.Minute)))
+	if _, err := s.TakeOAuthTxn(ctx, "t2", now.Add(2*time.Minute)); !errors.Is(err, store.ErrNotFound) {
+		t.Fatal("expired pending request accepted")
+	}
+
+	// codes: use once, replay is reported, expiry
+	code := store.OAuthCode{ClientID: "c1", RedirectURI: "https://a.example/cb", Challenge: "ch", Resource: "https://h/mcp", Scope: "read", Family: "fam1", Expires: now.Add(5 * time.Minute)}
+	must(t, s.PutOAuthCode(ctx, "code1", code))
+	cc, replay, err := s.UseOAuthCode(ctx, "code1", now)
+	if err != nil || replay || *cc != code {
+		t.Fatalf("first use: %+v %v %v", cc, replay, err)
+	}
+	if cc, replay, err = s.UseOAuthCode(ctx, "code1", now.Add(time.Second)); err != nil || !replay || cc.Family != "fam1" {
+		t.Fatalf("replay must be reported with the family: %+v %v %v", cc, replay, err)
+	}
+	if _, _, err := s.UseOAuthCode(ctx, "ghost", now); !errors.Is(err, store.ErrNotFound) {
+		t.Fatal(err)
+	}
+	must(t, s.PutOAuthCode(ctx, "code2", code))
+	if _, _, err := s.UseOAuthCode(ctx, "code2", now.Add(6*time.Minute)); !errors.Is(err, store.ErrNotFound) {
+		t.Fatal("expired code accepted")
+	}
+
+	// refresh tokens rotate; replay reported
+	rt := store.OAuthRefresh{Hash: "r1", ClientID: "c1", Family: "fam1", Resource: "https://h/mcp", Scope: "read", Expires: now.Add(time.Hour)}
+	must(t, s.PutOAuthRefresh(ctx, rt))
+	rr, replay, err := s.UseOAuthRefresh(ctx, "r1", now)
+	if err != nil || replay || *rr != rt {
+		t.Fatalf("%+v %v %v", rr, replay, err)
+	}
+	if _, replay, _ = s.UseOAuthRefresh(ctx, "r1", now); !replay {
+		t.Fatal("refresh replay not detected")
+	}
+	if _, _, err := s.UseOAuthRefresh(ctx, "ghost", now); !errors.Is(err, store.ErrNotFound) {
+		t.Fatal(err)
+	}
+
+	// families: revoking one revokes its access tokens and refresh tokens, nothing else
+	must(t, s.CreateToken(ctx, store.Token{ID: "a1", Hash: "ha1", Scope: "read", CreatedAt: now, ClientID: "c1", Family: "fam1"}))
+	must(t, s.CreateToken(ctx, store.Token{ID: "a2", Hash: "ha2", Scope: "read", CreatedAt: now, ClientID: "c1", Family: "fam2"}))
+	must(t, s.PutOAuthRefresh(ctx, store.OAuthRefresh{Hash: "r2", ClientID: "c1", Family: "fam1", Expires: now.Add(time.Hour)}))
+	must(t, s.RevokeFamily(ctx, "fam1", now.Add(time.Minute)))
+	t1, _ := s.TokenByHash(ctx, "ha1")
+	t2, _ := s.TokenByHash(ctx, "ha2")
+	if t1.Active(now.Add(2*time.Minute)) || !t2.Active(now.Add(2*time.Minute)) || t1.ClientID != "c1" || t1.Family != "fam1" {
+		t.Fatalf("family revocation: %+v / %+v", t1, t2)
+	}
+	if _, _, err := s.UseOAuthRefresh(ctx, "r2", now); !errors.Is(err, store.ErrNotFound) {
+		t.Fatal("a revoked family must lose its refresh tokens")
+	}
+
+	// deleting a client revokes its tokens and removes its state
+	must(t, s.PutOAuthCode(ctx, "code3", code))
+	n, err := s.DeleteOAuthClient(ctx, "c1", now.Add(3*time.Minute))
+	must(t, err)
+	if n != 1 { // a1 was already revoked, a2 is revoked now
+		t.Fatalf("revoked %d tokens", n)
+	}
+	if t2, _ = s.TokenByHash(ctx, "ha2"); t2.Active(now.Add(4 * time.Minute)) {
+		t.Fatal("client deletion left a token active")
+	}
+	if _, _, err := s.UseOAuthCode(ctx, "code3", now); !errors.Is(err, store.ErrNotFound) {
+		t.Fatal("client deletion left codes behind")
+	}
+	if _, err := s.OAuthClient(ctx, "c1"); !errors.Is(err, store.ErrNotFound) {
+		t.Fatal("client still exists")
+	}
+	if _, err := s.DeleteOAuthClient(ctx, "c1", now); !errors.Is(err, store.ErrNotFound) {
+		t.Fatalf("second delete: %v", err)
+	}
+
+	// pruning removes never-used clients older than the cutoff only
+	must(t, s.CreateOAuthClient(ctx, store.OAuthClient{ID: "c3", Name: "fresh", RedirectURIs: []string{"https://c.example/cb"}, CreatedAt: now}))
+	if _, err := s.PruneOAuth(ctx, now, now.Add(-24*time.Hour)); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.OAuthClient(ctx, "c2"); !errors.Is(err, store.ErrNotFound) {
+		t.Error("stale unused client survived pruning")
+	}
+	if _, err := s.OAuthClient(ctx, "c3"); err != nil {
+		t.Errorf("fresh client was pruned: %v", err)
 	}
 }

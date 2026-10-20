@@ -2,6 +2,7 @@ package store_test
 
 import (
 	"context"
+	"database/sql"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -50,4 +51,37 @@ func TestSQLitePersistsAndIsPrivate(t *testing.T) {
 	if _, err := s2.TokenByHash(ctx, "h"); err != nil {
 		t.Fatalf("token lost across reopen: %v", err)
 	}
+}
+
+func TestSQLiteMigratesPreOAuthDatabase(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "old.db")
+	db, err := sql.Open("sqlite", "file:"+path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// the tokens table as it was before OAuth support
+	if _, err := db.ExecContext(ctx, `CREATE TABLE tokens(id TEXT PRIMARY KEY, hash TEXT NOT NULL UNIQUE, scope TEXT NOT NULL, label TEXT NOT NULL,
+		created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, revoked_at INTEGER NOT NULL, last_used_at INTEGER NOT NULL);
+		INSERT INTO tokens VALUES('tok_old','hold','read','legacy',1,0,0,0)`); err != nil {
+		t.Fatal(err)
+	}
+	_ = db.Close()
+	s, err := store.OpenSQLite(ctx, path)
+	if err != nil {
+		t.Fatalf("opening an old database: %v", err)
+	}
+	defer func() { _ = s.Close() }()
+	old, err := s.TokenByHash(ctx, "hold")
+	if err != nil || old.Label != "legacy" || old.ClientID != "" || old.Family != "" {
+		t.Fatalf("legacy token lost or changed: %+v %v", old, err)
+	}
+	if err := s.CreateToken(ctx, store.Token{ID: "tok_new", Hash: "hnew", Scope: "read", CreatedAt: time.Now(), ClientID: "c", Family: "f"}); err != nil {
+		t.Fatalf("new columns unusable after migration: %v", err)
+	}
+	s2, err := store.OpenSQLite(ctx, path) // idempotent
+	if err != nil {
+		t.Fatalf("second open: %v", err)
+	}
+	_ = s2.Close()
 }

@@ -78,6 +78,8 @@ type Token struct {
 	Scope      string
 	Label      string
 	CreatedAt  time.Time
+	ClientID   string    // OAuth client that obtained this token, if any
+	Family     string    // OAuth grant family (all tokens from one authorization), if any
 	ExpiresAt  time.Time // zero = never
 	RevokedAt  time.Time // zero = active
 	LastUsedAt time.Time
@@ -117,6 +119,7 @@ type Store interface {
 	WorkItems(ctx context.Context, q WorkItemQuery) ([]WorkItemRecord, error)
 	Close() error
 	AuthStore
+	OAuthStore
 }
 
 // AuthStore holds tokens, pairing codes and the audit log.

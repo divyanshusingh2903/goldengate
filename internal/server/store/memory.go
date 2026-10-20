@@ -20,6 +20,24 @@ type Memory struct {
 	tokens   map[string]*Token // by id
 	pairings map[string]*pairing
 	audit    []AuditEvent
+
+	oclients map[string]*OAuthClient
+	otxns    map[string]*memTxn
+	ocodes   map[string]*memCode
+	orefresh map[string]*memRefresh
+}
+
+type memTxn struct {
+	t       OAuthTxn
+	expires time.Time
+}
+type memCode struct {
+	c    OAuthCode
+	used bool
+}
+type memRefresh struct {
+	r    OAuthRefresh
+	used bool
 }
 
 type workKey struct{ project, kind, provider, key string }
@@ -35,6 +53,7 @@ func NewMemory() *Memory {
 	return &Memory{
 		sessions: map[SessionKey]*SessionRecord{}, work: map[workKey]*WorkItemRecord{},
 		tokens: map[string]*Token{}, pairings: map[string]*pairing{},
+		oclients: map[string]*OAuthClient{}, otxns: map[string]*memTxn{}, ocodes: map[string]*memCode{}, orefresh: map[string]*memRefresh{},
 	}
 }
 
@@ -476,5 +495,226 @@ func (m *Memory) PruneAudit(_ context.Context, before time.Time) (int, error) {
 	}
 	n := len(m.audit) - len(keep)
 	m.audit = keep
+	return n, nil
+}
+
+// --- OAuth ---
+
+// CreateOAuthClient implements OAuthStore.
+func (m *Memory) CreateOAuthClient(_ context.Context, c OAuthClient) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.oclients[c.ID]; ok {
+		return errDuplicate
+	}
+	c.RedirectURIs = append([]string(nil), c.RedirectURIs...)
+	m.oclients[c.ID] = &c
+	return nil
+}
+
+// OAuthClient implements OAuthStore.
+func (m *Memory) OAuthClient(_ context.Context, id string) (*OAuthClient, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	c, ok := m.oclients[id]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	cp := *c
+	cp.RedirectURIs = append([]string(nil), c.RedirectURIs...)
+	return &cp, nil
+}
+
+// ListOAuthClients implements OAuthStore.
+func (m *Memory) ListOAuthClients(context.Context) ([]OAuthClient, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	out := make([]OAuthClient, 0, len(m.oclients))
+	for _, c := range m.oclients {
+		out = append(out, *c)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if !out[i].CreatedAt.Equal(out[j].CreatedAt) {
+			return out[i].CreatedAt.Before(out[j].CreatedAt)
+		}
+		return out[i].ID < out[j].ID
+	})
+	return out, nil
+}
+
+// CountOAuthClients implements OAuthStore.
+func (m *Memory) CountOAuthClients(context.Context) (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.oclients), nil
+}
+
+// TouchOAuthClient implements OAuthStore.
+func (m *Memory) TouchOAuthClient(_ context.Context, id string, at time.Time) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if c, ok := m.oclients[id]; ok {
+		c.LastUsedAt = at.UTC()
+	}
+	return nil
+}
+
+// DeleteOAuthClient implements OAuthStore.
+func (m *Memory) DeleteOAuthClient(_ context.Context, id string, at time.Time) (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if _, ok := m.oclients[id]; !ok {
+		return 0, ErrNotFound
+	}
+	delete(m.oclients, id)
+	n := 0
+	for _, t := range m.tokens {
+		if t.ClientID == id && (t.RevokedAt.IsZero() || at.Before(t.RevokedAt)) {
+			t.RevokedAt = at.UTC()
+			n++
+		}
+	}
+	for h, c := range m.ocodes {
+		if c.c.ClientID == id {
+			delete(m.ocodes, h)
+		}
+	}
+	for h, r := range m.orefresh {
+		if r.r.ClientID == id {
+			delete(m.orefresh, h)
+		}
+	}
+	for h, t := range m.otxns {
+		if t.t.ClientID == id {
+			delete(m.otxns, h)
+		}
+	}
+	return n, nil
+}
+
+// PutOAuthTxn implements OAuthStore.
+func (m *Memory) PutOAuthTxn(_ context.Context, hash string, t OAuthTxn, expires time.Time) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.otxns[hash] = &memTxn{t: t, expires: expires.UTC()}
+	return nil
+}
+
+// TakeOAuthTxn implements OAuthStore.
+func (m *Memory) TakeOAuthTxn(_ context.Context, hash string, now time.Time) (*OAuthTxn, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	t, ok := m.otxns[hash]
+	if !ok {
+		return nil, ErrNotFound
+	}
+	delete(m.otxns, hash)
+	if !now.Before(t.expires) {
+		return nil, ErrNotFound
+	}
+	cp := t.t
+	return &cp, nil
+}
+
+// PutOAuthCode implements OAuthStore.
+func (m *Memory) PutOAuthCode(_ context.Context, hash string, c OAuthCode) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.ocodes[hash] = &memCode{c: c}
+	return nil
+}
+
+// UseOAuthCode implements OAuthStore.
+func (m *Memory) UseOAuthCode(_ context.Context, hash string, now time.Time) (*OAuthCode, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	c, ok := m.ocodes[hash]
+	if !ok {
+		return nil, false, ErrNotFound
+	}
+	cp := c.c
+	if c.used {
+		return &cp, true, nil
+	}
+	if !now.Before(c.c.Expires) {
+		return nil, false, ErrNotFound
+	}
+	c.used = true
+	return &cp, false, nil
+}
+
+// PutOAuthRefresh implements OAuthStore.
+func (m *Memory) PutOAuthRefresh(_ context.Context, r OAuthRefresh) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.orefresh[r.Hash] = &memRefresh{r: r}
+	return nil
+}
+
+// UseOAuthRefresh implements OAuthStore.
+func (m *Memory) UseOAuthRefresh(_ context.Context, hash string, now time.Time) (*OAuthRefresh, bool, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	r, ok := m.orefresh[hash]
+	if !ok {
+		return nil, false, ErrNotFound
+	}
+	cp := r.r
+	if r.used {
+		return &cp, true, nil
+	}
+	if !now.Before(r.r.Expires) {
+		return nil, false, ErrNotFound
+	}
+	r.used = true
+	return &cp, false, nil
+}
+
+// RevokeFamily implements OAuthStore.
+func (m *Memory) RevokeFamily(_ context.Context, family string, at time.Time) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	for _, t := range m.tokens {
+		if t.Family == family && (t.RevokedAt.IsZero() || at.Before(t.RevokedAt)) {
+			t.RevokedAt = at.UTC()
+		}
+	}
+	for h, r := range m.orefresh {
+		if r.r.Family == family {
+			delete(m.orefresh, h)
+		}
+	}
+	return nil
+}
+
+// PruneOAuth implements OAuthStore.
+func (m *Memory) PruneOAuth(_ context.Context, now, unusedClientsBefore time.Time) (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	n := 0
+	for h, t := range m.otxns {
+		if !now.Before(t.expires) {
+			delete(m.otxns, h)
+			n++
+		}
+	}
+	for h, c := range m.ocodes {
+		if now.After(c.c.Expires.Add(24 * time.Hour)) {
+			delete(m.ocodes, h)
+			n++
+		}
+	}
+	for h, r := range m.orefresh {
+		if now.After(r.r.Expires.Add(24 * time.Hour)) {
+			delete(m.orefresh, h)
+			n++
+		}
+	}
+	for id, c := range m.oclients {
+		if c.LastUsedAt.IsZero() && c.CreatedAt.Before(unusedClientsBefore) {
+			delete(m.oclients, id)
+			n++
+		}
+	}
 	return n, nil
 }
