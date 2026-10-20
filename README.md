@@ -5,7 +5,7 @@ Let a remote AI assistant know what you have been working on in your coding tool
 - `goldengate` (laptop): reads your local session history, applies your allow/deny choices, redacts and summarizes, and pushes to your own server.
 - `goldengatebridge` (server you run): stores the summaries and serves them read-only over MCP (streamable HTTP, stateless JSON).
 
-Status: pre-release (M2b). Claude Code is supported as a source; Codex, OpenCode, the TUI and deployment scripts are on the roadmap in [DESIGN.md](DESIGN.md). See [SECURITY.md](SECURITY.md) before connecting an assistant.
+Status: pre-release (M3). Sources: Claude Code, Codex, OpenCode, and claude.ai / ChatGPT data exports. The TUI and deployment scripts are on the roadmap in [DESIGN.md](DESIGN.md). See [SECURITY.md](SECURITY.md) before connecting an assistant.
 
 ## Quickstart (about ten minutes)
 
@@ -38,6 +38,18 @@ Status: pre-release (M2b). Claude Code is supported as a source; Codex, OpenCode
    - Revoke a connected assistant with `goldengatebridge oauth clients delete <id>`.
 
 Un-share with `goldengate share remove ~/code/myproject --purge-remote`. Rotate the assistant's token with `goldengate token rotate read`.
+
+## Sources
+
+| Source | How it is read |
+|---|---|
+| Claude Code | `~/.claude/projects/**.jsonl` (honors `CLAUDE_CONFIG_DIR`) |
+| Codex CLI / Desktop | `~/.codex/sessions/**/rollout-*.jsonl` (honors `CODEX_HOME`) |
+| OpenCode | its SQLite database, read-only (`$XDG_DATA_HOME/opencode/opencode.db`) |
+| claude.ai | `goldengate import-claude-ai export.zip` |
+| ChatGPT | `goldengate import-chatgpt export.zip` |
+
+The same folder in several tools is one project. Worktrees are filed under their repository when it is selected. Chat exports become projects like `claude-ai:Chats` and are shared only with an explicit `goldengate share add 'claude-ai:Chats'` (globs work: `chatgpt:*`). Exports stay where you keep them; `goldengate imports list|remove` manages them.
 
 ## Development
 

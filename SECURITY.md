@@ -39,6 +39,14 @@ Some assistants only connect through OAuth. With `--oauth --public-url https://y
 - **Browser surface:** the consent page is server-rendered (`html/template`, no JavaScript), is served with a strict CSP, `X-Frame-Options: DENY`, `no-store` and no referrer, and only ever carries an unguessable one-time request id, never the request parameters. Discovery metadata is the only CORS-enabled response.
 - Without `--oauth` none of these endpoints exist.
 
+## Sources and imports
+- **Coding tools** (Claude Code, Codex, OpenCode) are read in place and read-only. Only session history is opened: for OpenCode that means four tables of its database (a test enforces the allow-list); its credential and account tables, `auth.json` and every other file next to it are never touched.
+- **Chat exports** (claude.ai, ChatGPT) are zips you supply. They are untrusted input: the whole archive is refused if any entry name could escape a directory (`..`, absolute paths, backslashes, drive letters, control characters), is a symlink or a duplicate, or if the archive or an entry is suspiciously large or compressible (zip bombs). Nothing is ever extracted to disk; decompression is bounded even if the archive lies about sizes. Only the conversation files are opened (`conversations.json`, `projects.json` for names, and ChatGPT's numbered shards): account files (`users.json`, `user.json`), `chat.html`, feedback and shared-link files are never read.
+- **Chat history is more personal than code history**, so chat projects (`claude-ai:Chats`, `chatgpt:project-...`) are shared only by an explicit rule, even when `share.default = "allow"`.
+- **Artifacts and uploads** from chats travel as metadata only (id, title, status): never their contents. Names that look like secrets (`.env`, keys) are dropped.
+- **Worktrees** are filed under their repository only when the repository itself is selected, so the name of an unselected folder is never sent. Finding worktrees uses folder paths and what the tool itself records; reading a worktree's `.git` pointer file is opt-in (`enrich.git`).
+- **The chat export layouts are not formally documented.** The parsers follow the commonly seen shapes, skip anything unknown with a warning, and were tested on synthetic fixtures, not on real exports.
+
 ## Prompt injection (read this)
 Everything the server stores comes from coding-session transcripts, which include text from web pages, READMEs, issue bodies and tool output. Any of it may contain instructions aimed at an AI model. When another assistant reads it over MCP, that text is **untrusted data**.
 
