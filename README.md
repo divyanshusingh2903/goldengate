@@ -5,7 +5,7 @@ Let a remote AI assistant know what you have been working on in your coding tool
 - `goldengate` (laptop): reads your local session history, applies your allow/deny choices, redacts and summarizes, and pushes to your own server.
 - `goldengatebridge` (server you run): stores the summaries and serves them read-only over MCP (streamable HTTP, stateless JSON).
 
-Status: pre-release (M2). Claude Code is supported as a source; Codex, OpenCode, the TUI, deployment scripts and OAuth are on the roadmap in [DESIGN.md](DESIGN.md). See [SECURITY.md](SECURITY.md) before connecting an assistant.
+Status: pre-release (M2b). Claude Code is supported as a source; Codex, OpenCode, the TUI and deployment scripts are on the roadmap in [DESIGN.md](DESIGN.md). See [SECURITY.md](SECURITY.md) before connecting an assistant.
 
 ## Quickstart (about ten minutes)
 
@@ -32,7 +32,10 @@ Status: pre-release (M2). Claude Code is supported as a source; Codex, OpenCode,
    goldengate sync
    ```
 
-4. **Connect the assistant** with `https://bridge.example.com/mcp` and the read token, as an `Authorization: Bearer` header if its connector offers one. Some assistants (Gemini's consumer app appears to be one) only support OAuth, which is not implemented yet.
+4. **Connect the assistant.**
+   - If its connector lets you set a header: use `https://bridge.example.com/mcp` and send the read token as `Authorization: Bearer <token>`.
+   - If it only supports OAuth (Gemini's custom apps do; it supports dynamic client registration): start the server with `--oauth --public-url https://bridge.example.com`, then add `https://bridge.example.com/mcp` as the connector URL (Gemini: Settings > Connected Apps > Add a custom app). A consent page opens; approve it with your admin secret. No token to paste. If the assistant asks for a client ID and secret instead, run `goldengatebridge oauth clients create --redirect-uri <the address it shows>`.
+   - Revoke a connected assistant with `goldengatebridge oauth clients delete <id>`.
 
 Un-share with `goldengate share remove ~/code/myproject --purge-remote`. Rotate the assistant's token with `goldengate token rotate read`.
 

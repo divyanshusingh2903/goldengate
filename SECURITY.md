@@ -28,6 +28,17 @@ Use GitHub private vulnerability reporting on this repository (channel to be con
 - The server refuses to start without credentials, and refuses plain HTTP on a non-loopback address unless TLS is configured or `--behind-tls-proxy` is given. The client refuses plain `http://` servers except on loopback and never follows redirects.
 - The audit log records token id, scope, action, project key, time and source address. Never payload content. Default retention is 90 days.
 
+## OAuth (optional, `serve --oauth`)
+Some assistants only connect through OAuth. With `--oauth --public-url https://your-host` the bridge also runs a small single-user OAuth 2.1 authorization server (MCP authorization spec: RFC 9728 and 8414 discovery, RFC 7591 dynamic registration, PKCE S256 only, RFC 8707 resource indicators, exact redirect-URI matching).
+
+- **Who can approve:** only the holder of the admin secret. The consent page shows the application's name and exactly where it will be sent, and asks for the admin secret. Wrong guesses go through the same lockout as every other token check.
+- **What a connected assistant gets:** an ordinary short-lived (1 hour) `read` token plus a rotating refresh token (30 days). It can never write, delete or manage tokens.
+- **Theft handling:** authorization codes are single use; reusing a code, or replaying an already-used refresh token, revokes everything issued from that grant. `goldengatebridge oauth clients delete ID` cuts a client off immediately.
+- **Open registration:** anyone who can reach the server can register a client, but a registered client gets nothing without your consent. Registration is rate limited and capped, unused clients are pruned after 7 days, and `--oauth-redirect-host` can restrict redirect URIs to the hosts you expect.
+- **The phishing risk to know about:** an attacker can register a client with their own redirect address and lure you to its sign-in link. The consent page names the application and its redirect host so you can check; approve only connections you started yourself, and prefer `--oauth-redirect-host` once you know your assistant's address.
+- **Browser surface:** the consent page is server-rendered (`html/template`, no JavaScript), is served with a strict CSP, `X-Frame-Options: DENY`, `no-store` and no referrer, and only ever carries an unguessable one-time request id, never the request parameters. Discovery metadata is the only CORS-enabled response.
+- Without `--oauth` none of these endpoints exist.
+
 ## Prompt injection (read this)
 Everything the server stores comes from coding-session transcripts, which include text from web pages, READMEs, issue bodies and tool output. Any of it may contain instructions aimed at an AI model. When another assistant reads it over MCP, that text is **untrusted data**.
 
