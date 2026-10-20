@@ -48,12 +48,17 @@ func newEnv(t *testing.T, mutate ...func(*server.Config)) *env {
 	for _, m := range mutate {
 		m(&cfg)
 	}
+	var handler http.Handler // set below: the public URL (for OAuth) must be known before the server is built
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { handler.ServeHTTP(w, r) }))
+	t.Cleanup(ts.Close)
+	if cfg.PublicURL == "self" {
+		cfg.PublicURL = ts.URL
+	}
 	s, err := server.New(cfg)
 	if err != nil {
 		t.Fatal(err)
 	}
-	ts := httptest.NewServer(s)
-	t.Cleanup(ts.Close)
+	handler = s
 	e := &env{t: t, ts: ts, st: st, au: au, admin: adminSecret}
 	e.ingest, _, _ = au.Mint(context.Background(), auth.ScopeIngest, "test", 0)
 	e.read, _, _ = au.Mint(context.Background(), auth.ScopeRead, "test", 0)

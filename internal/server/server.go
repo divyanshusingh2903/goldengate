@@ -21,6 +21,7 @@ import (
 	"github.com/OWNER/goldengate/internal/model"
 	"github.com/OWNER/goldengate/internal/server/auth"
 	"github.com/OWNER/goldengate/internal/server/bridgemcp"
+	"github.com/OWNER/goldengate/internal/server/oauth"
 	"github.com/OWNER/goldengate/internal/server/store"
 )
 
@@ -40,6 +41,12 @@ type Config struct {
 	ProxyHops   int  // proxies between the client and us (default 1)
 
 	AuditRetention time.Duration // default 90 days
+
+	// PublicURL, when set, enables the built-in OAuth 2.1 authorization server
+	// (needs the admin secret). It is the externally visible https base URL.
+	PublicURL          string
+	OAuthRedirectHosts []string      // optional allow-list of https redirect hosts
+	OAuthAccessTTL     time.Duration // default 1h
 }
 
 // Server is the bridge HTTP handler plus background maintenance.
@@ -47,6 +54,7 @@ type Server struct {
 	Config
 	ipLimit, tokLimit, pairLimit *auth.Limiter
 	mux                          *http.ServeMux
+	oauth                        *oauth.Provider
 }
 
 // New builds a Server.
@@ -76,6 +84,21 @@ func New(cfg Config) (*Server, error) {
 		ipLimit:   auth.NewLimiter(30, 60, cfg.Now),
 		tokLimit:  auth.NewLimiter(10, 40, cfg.Now),
 		pairLimit: auth.NewLimiter(0.2, 5, cfg.Now)}
+	if cfg.PublicURL != "" {
+		p, err := oauth.New(oauth.Config{
+			Store: cfg.Store, Auth: cfg.Auth, Issuer: cfg.PublicURL, AllowedRedirectHosts: cfg.OAuthRedirectHosts, AccessTTL: cfg.OAuthAccessTTL,
+			Now: cfg.Now, ClientIP: s.clientIP, Allow: s.oauthAllow, Log: cfg.Log,
+			Audit: func(ctx context.Context, e store.AuditEvent) {
+				if err := cfg.Store.AppendAudit(context.WithoutCancel(ctx), e); err != nil {
+					cfg.Log.Error("audit write failed", "err", err)
+				}
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+		s.oauth = p
+	}
 	s.routes()
 	return s, nil
 }
@@ -110,6 +133,9 @@ func (s *Server) routes() {
 	s.mux.Handle("DELETE /v1/admin/tokens/{id}", s.guard(auth.ScopeAdmin, s.handleRevokeToken))
 
 	s.mux.HandleFunc("POST /v1/pair", s.handlePair)
+	if s.oauth != nil {
+		s.oauth.Register(s.mux)
+	}
 	s.mux.Handle("/mcp", s.mcpHandler())
 	s.mux.HandleFunc("/", func(w http.ResponseWriter, _ *http.Request) { writeErr(w, http.StatusNotFound, "not found") })
 }
@@ -474,7 +500,11 @@ func (s *Server) mcpHandler() http.Handler {
 		return &sdkauth.TokenInfo{ // the SDK middleware compares Expiration with the real clock, so it must not use the injectable one
 			Scopes: []string{p.Scope}, Expiration: time.Now().Add(5 * time.Minute), UserID: p.TokenID, Extra: map[string]any{"ip": ip}}, nil
 	}
-	protected := sdkauth.RequireBearerToken(verifier, &sdkauth.RequireBearerTokenOptions{Scopes: []string{auth.ScopeRead}})(h)
+	opts := &sdkauth.RequireBearerTokenOptions{Scopes: []string{auth.ScopeRead}}
+	if s.oauth != nil {
+		opts.ResourceMetadataURL = s.oauth.ResourceMetadataURL() // 401s tell OAuth clients where to start
+	}
+	protected := sdkauth.RequireBearerToken(verifier, opts)(h)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ip := s.clientIP(r)
 		if !s.ipLimit.Allow(ip) || s.Auth.Blocked(ip) {
@@ -483,6 +513,23 @@ func (s *Server) mcpHandler() http.Handler {
 		}
 		protected.ServeHTTP(w, r)
 	})
+}
+
+// oauthAllow applies rate limits to the OAuth endpoints: registration and
+// consent attempts are expensive to abuse, so they get the strict bucket.
+func (s *Server) oauthAllow(w http.ResponseWriter, r *http.Request, bucket string) bool {
+	ip := s.clientIP(r)
+	ok := false
+	switch bucket {
+	case "register", "consent":
+		ok = s.pairLimit.Allow(bucket + "/" + ip)
+	default:
+		ok = s.ipLimit.Allow(ip)
+	}
+	if !ok {
+		tooMany(w)
+	}
+	return ok
 }
 
 // --- maintenance ---
@@ -494,6 +541,14 @@ func (s *Server) Maintain(ctx context.Context) {
 			s.Log.Error("audit prune failed", "err", err)
 		} else if n > 0 {
 			s.Log.Info("pruned audit log", "rows", n)
+		}
+		if s.oauth != nil {
+			now := s.Now()
+			if n, err := s.Store.PruneOAuth(ctx, now, now.Add(-7*24*time.Hour)); err != nil {
+				s.Log.Error("oauth prune failed", "err", err)
+			} else if n > 0 {
+				s.Log.Info("pruned oauth state", "rows", n)
+			}
 		}
 	}
 	prune()
