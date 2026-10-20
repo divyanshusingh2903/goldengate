@@ -20,3 +20,13 @@ credentials*
 .goldengate/
 coverage.out
 .claude/
+/bin/
+*.test
+*.out
+*.prof
+*.log
+# editor / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
