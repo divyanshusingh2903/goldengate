@@ -332,7 +332,10 @@ func (a *app) purgeCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			key := pathutil.Scrub(pathutil.Normalize(pathutil.ExpandHome(project, a.Home)), pathutil.Normalize(a.Home))
+			key := project
+			if !pathutil.IsVirtualKey(project) {
+				key = pathutil.Scrub(pathutil.Normalize(pathutil.ExpandHome(project, a.Home)), pathutil.Normalize(a.Home))
+			}
 			n, err := cl.DeleteProject(cmd.Context(), key)
 			if err != nil {
 				return err
@@ -342,11 +345,11 @@ func (a *app) purgeCmd() *cobra.Command {
 				return err
 			}
 			defer func() { _ = st.Close() }()
-			if err := st.ForgetProject(cmd.Context(), pathutil.Normalize(pathutil.ExpandHome(project, a.Home))); err != nil {
+			if err := st.ForgetProject(cmd.Context(), a.localKey(project)); err != nil {
 				return err
 			}
 			fmt.Fprintf(a.Stdout, "deleted %d session(s) of %s from the server.\n", n, key)
-			if m, err := a.matcher(cfg); err == nil && m.Decide(pathutil.Normalize(pathutil.ExpandHome(project, a.Home)), "").Shared {
+			if m, err := a.matcher(cfg); err == nil && m.Decide(a.localKey(project), "").Shared {
 				fmt.Fprintln(a.Stdout, "Note: this project is still shared, so the next sync uploads it again. Use `goldengate share remove` to stop sharing it.")
 			}
 			return nil

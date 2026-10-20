@@ -30,6 +30,8 @@ CREATE TABLE IF NOT EXISTS sessions(
   PRIMARY KEY(source, session_id));
 CREATE INDEX IF NOT EXISTS sessions_project ON sessions(project);
 CREATE TABLE IF NOT EXISTS tombstones(project TEXT PRIMARY KEY, created_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS imports(
+  id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT NOT NULL, path TEXT NOT NULL, added_at INTEGER NOT NULL, UNIQUE(source, path));
 `
 
 // OpenState opens (creating if needed) the state database at path. Use
@@ -144,4 +146,69 @@ func (s *State) ForgetProject(ctx context.Context, project string) error {
 		return fmt.Errorf("state: forget project: %w", err)
 	}
 	return nil
+}
+
+// Import is a registered chat-export archive (claude.ai, ChatGPT). The archive
+// stays where the user keeps it; only its path is remembered.
+type Import struct {
+	ID      int64
+	Source  string
+	Path    string
+	AddedAt time.Time
+}
+
+// AddImport remembers an archive. Adding the same one again is a no-op.
+func (s *State) AddImport(ctx context.Context, source, path string, now time.Time) error {
+	if _, err := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO imports(source, path, added_at) VALUES(?,?,?)`, source, path, now.Unix()); err != nil {
+		return fmt.Errorf("state: add import: %w", err)
+	}
+	return nil
+}
+
+// ListImports returns the registered archives, oldest first.
+func (s *State) ListImports(ctx context.Context) ([]Import, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT id, source, path, added_at FROM imports ORDER BY id`)
+	if err != nil {
+		return nil, fmt.Errorf("state: list imports: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []Import
+	for rows.Next() {
+		var i Import
+		var at int64
+		if err := rows.Scan(&i.ID, &i.Source, &i.Path, &at); err != nil {
+			return nil, fmt.Errorf("state: list imports: %w", err)
+		}
+		i.AddedAt = time.Unix(at, 0)
+		out = append(out, i)
+	}
+	return out, rows.Err()
+}
+
+// RemoveImport forgets an archive (the file itself is left alone).
+func (s *State) RemoveImport(ctx context.Context, id int64) (bool, error) {
+	res, err := s.db.ExecContext(ctx, `DELETE FROM imports WHERE id=?`, id)
+	if err != nil {
+		return false, fmt.Errorf("state: remove import: %w", err)
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
+}
+
+// SessionKeys lists the pushed sessions of a project, for per-session remote deletion.
+func (s *State) SessionKeys(ctx context.Context, project string) ([][2]string, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT source, session_id FROM sessions WHERE project=? ORDER BY source, session_id`, project)
+	if err != nil {
+		return nil, fmt.Errorf("state: session keys: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out [][2]string
+	for rows.Next() {
+		var k [2]string
+		if err := rows.Scan(&k[0], &k[1]); err != nil {
+			return nil, fmt.Errorf("state: session keys: %w", err)
+		}
+		out = append(out, k)
+	}
+	return out, rows.Err()
 }

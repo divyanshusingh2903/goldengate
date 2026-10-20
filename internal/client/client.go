@@ -151,6 +151,19 @@ func (c *Client) DeleteProject(ctx context.Context, project string) (int, error)
 	return out.Deleted, err
 }
 
+// DeleteSession removes one session from the server (source may be empty).
+func (c *Client) DeleteSession(ctx context.Context, source, id string) (int, error) {
+	var out struct {
+		Deleted int `json:"deleted"`
+	}
+	path := "/v1/sessions/" + url.PathEscape(id)
+	if source != "" {
+		path += "?source=" + url.QueryEscape(source)
+	}
+	err := c.do(ctx, http.MethodDelete, path, nil, &out)
+	return out.Deleted, err
+}
+
 // RemoteProject is what the server holds for a project.
 type RemoteProject struct {
 	Project      string         `json:"project"`

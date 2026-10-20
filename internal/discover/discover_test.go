@@ -9,6 +9,7 @@ import (
 	"github.com/OWNER/goldengate/internal/adapters"
 	"github.com/OWNER/goldengate/internal/discover"
 	"github.com/OWNER/goldengate/internal/model"
+	"github.com/OWNER/goldengate/internal/project"
 	"github.com/OWNER/goldengate/internal/selection"
 )
 
@@ -42,7 +43,7 @@ func TestGroupsAcrossToolsAndDecides(t *testing.T) {
 	_ = reg.Register(fake{"claude-code", []model.SessionRef{ref("claude-code", "1", "/h/a", time.Hour), ref("claude-code", "2", "/h/b", 2*time.Hour)}})
 	_ = reg.Register(fake{"codex", []model.SessionRef{ref("codex", "3", "/h/a", time.Minute)}})
 	m, _ := selection.New(selection.Policy{Allow: []string{"/h/a"}}, selection.Options{})
-	res, err := discover.Projects(context.Background(), &reg, m, time.Time{})
+	res, err := discover.Projects(context.Background(), &reg, m, time.Time{}, project.Resolver{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -55,5 +56,29 @@ func TestGroupsAcrossToolsAndDecides(t *testing.T) {
 	}
 	if res.Projects[1].Decision.Shared {
 		t.Fatal("b must not be shared")
+	}
+}
+
+func TestWorktreesGroupWithTheirRepository(t *testing.T) {
+	now := time.Now()
+	var reg adapters.Registry
+	_ = reg.Register(fake{"claude-code", []model.SessionRef{
+		{Source: "claude-code", ID: "1", ProjectKey: "/h/app", UpdatedAt: now},
+		{Source: "claude-code", ID: "2", ProjectKey: "/h/app/.claude/worktrees/fox", UpdatedAt: now},
+	}})
+	_ = reg.Register(fake{"opencode", []model.SessionRef{
+		{Source: "opencode", ID: "3", ProjectKey: "/h/app-wt", RepoRoot: "/h/app", UpdatedAt: now},
+	}})
+	m, _ := selection.New(selection.Policy{Default: "allow"}, selection.Options{})
+	res, err := discover.Projects(context.Background(), &reg, m, time.Time{}, project.Resolver{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	groups := map[string][]string{}
+	for _, p := range res.Projects {
+		groups[p.Group()] = append(groups[p.Group()], p.Key)
+	}
+	if len(groups) != 1 || len(groups["/h/app"]) != 3 {
+		t.Fatalf("worktrees from different tools must group under the repository: %v", groups)
 	}
 }

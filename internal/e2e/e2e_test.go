@@ -513,3 +513,58 @@ func TestInitExplainsOAuthOnlyWhenTheServerHasIt(t *testing.T) {
 		t.Errorf("the read token is still offered for header-capable clients:\n%s", out)
 	}
 }
+
+// addClaudeSession plants another Claude Code session with a different folder and prompt.
+func (l *laptop) addClaudeSession(id, cwd, prompt string) {
+	l.t.Helper()
+	data, err := os.ReadFile(fixture)
+	if err != nil {
+		l.t.Fatal(err)
+	}
+	body := strings.ReplaceAll(string(data), "/home/user/projects/demo", cwd)
+	body = strings.ReplaceAll(body, "please ship the widget", prompt)
+	dir := filepath.Join(l.claude, "projects", "-"+id)
+	_ = os.MkdirAll(dir, 0o755)
+	if err := os.WriteFile(filepath.Join(dir, id+".jsonl"), []byte(body), 0o600); err != nil {
+		l.t.Fatal(err)
+	}
+}
+
+func TestWorktreeSessionsShareTheirRepositoryProject(t *testing.T) {
+	b := startBridge(t)
+	l := newLaptop(t)
+	l.addClaudeSession("33333333-3333-4333-8333-333333333333", "/home/user/projects/demo/.claude/worktrees/fox", "worktree-only prompt WTMARK")
+	l.must(l.initEnv(b), "init", "--non-interactive")
+	l.must(nil, "share", "add", "~/projects/demo")
+	l.must(nil, "sync")
+
+	ps, _ := b.st.ListProjects(context.Background())
+	if len(ps) != 1 || ps[0].Project != "~/projects/demo" || ps[0].Sessions != 2 {
+		t.Fatalf("the worktree must be filed under its repository: %+v", ps)
+	}
+	if held := everythingTheServerHolds(t, b); strings.Contains(held, ".claude/worktrees") {
+		t.Error("the worktree path was sent")
+	}
+
+	// stop sharing only the worktree: just its sessions disappear from the server
+	l.must(nil, "share", "deny", "~/projects/demo/.claude/worktrees/fox", "--purge-remote")
+	if !strings.Contains(l.out.String(), "1 session(s) of ~/projects/demo/.claude/worktrees/fox") {
+		t.Errorf("per-session deletion should be reported:\n%s", l.out)
+	}
+	ps, _ = b.st.ListProjects(context.Background())
+	if len(ps) != 1 || ps[0].Sessions != 1 {
+		t.Fatalf("the repository's other session must stay: %+v", ps)
+	}
+	if held := everythingTheServerHolds(t, b); strings.Contains(held, "WTMARK") {
+		t.Error("the worktree's content survived its deletion")
+	}
+	l.must(nil, "sync")
+	if ps, _ = b.st.ListProjects(context.Background()); ps[0].Sessions != 1 {
+		t.Errorf("a denied worktree was uploaded again: %+v", ps)
+	}
+	// removing the repository removes the rest
+	l.must(nil, "share", "remove", "~/projects/demo", "--purge-remote")
+	if ps, _ = b.st.ListProjects(context.Background()); len(ps) != 0 {
+		t.Fatalf("%+v", ps)
+	}
+}

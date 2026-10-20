@@ -73,7 +73,7 @@ func Default() Config {
 	return Config{
 		Share: Share{
 			Default:        "deny",
-			IncludeSources: []string{"claude-code", "codex", "opencode"},
+			IncludeSources: []string{"claude-code", "codex", "opencode", "claude-ai", "chatgpt"},
 			Since:          "90d",
 			Level:          model.LevelSummary,
 		},

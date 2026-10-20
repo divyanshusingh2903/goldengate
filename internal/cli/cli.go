@@ -21,6 +21,8 @@ import (
 
 	"github.com/OWNER/goldengate/internal/adapters"
 	"github.com/OWNER/goldengate/internal/adapters/claudecode"
+	"github.com/OWNER/goldengate/internal/adapters/codex"
+	"github.com/OWNER/goldengate/internal/adapters/opencode"
 	"github.com/OWNER/goldengate/internal/config"
 	"github.com/OWNER/goldengate/internal/discover"
 	"github.com/OWNER/goldengate/internal/pathutil"
@@ -70,8 +72,10 @@ func DefaultDeps() Deps {
 // DefaultRegistry registers every adapter this build ships.
 func DefaultRegistry(_ string, _ func(string) string) (*adapters.Registry, error) {
 	var r adapters.Registry
-	if err := r.Register(claudecode.New(claudecode.Options{})); err != nil {
-		return nil, err
+	for _, ad := range []adapters.Adapter{claudecode.New(claudecode.Options{}), codex.New(codex.Options{}), opencode.New(opencode.Options{})} {
+		if err := r.Register(ad); err != nil {
+			return nil, err
+		}
 	}
 	return &r, nil
 }
@@ -97,12 +101,13 @@ func New(d Deps) *cobra.Command {
 	root.SetOut(d.Stdout)
 	root.SetErr(d.Stderr)
 	root.PersistentFlags().StringVar(&a.configPath, "config", "", "config file (default: XDG config dir)")
-	root.AddCommand(a.syncCmd(), a.shareCmd(), a.doctorCmd(), a.initCmd(), a.tokenCmd(), a.purgeCmd(), &cobra.Command{
+	root.AddCommand(a.syncCmd(), a.shareCmd(), a.doctorCmd(), a.initCmd(), a.tokenCmd(), a.purgeCmd(), a.importsCmd(), &cobra.Command{
 		Use: "version", Short: "Print the version",
 		Run: func(*cobra.Command, []string) {
 			fmt.Fprintln(a.Stdout, "goldengate", Version, runtime.GOOS+"/"+runtime.GOARCH)
 		},
 	})
+	root.AddCommand(a.importCmds()...)
 	return root
 }
 
@@ -145,7 +150,7 @@ func (a *app) syncCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			reg, err := a.NewRegistry(a.Home, a.Getenv)
+			reg, err := a.registry(cmd.Context())
 			if err != nil {
 				return err
 			}
@@ -165,7 +170,7 @@ func (a *app) syncCmd() *cobra.Command {
 				level = slog.LevelWarn
 			}
 			s := &gsync.Syncer{
-				Registry: reg, Config: cfg, Matcher: m, State: st, Home: a.Home, Now: a.Now,
+				Registry: reg, Config: cfg, Matcher: m, State: st, Home: a.Home, Now: a.Now, Resolver: a.resolver(cfg),
 				Log: slog.New(slog.NewTextHandler(a.Stderr, &slog.HandlerOptions{Level: level})),
 			}
 			var sink gsync.Sink = gsync.DryRunSink{W: a.Stdout}
@@ -253,18 +258,33 @@ func (a *app) shareCmd() *cobra.Command {
 
 // ruleFor turns a user-typed path into the form stored in the config:
 // home-relative with "~" when possible, glob characters left untouched.
+// Chat projects ("claude-ai:Chats") are not paths and are stored as typed.
 func (a *app) ruleFor(p string) string {
-	if strings.ContainsAny(p, "*?[{") {
+	if strings.ContainsAny(p, "*?[{") || pathutil.IsVirtualKey(p) {
 		return p
 	}
 	abs := pathutil.Normalize(pathutil.ExpandHome(p, a.Home))
 	return pathutil.Scrub(abs, pathutil.Normalize(a.Home))
 }
 
+// localKey is the project key sessions of this folder (or chat project) carry.
+func (a *app) localKey(p string) string {
+	if pathutil.IsVirtualKey(p) {
+		return p
+	}
+	return pathutil.Normalize(pathutil.ExpandHome(p, a.Home))
+}
+
 func sameRule(a *app, x, y string) bool {
+	if x == y {
+		return true
+	}
+	if pathutil.IsVirtualKey(x) || pathutil.IsVirtualKey(y) {
+		return false
+	}
 	nx := pathutil.Fold(pathutil.Normalize(pathutil.ExpandHome(x, a.Home)), pathutil.CaseInsensitiveFS())
 	ny := pathutil.Fold(pathutil.Normalize(pathutil.ExpandHome(y, a.Home)), pathutil.CaseInsensitiveFS())
-	return x == y || nx == ny
+	return nx == ny
 }
 
 func (a *app) shareAdd(ctx context.Context, p string) error {
@@ -283,7 +303,7 @@ func (a *app) shareAdd(ctx context.Context, p string) error {
 	if err := config.Save(a.cfgPath(), cfg); err != nil {
 		return err
 	}
-	if m, err := a.matcher(cfg); err == nil && m.Denied(pathutil.ExpandHome(p, a.Home)) {
+	if m, err := a.matcher(cfg); err == nil && m.Denied(a.localKey(p)) {
 		fmt.Fprintf(a.Stderr, "warning: %s is also matched by a deny rule; deny wins, nothing will be shared\n", rule)
 	}
 	st, err := a.openState()
@@ -291,7 +311,7 @@ func (a *app) shareAdd(ctx context.Context, p string) error {
 		return err
 	}
 	defer func() { _ = st.Close() }()
-	if err := st.ClearTombstone(ctx, pathutil.Normalize(pathutil.ExpandHome(p, a.Home))); err != nil {
+	if err := st.ClearTombstone(ctx, a.localKey(p)); err != nil {
 		return err
 	}
 	fmt.Fprintf(a.Stdout, "sharing %s\n", rule)
@@ -350,11 +370,11 @@ func (a *app) change(ctx context.Context, before config.Config, edit func(*confi
 	if err != nil {
 		return err
 	}
-	reg, err := a.NewRegistry(a.Home, a.Getenv)
+	reg, err := a.registry(ctx)
 	if err != nil {
 		return err
 	}
-	found, err := discover.Projects(ctx, reg, mBefore, time.Time{})
+	found, err := discover.Projects(ctx, reg, mBefore, time.Time{}, a.resolver(before))
 	if err != nil {
 		return err
 	}
@@ -366,27 +386,77 @@ func (a *app) change(ctx context.Context, before config.Config, edit func(*confi
 		return err
 	}
 	defer func() { _ = st.Close() }()
-	var unshared []string
-	for _, p := range found.Projects {
-		if mBefore.Decide(p.Key, "").Shared && !mAfter.Decide(p.Key, "").Shared {
-			if err := st.Tombstone(ctx, p.Key, a.Now()); err != nil {
-				return err
-			}
-			unshared = append(unshared, pathutil.Scrub(p.Key, a.Home))
-		}
+	targets, err := a.unshare(ctx, st, found.Projects, mBefore, mAfter)
+	if err != nil {
+		return err
 	}
 	fmt.Fprintln(a.Stdout, msg)
-	if len(unshared) == 0 {
+	if len(targets) == 0 {
 		return nil
 	}
-	fmt.Fprintf(a.Stdout, "%d project(s) un-shared; they will never be sent again.\n", len(unshared))
-	return a.offerRemoteDelete(ctx, before, unshared, purge)
+	fmt.Fprintf(a.Stdout, "%d project(s) un-shared; they will never be sent again.\n", len(targets))
+	return a.offerRemoteDelete(ctx, before, targets, purge)
+}
+
+// remoteTarget is what to delete from the server for one un-shared project.
+type remoteTarget struct {
+	Label    string      // shown to the user
+	Project  string      // delete this whole server project, or ...
+	Sessions [][2]string // ... just these (source, id) pairs when the server project is shared with others
+}
+
+// unshare tombstones every project that stops being shared and works out what
+// the server holds for it. A worktree is filed under its repository root; if
+// the root stays shared, only that worktree's sessions are deleted, otherwise
+// the whole server project goes (and any still-shared sibling filed under it
+// is forgotten locally so its sessions upload again).
+func (a *app) unshare(ctx context.Context, st *gsync.State, projects []discover.Project, before, after *selection.Matcher) ([]remoteTarget, error) {
+	served := func(p discover.Project) string {
+		if p.Root != "" && before.Decide(p.Root, "").Shared {
+			return p.Root
+		}
+		return p.Key
+	}
+	var targets []remoteTarget
+	wholeDeleted := map[string]bool{}
+	for _, p := range projects {
+		if !before.Decide(p.Key, "").Shared || after.Decide(p.Key, "").Shared {
+			continue
+		}
+		srv := served(p)
+		keys, err := st.SessionKeys(ctx, p.Key) // before the tombstone forgets them
+		if err != nil {
+			return nil, err
+		}
+		if err := st.Tombstone(ctx, p.Key, a.Now()); err != nil {
+			return nil, err
+		}
+		if srv != p.Key && after.Decide(srv, "").Shared {
+			if len(keys) > 0 {
+				targets = append(targets, remoteTarget{Label: fmt.Sprintf("%d session(s) of %s", len(keys), pathutil.Scrub(p.Key, a.Home)), Sessions: keys})
+			}
+			continue
+		}
+		scrubbed := pathutil.Scrub(srv, a.Home)
+		if !wholeDeleted[scrubbed] {
+			wholeDeleted[scrubbed] = true
+			targets = append(targets, remoteTarget{Label: scrubbed, Project: scrubbed})
+		}
+	}
+	for _, q := range projects { // siblings that stay shared but were filed under a project we are deleting
+		if after.Decide(q.Key, "").Shared && wholeDeleted[pathutil.Scrub(served(q), a.Home)] {
+			if err := st.ForgetProject(ctx, q.Key); err != nil {
+				return nil, err
+			}
+		}
+	}
+	return targets, nil
 }
 
 // offerRemoteDelete deletes un-shared projects from the server when asked
 // to (or when the user answers yes). Failures are reported, not fatal: the
 // local un-share has already happened.
-func (a *app) offerRemoteDelete(ctx context.Context, cfg config.Config, projects []string, purge string) error {
+func (a *app) offerRemoteDelete(ctx context.Context, cfg config.Config, targets []remoteTarget, purge string) error {
 	if cfg.Server.URL == "" {
 		return nil
 	}
@@ -396,7 +466,7 @@ func (a *app) offerRemoteDelete(ctx context.Context, cfg config.Config, projects
 			fmt.Fprintln(a.Stdout, "Data already on the server was left in place. Delete it with: goldengate purge --project PATH (or rerun with --purge-remote).")
 			return nil
 		}
-		ans, err := a.prompt(fmt.Sprintf("Also delete %d project(s) from the server? [y/N] ", len(projects)))
+		ans, err := a.prompt(fmt.Sprintf("Also delete %d project(s) from the server? [y/N] ", len(targets)))
 		if err != nil || !strings.EqualFold(strings.TrimSpace(ans), "y") {
 			fmt.Fprintln(a.Stdout, "Data already on the server was left in place.")
 			return nil
@@ -410,13 +480,26 @@ func (a *app) offerRemoteDelete(ctx context.Context, cfg config.Config, projects
 		fmt.Fprintf(a.Stderr, "could not delete remote data: %v\n", err)
 		return nil
 	}
-	for _, p := range projects {
-		n, err := cl.DeleteProject(ctx, p)
-		if err != nil {
-			fmt.Fprintf(a.Stderr, "could not delete %s from the server: %v\n", p, err)
+	for _, t := range targets {
+		if t.Project != "" {
+			n, err := cl.DeleteProject(ctx, t.Project)
+			if err != nil {
+				fmt.Fprintf(a.Stderr, "could not delete %s from the server: %v\n", t.Label, err)
+				continue
+			}
+			fmt.Fprintf(a.Stdout, "deleted %s from the server (%d sessions)\n", t.Label, n)
 			continue
 		}
-		fmt.Fprintf(a.Stdout, "deleted %s from the server (%d sessions)\n", p, n)
+		n := 0
+		for _, k := range t.Sessions {
+			d, err := cl.DeleteSession(ctx, k[0], k[1])
+			if err != nil {
+				fmt.Fprintf(a.Stderr, "could not delete a session of %s: %v\n", t.Label, err)
+				continue
+			}
+			n += d
+		}
+		fmt.Fprintf(a.Stdout, "deleted %s from the server (%d sessions)\n", t.Label, n)
 	}
 	return nil
 }
@@ -442,7 +525,7 @@ func (a *app) shareListCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			reg, err := a.NewRegistry(a.Home, a.Getenv)
+			reg, err := a.registry(c.Context())
 			if err != nil {
 				return err
 			}
@@ -450,7 +533,7 @@ func (a *app) shareListCmd() *cobra.Command {
 			if d, err := config.ParseSince(cfg.Share.Since); err == nil && d > 0 {
 				since = a.Now().Add(-d)
 			}
-			res, err := discover.Projects(c.Context(), reg, m, since)
+			res, err := discover.Projects(c.Context(), reg, m, since, a.resolver(cfg))
 			if err != nil {
 				return err
 			}
@@ -462,8 +545,12 @@ func (a *app) shareListCmd() *cobra.Command {
 				} else if m.Denied(p.Key) {
 					mark = "[-]"
 				}
-				fmt.Fprintf(w, "%s %-50s %4d sessions  last %s  (%s)\n", mark, pathutil.Scrub(p.Key, a.Home), p.Sessions,
-					p.LastActivity.Local().Format("2006-01-02"), p.Decision.Reason)
+				extra := ""
+				if p.Root != "" {
+					extra = "  worktree of " + pathutil.Scrub(p.Root, a.Home)
+				}
+				fmt.Fprintf(w, "%s %-50s %4d sessions  last %s  (%s)%s\n", mark, pathutil.Scrub(p.Key, a.Home), p.Sessions,
+					p.LastActivity.Local().Format("2006-01-02"), p.Decision.Reason, extra)
 			}
 			for _, wn := range res.Warnings {
 				fmt.Fprintln(a.Stderr, "warning:", wn)
@@ -518,7 +605,7 @@ func (a *app) doctorCmd() *cobra.Command {
 				_ = st.Close()
 				fmt.Fprintf(w, "state   ok    %s (%d sessions recorded)\n", a.dirs().StatePath(), n)
 			}
-			reg, err := a.NewRegistry(a.Home, a.Getenv)
+			reg, err := a.registry(c.Context())
 			if err != nil {
 				return err
 			}
