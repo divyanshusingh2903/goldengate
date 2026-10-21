@@ -6,6 +6,7 @@
 package sync
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -290,6 +291,7 @@ func (s *Syncer) Plan(ctx context.Context, o RunOpts) (Batch, Report, error) {
 				return b, rep, err
 			}
 			mtime := ref.UpdatedAt.UnixNano()
+			resum := false
 			if seen && prev.Size == ref.SizeBytes && prev.MTimeNS == mtime {
 				stale := s.Summarizer != nil && staleSummary(prev.Payload, s.Summarizer.Name())
 				if !stale || !o.Resummarize {
@@ -300,6 +302,7 @@ func (s *Syncer) Plan(ctx context.Context, o RunOpts) (Batch, Report, error) {
 					continue
 				}
 				rep.Resummarized++
+				resum = true
 			}
 			raw, err := a.Load(ctx, ref)
 			if err != nil {
@@ -311,7 +314,7 @@ func (s *Syncer) Plan(ctx context.Context, o RunOpts) (Batch, Report, error) {
 				return b, rep, fmt.Errorf("sync: load: %w", err)
 			}
 			rep.Warnings += len(raw.Warnings)
-			if err := pool.add(job{raw: raw, ref: ref, prev: prev, seen: seen, mtime: mtime}); err != nil {
+			if err := pool.add(job{raw: raw, ref: ref, prev: prev, seen: seen, mtime: mtime, resummarize: resum}); err != nil {
 				return b, rep, err
 			}
 		}
@@ -324,7 +327,10 @@ func (s *Syncer) Plan(ctx context.Context, o RunOpts) (Batch, Report, error) {
 	for _, j := range jobs {
 		{
 			p, ref, prev, seen, mtime := j.payload, j.ref, j.prev, j.seen, j.mtime
-			if seen && prev.ContentHash == p.ContentHash {
+			body, _ := json.Marshal(p)
+			// the fingerprint covers the conversation, not the summary: a
+			// re-summarized session is sent when its payload came out different
+			if seen && prev.ContentHash == p.ContentHash && (!j.resummarize || bytes.Equal(body, prev.Payload)) {
 				// same content, only the file's stat changed: remember the new stat, send nothing
 				prev.Size, prev.MTimeNS = ref.SizeBytes, mtime
 				b.refresh = append(b.refresh, prev)
@@ -335,7 +341,6 @@ func (s *Syncer) Plan(ctx context.Context, o RunOpts) (Batch, Report, error) {
 				rep.Redactions[k] += n
 			}
 			s.log().Debug("planned", "adapter", ref.Source, "session", ref.ID, "redactions", p.Redactions)
-			body, _ := json.Marshal(p)
 			b.items = append(b.items, planned{payload: p, entry: Entry{
 				Source: ref.Source, SessionID: ref.ID, Project: ref.ProjectKey, ContentHash: p.ContentHash,
 				Size: ref.SizeBytes, MTimeNS: mtime, Payload: body,
@@ -372,6 +377,8 @@ type job struct {
 	seen    bool
 	mtime   int64
 	payload *model.SessionPayload
+	// resummarize sends the session even though its conversation is unchanged
+	resummarize bool
 }
 
 // buildPool summarizes sessions while the plan keeps listing them: with a

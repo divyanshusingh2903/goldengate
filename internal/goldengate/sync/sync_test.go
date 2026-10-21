@@ -57,8 +57,9 @@ func (f *fake) Load(_ context.Context, ref model.SessionRef) (*model.RawSession,
 
 func sess(id, project, prompt string) model.RawSession {
 	return model.RawSession{
-		Ref:   model.SessionRef{Source: "claude-code", ID: id, ProjectKey: project, StartedAt: t0, SizeBytes: 10},
-		Turns: []model.Turn{{Role: "user", Text: prompt, Time: t0}, {Role: "assistant", LastText: "ok", Text: "ok", Time: t0.Add(time.Minute)}},
+		Ref: model.SessionRef{Source: "claude-code", ID: id, ProjectKey: project, StartedAt: t0, SizeBytes: 10},
+		Turns: []model.Turn{{Role: "user", Text: prompt, Time: t0}, {Role: "assistant", LastText: "ok", Text: "I looked at the code, made the change the prompt asked for, ran the tests and they pass. " +
+			"The work is committed; nothing else is left for this request.", Time: t0.Add(time.Minute)}},
 	}
 }
 
@@ -351,6 +352,7 @@ func TestPreviewWorksBeforeSharingAndTracksChanges(t *testing.T) {
 		}
 	}
 	e.f.sessions[1].Turns[0].Text = "second session, now different"
+	e.f.sessions[1].Ref.SizeBytes++ // an edit grows the file
 	pr, _ = e.s.Preview(ctx, "/home/u/code/app", 10)
 	var changed *gsync.PreviewItem
 	for i := range pr.Items {

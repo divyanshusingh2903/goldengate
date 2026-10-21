@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/llm"
@@ -90,6 +91,9 @@ func (o *ModelOptions) apply(s *model.RawSession, rd *redact.Redactor, r *scoped
 	if o.Client == nil {
 		return
 	}
+	if trivial(s) {
+		return // too little to summarize: a model would invent work; the rules' summary stays
+	}
 	input := modelInput(s, rd, sum, o.MaxInputChars)
 	if input == "" {
 		return
@@ -137,7 +141,7 @@ func (o *ModelOptions) apply(s *model.RawSession, rd *redact.Redactor, r *scoped
 		sum.Goals = g
 	}
 	sum.Description = list(a.Description)
-	sum.OpenProblems = head(list(a.OpenProblems), maxOpenProblems)
+	sum.OpenProblems = head(realProblems(list(a.OpenProblems)), maxOpenProblems)
 	// Outcomes stay as the rules found them in the command results.
 	sum.SummarizedBy = o.Client.Name()
 }
@@ -151,6 +155,35 @@ func (o *ModelOptions) fail(err error) {
 func cacheKey(name, input string) string {
 	h := sha256.Sum256([]byte(promptVersion + "\x00" + name + "\x00" + input))
 	return hex.EncodeToString(h[:])
+}
+
+// minConversationChars is the least conversation worth a model call.
+const minConversationChars = 120
+
+// trivial reports a session with too little conversation for a model: a
+// greeting, a one-word prompt, a tool's own probe.
+func trivial(s *model.RawSession) bool {
+	n := 0
+	for _, t := range s.Turns {
+		if t.Role == "user" || t.Role == "assistant" {
+			n += len(strings.TrimSpace(t.Text))
+		}
+	}
+	return n < minConversationChars
+}
+
+// noProblem matches a model saying there is nothing to report, which small
+// models tend to write into the list instead of leaving it empty.
+var noProblem = regexp.MustCompile(`(?i)^\W*(none|n/?a|nothing|no (open |outstanding |specific |known )?(problems?|issues?)\b)|does not mention|doesn't mention|no (open |outstanding )?(problems?|issues?) (were |are )?(mentioned|identified|reported|left)`)
+
+func realProblems(in []string) []string {
+	var out []string
+	for _, p := range in {
+		if !noProblem.MatchString(p) {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // maxTurnChars bounds one message so a pasted log cannot crowd out the rest.

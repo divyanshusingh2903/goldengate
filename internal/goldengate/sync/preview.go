@@ -97,7 +97,9 @@ func (s *Syncer) Preview(ctx context.Context, project string, limit int) (Previe
 			return res, err
 		} else if ok {
 			it.Status = PreviewChanged
-			if prev.ContentHash == p.ContentHash {
+			// the same test a sync makes: an untouched file, or the same conversation
+			untouched := prev.Size == f.ref.SizeBytes && prev.MTimeNS == f.ref.UpdatedAt.UnixNano()
+			if untouched || prev.ContentHash == p.ContentHash {
 				it.Status = PreviewUnchanged
 			}
 			var old model.SessionPayload

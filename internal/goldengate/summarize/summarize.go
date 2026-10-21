@@ -96,7 +96,7 @@ func Build(s *model.RawSession, o Options) (*model.SessionPayload, error) {
 		p.WorkItems = workItems(s, o.Work, r)
 	}
 	p.Redactions = model.Redactions(r.counts)
-	h, err := hash(p)
+	h, err := fingerprint(s, p)
 	if err != nil {
 		return nil, err
 	}
@@ -455,14 +455,29 @@ var reURLCreds = regexp.MustCompile(`^([a-z][a-z0-9+.\-]*://)[^/@\s]*@`)
 
 func stripURLCreds(u string) string { return reURLCreds.ReplaceAllString(u, "$1") }
 
-// hash is the idempotency key: it covers everything that would be sent.
-func hash(p *model.SessionPayload) (string, error) {
-	cp := *p
-	cp.ContentHash = ""
-	cp.Redactions = nil
-	b, err := json.Marshal(cp)
+// fingerprint is the idempotency key: a hash of the session as the tool
+// recorded it, plus where and at what level it is shared. It never covers the
+// summary, which a model may write differently each time, so a session is
+// resent only when its conversation changed. The file's stat (size, mtime) and
+// parse warnings are left out: touching a file is not a change.
+func fingerprint(s *model.RawSession, p *model.SessionPayload) (string, error) {
+	b, err := json.Marshal(struct {
+		Level         string
+		Source, ID    string
+		Project       string
+		StartedAt     time.Time
+		Title         string
+		Turns         []model.Turn
+		FilesTouched  []string
+		ToolsUsed     map[string]int
+		SourceVersion string
+		GitBranch     string
+		GitRemote     string
+		Events        []model.HarnessEvent
+	}{p.Level, s.Ref.Source, s.Ref.ID, p.Project, s.Ref.StartedAt, s.Title, s.Turns, s.FilesTouched, s.ToolsUsed,
+		s.SourceVersion, s.GitBranch, s.GitRemote, s.Events})
 	if err != nil {
-		return "", fmt.Errorf("summarize: hash: %w", err)
+		return "", fmt.Errorf("summarize: fingerprint: %w", err)
 	}
 	sum := sha256.Sum256(b)
 	return hex.EncodeToString(sum[:]), nil
