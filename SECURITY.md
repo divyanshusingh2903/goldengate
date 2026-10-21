@@ -36,6 +36,7 @@ By default summaries are written locally by fixed rules and no model is involved
 - Repeated bad tokens lock an address out for a few minutes. Per-address and per-token rate limits apply. Failure counters and limits are held in memory per instance: on a multi-instance deployment each instance counts separately.
 - Behind a TLS-terminating proxy, run with `--behind-tls-proxy` (and `--proxy-hops`). Without it `X-Forwarded-For` is ignored, so it cannot be used to dodge the lockout.
 - The server refuses to start without credentials, and refuses plain HTTP on a non-loopback address unless TLS is configured or `--behind-tls-proxy` is given. The client refuses plain `http://` servers except on loopback and never follows redirects.
+- `/mcp` refuses a request whose `Origin` header names a browser origin it does not trust (403, before the token is checked), so a web page cannot reach it by DNS rebinding. Only the `--public-url` origin and origins given with `--allowed-origin` are trusted; requests without an `Origin` header, which is how assistants and CLIs connect, are unaffected.
 - The audit log records token id, scope, action, project key, time and source address. Never payload content. Default retention is 90 days.
 
 ## OAuth (optional, `serve --oauth`)
