@@ -207,6 +207,7 @@ type event struct {
 	Cwd         string          `json:"cwd"`
 	GitBranch   string          `json:"gitBranch"`
 	Version     string          `json:"version"`
+	Entrypoint  string          `json:"entrypoint"`
 	Message     *message        `json:"message"`
 	CustomTitle string          `json:"customTitle"`
 	PRNumber    int             `json:"prNumber"`
@@ -292,6 +293,9 @@ func (a *Adapter) Load(ctx context.Context, ref model.SessionRef) (*model.RawSes
 }
 
 func (a *Adapter) apply(s *model.RawSession, ev *event, pend map[string]callRef, skipped map[string]int) {
+	if ev.Entrypoint == "sdk-cli" {
+		s.Origin = model.OriginCLI // claude -p, or an app calling Claude Code headless
+	}
 	if ev.Version != "" {
 		if s.SourceVersion == "" {
 			s.SourceVersion = ev.Version

@@ -97,10 +97,11 @@ type envelope struct {
 }
 
 type sessionMeta struct {
-	ID         string `json:"id"`
-	Timestamp  string `json:"timestamp"`
-	Cwd        string `json:"cwd"`
-	CLIVersion string `json:"cli_version"`
+	ID         string          `json:"id"`
+	Timestamp  string          `json:"timestamp"`
+	Cwd        string          `json:"cwd"`
+	CLIVersion string          `json:"cli_version"`
+	Source     json.RawMessage `json:"source"` // "cli", "vscode", "exec", … (an object for sub-agents)
 	Git        struct {
 		Branch string `json:"branch"`
 		Remote string `json:"repository_url"`
@@ -312,6 +313,9 @@ func (a *Adapter) apply(s *model.RawSession, env *envelope, pend map[string]pend
 			return
 		}
 		s.SourceVersion = m.CLIVersion
+		if string(m.Source) == `"exec"` {
+			s.Origin = model.OriginCLI // codex exec
+		}
 		s.GitBranch = m.Git.Branch
 		s.GitRemote = stripCredentials(m.Git.Remote)
 		if m.CLIVersion != "" && !testedVersion(m.CLIVersion) {

@@ -79,6 +79,7 @@ func Build(s *model.RawSession, o Options) (*model.SessionPayload, error) {
 		SessionID: s.Ref.ID,
 		Project:   pathutil.Scrub(firstNonEmpty(o.ProjectKey, s.Ref.ProjectKey), o.Home),
 		Level:     level,
+		Origin:    s.Origin,
 	}
 	p.StartedAt, p.UpdatedAt = activityWindow(s)
 
@@ -471,11 +472,12 @@ func fingerprint(s *model.RawSession, p *model.SessionPayload) (string, error) {
 		FilesTouched  []string
 		ToolsUsed     map[string]int
 		SourceVersion string
+		Origin        string
 		GitBranch     string
 		GitRemote     string
 		Events        []model.HarnessEvent
 	}{p.Level, s.Ref.Source, s.Ref.ID, p.Project, s.Ref.StartedAt, s.Title, s.Turns, s.FilesTouched, s.ToolsUsed,
-		s.SourceVersion, s.GitBranch, s.GitRemote, s.Events})
+		s.SourceVersion, s.Origin, s.GitBranch, s.GitRemote, s.Events})
 	if err != nil {
 		return "", fmt.Errorf("summarize: fingerprint: %w", err)
 	}

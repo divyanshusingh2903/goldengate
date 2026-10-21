@@ -261,3 +261,18 @@ func FuzzLoad(f *testing.F) {
 		_, _ = codex.New(codex.Options{CodexHome: t.TempDir()}).Load(context.Background(), model.SessionRef{ID: "s", Path: p, ProjectKey: "/p"})
 	})
 }
+
+func TestExecRunIsTaggedCLI(t *testing.T) {
+	for src, want := range map[string]string{"cli": "", "vscode": "", "exec": model.OriginCLI} {
+		a, dst := install(t, "0.15x/basic.jsonl")
+		data, _ := os.ReadFile(dst)
+		if err := os.WriteFile(dst, []byte(strings.Replace(string(data), `"source":"cli"`, `"source":"`+src+`"`, 1)), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		refs, _ := list(t, a)
+		s, err := a.Load(context.Background(), refs[0])
+		if err != nil || s.Origin != want {
+			t.Errorf("source %s: origin %q, want %q (%v)", src, s.Origin, want, err)
+		}
+	}
+}

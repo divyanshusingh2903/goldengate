@@ -1044,6 +1044,9 @@ func (m *Model) cardLines(w, h, x0 int) []string {
 			if (r.State == Shared || r.State == Partial) && r.Synced > 0 {
 				tag = map[string]string{"new": m.th.Added.Render(" · new"), "changed": m.th.Changed.Render(" · changed")}[it.Status]
 			}
+			if it.Payload.Origin != "" {
+				tag = m.th.Dim.Render(" · "+it.Payload.Origin) + tag // started by a command, not a chat
+			}
 			tg := m.tag(it.Source)
 			add(" " + tg + " " + clip(titleOf(&it.Payload), w-5-lipgloss.Width(tg)-lipgloss.Width(tag)) + tag)
 		}

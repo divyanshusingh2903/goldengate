@@ -44,6 +44,7 @@ func TestValidateRejects(t *testing.T) {
 		"ancient time":       func(p *SessionPayload) { p.StartedAt = time.Date(1990, 1, 1, 0, 0, 0, 0, time.UTC) },
 		"bad hash":           func(p *SessionPayload) { p.ContentHash = "xyz" },
 		"unknown level":      func(p *SessionPayload) { p.Level = "full" },
+		"unknown origin":     func(p *SessionPayload) { p.Origin = "robot" },
 		"summary missing":    func(p *SessionPayload) { p.Summary = nil },
 		"too many items":     func(p *SessionPayload) { p.WorkItems = make([]WorkItem, MaxWorkItemCount+1) },
 		"bad kind":           func(p *SessionPayload) { p.WorkItems[0].Kind = "script" },

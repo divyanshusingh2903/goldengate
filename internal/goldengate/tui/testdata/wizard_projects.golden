@@ -19,7 +19,7 @@
 │                                                │ Recent sessions (not sent)                      │
 │                                                │  CC Fix OAuth redirect mismatch                 │
 │                                                │  CX Add gRPC health checks                      │
-│                                                │  CC Refactor token store                        │
+│                                                │  CC Refactor token store · cli                  │
 │                                                │ 2 secret(s) redacted before sending             │
 │                                                │                                                 │
 │                                                │                                                 │

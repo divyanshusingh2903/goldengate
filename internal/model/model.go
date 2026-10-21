@@ -80,6 +80,7 @@ type RawSession struct {
 	FilesTouched  []string // project-relative where possible
 	ToolsUsed     map[string]int
 	SourceVersion string // version of the tool that wrote the session, if recorded
+	Origin        string // how the session was started: "" for a chat, OriginCLI for a scripted run
 	GitBranch     string
 	GitRemote     string // credentials stripped
 	Events        []HarnessEvent

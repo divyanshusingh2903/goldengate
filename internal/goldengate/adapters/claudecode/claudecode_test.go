@@ -266,3 +266,18 @@ func FuzzLoad(f *testing.F) {
 }
 
 func timeFar() (t time.Time) { return time.Now().Add(24 * time.Hour) }
+
+func TestHeadlessRunIsTaggedCLI(t *testing.T) {
+	for entry, want := range map[string]string{"claude-desktop": "", "sdk-cli": model.OriginCLI} {
+		a, dst := install(t, "2.1/basic.jsonl", "-p")
+		data, _ := os.ReadFile(dst)
+		if err := os.WriteFile(dst, []byte(strings.ReplaceAll(string(data), `"entrypoint":"claude-desktop"`, `"entrypoint":"`+entry+`"`)), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		refs, _ := list(t, a)
+		s, err := a.Load(context.Background(), refs[0])
+		if err != nil || s.Origin != want {
+			t.Errorf("entrypoint %s: origin %q, want %q (%v)", entry, s.Origin, want, err)
+		}
+	}
+}

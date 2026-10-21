@@ -78,6 +78,9 @@ func (p *SessionPayload) Validate(now time.Time) error {
 	if err := CheckText("project", p.Project, MaxProjectLen); err != nil {
 		return err
 	}
+	if p.Origin != "" && p.Origin != OriginCLI {
+		return fmt.Errorf("origin: unsupported %q", p.Origin)
+	}
 	switch p.Level {
 	case LevelSummary, LevelTitlesOnly:
 	default:

@@ -104,7 +104,7 @@ func (f *fakeBackend) samplePreview() Preview {
 		return PreviewItem{Source: src, ID: id, Updated: ago(2 * time.Hour), Status: st, Payload: p, Diff: diff,
 			JSON: fmt.Sprintf("{\n  \"source\": %q,\n  \"session_id\": %q,\n  \"summary\": {\n    \"title\": %q,\n    \"last_assistant\": \"Fixed. Key was [REDACTED:aws-access-key] in the log.\"\n  }\n}", src, id, title)}
 	}
-	return Preview{Key: "/home/u/code/pharmfindr", Level: "summary", Total: 47, Redactions: map[string]int{"aws-access-key": 2},
+	pv := Preview{Key: "/home/u/code/pharmfindr", Level: "summary", Total: 47, Redactions: map[string]int{"aws-access-key": 2},
 		Items: []PreviewItem{
 			mk("claude-code", "s-0001", "Fix OAuth redirect mismatch", "The login redirect fails on staging", "changed", []string{`title: "Fix OAuth redirect" -> "Fix OAuth redirect mismatch"`, "+ file auth/redirect_test.go"},
 				model.WorkItem{Kind: "commit", Key: "pharmfindr@abc1234", Status: "created", Evidence: []model.Evidence{{Via: "tool_result"}}},
@@ -112,6 +112,8 @@ func (f *fakeBackend) samplePreview() Preview {
 			mk("codex", "s-0002", "Add gRPC health checks", "Expose /healthz over gRPC", "new", nil),
 			mk("claude-code", "s-0003", "Refactor token store", "", "unchanged", nil),
 		}}
+	pv.Items[2].Payload.Origin = model.OriginCLI // started by a command
+	return pv
 }
 
 func (f *fakeBackend) rowIndex(key string) int {

@@ -121,6 +121,12 @@ func TestHashStableAndSensitive(t *testing.T) {
 	if d.ContentHash == a.ContentHash {
 		t.Fatal("hash must change with level")
 	}
+	s = session()
+	s.Origin = model.OriginCLI
+	e, _ := Build(s, Options{})
+	if e.Origin != model.OriginCLI || e.ContentHash == a.ContentHash {
+		t.Fatal("the origin is carried to the payload and is part of the hash")
+	}
 }
 
 func TestBuildDoesNotMutateSession(t *testing.T) {

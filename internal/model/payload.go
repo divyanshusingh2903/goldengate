@@ -7,6 +7,10 @@ const (
 	LevelTitlesOnly = "titles-only"
 	LevelSummary    = "summary"
 	LevelFull       = "full"
+
+	// OriginCLI marks a session started by a command (claude -p, codex exec,
+	// an app's background call) rather than typed into a chat.
+	OriginCLI = "cli"
 )
 
 // Summary is the compact, redacted description of one session. A coding
@@ -66,6 +70,7 @@ type SessionPayload struct {
 	SessionID   string     `json:"session_id"`
 	Project     string     `json:"project"` // scrubbed project key, e.g. ~/code/foo
 	Level       string     `json:"level"`
+	Origin      string     `json:"origin,omitempty"` // OriginCLI, or empty for a chat
 	StartedAt   time.Time  `json:"started_at"`
 	UpdatedAt   time.Time  `json:"updated_at"`
 	Summary     *Summary   `json:"summary,omitempty"` // nil at titles-only except Title

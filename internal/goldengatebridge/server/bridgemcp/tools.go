@@ -136,6 +136,7 @@ type SessionView struct {
 	Title        string   `json:"title"`
 	UpdatedAt    string   `json:"updated_at"`
 	Level        string   `json:"level"`
+	Origin       string   `json:"origin,omitempty"` // "cli": started by a command, not a chat
 	Goals        []string `json:"goals,omitempty"`
 	Description  []string `json:"description,omitempty"` // what was done, one entry per task
 	Outcomes     []string `json:"outcomes,omitempty"`
@@ -150,7 +151,7 @@ type SessionView struct {
 
 func viewOf(r store.SessionRecord, full bool) SessionView {
 	p := r.Payload
-	v := SessionView{ID: p.SessionID, Source: p.Source, Project: p.Project, UpdatedAt: ts(p.UpdatedAt), Level: p.Level, Title: p.TitleOnly}
+	v := SessionView{ID: p.SessionID, Source: p.Source, Project: p.Project, UpdatedAt: ts(p.UpdatedAt), Level: p.Level, Origin: p.Origin, Title: p.TitleOnly}
 	if sm := p.Summary; sm != nil {
 		// older records carry goal/outcome/last_assistant; the accessors read either
 		v.Title, v.Outcomes, v.GitBranch = sm.Title, sm.OutcomeList(), sm.GitBranch
@@ -165,7 +166,11 @@ func viewOf(r store.SessionRecord, full bool) SessionView {
 
 func sessionLines(now time.Time, v SessionView, detail bool) []string {
 	updated, _ := time.Parse(time.RFC3339, v.UpdatedAt)
-	l := []string{fmt.Sprintf("- [%s] %s (%s, %s) id=%s", clean(v.Source), clean(v.Title), ago(now, updated), clean(v.Project), clean(v.ID))}
+	src := clean(v.Source)
+	if v.Origin != "" {
+		src += ", " + clean(v.Origin)
+	}
+	l := []string{fmt.Sprintf("- [%s] %s (%s, %s) id=%s", src, clean(v.Title), ago(now, updated), clean(v.Project), clean(v.ID))}
 	list := func(name string, vs []string) {
 		for _, x := range vs {
 			l = append(l, "    "+name+": "+clean(x))
