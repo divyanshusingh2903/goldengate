@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -836,5 +837,116 @@ func TestBadAllowedOriginStopsStartup(t *testing.T) {
 		if _, err := server.New(server.Config{Store: st, Auth: au, AllowedOrigins: []string{bad}}); err == nil {
 			t.Errorf("allowed origin %q accepted", bad)
 		}
+	}
+}
+
+// rpcError is the error half of a JSON-RPC response.
+type rpcError struct {
+	ID    json.RawMessage `json:"id"`
+	Error *struct {
+		Code int `json:"code"`
+		Data struct {
+			Supported []string `json:"supported"`
+			Requested string   `json:"requested"`
+		} `json:"data"`
+	} `json:"error"`
+}
+
+func (e *env) mcpRaw(token, body string, headers map[string]string) (int, rpcError, string) {
+	e.t.Helper()
+	req, _ := http.NewRequestWithContext(context.Background(), "POST", e.ts.URL+"/mcp", strings.NewReader(body))
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	for k, v := range headers {
+		req.Header.Set(k, v)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	b, _ := io.ReadAll(resp.Body)
+	var r rpcError
+	if strings.HasPrefix(resp.Header.Get("Content-Type"), "application/json") {
+		_ = json.Unmarshal(b, &r)
+	}
+	return resp.StatusCode, r, string(b)
+}
+
+// modern builds a 2026-07-28 request: the version travels in _meta and must
+// match the MCP-Protocol-Version header.
+func modern(method, params, version string) string {
+	meta := fmt.Sprintf(`"_meta":{"io.modelcontextprotocol/protocolVersion":%q,"io.modelcontextprotocol/clientCapabilities":{},"io.modelcontextprotocol/clientInfo":{"name":"t","version":"0"}}`, version)
+	if params != "" {
+		meta = params + "," + meta
+	}
+	return fmt.Sprintf(`{"jsonrpc":"2.0","id":7,"method":%q,"params":{%s}}`, method, meta)
+}
+
+func TestMCPRejectsUnsupportedProtocolVersionsWithJSONRPC(t *testing.T) {
+	e := newEnv(t)
+	seedMCP(e)
+	legacy := `{"jsonrpc":"2.0","id":7,"method":"tools/list"}`
+	for _, c := range []struct{ name, version, body string }{
+		{"older than any supported", "1999-01-01", legacy},
+		{"not a version", "banana", legacy},
+		{"newer than any supported", "2099-01-01", modern("tools/list", "", "2099-01-01")},
+	} {
+		code, r, raw := e.mcpRaw(e.read, c.body, map[string]string{"Mcp-Protocol-Version": c.version, "Mcp-Method": "tools/list"})
+		if code != 400 || r.Error == nil || r.Error.Code != mcp.CodeUnsupportedProtocolVersion {
+			t.Errorf("%s: %d %s (want 400 with UnsupportedProtocolVersionError)", c.name, code, raw)
+			continue
+		}
+		if string(r.ID) != "7" || r.Error.Data.Requested != c.version || !slices.Equal(r.Error.Data.Supported, mcp.SupportedProtocolVersions()) {
+			t.Errorf("%s: the error must echo the id and list the supported versions: %s", c.name, raw)
+		}
+	}
+	// a notification has no id to echo
+	if code, r, raw := e.mcpRaw(e.read, `{"jsonrpc":"2.0","method":"notifications/initialized"}`, map[string]string{"Mcp-Protocol-Version": "1999-01-01"}); code != 400 || r.Error == nil || r.ID != nil {
+		t.Errorf("notification: %d %s", code, raw)
+	}
+	// the token is checked first: an unauthenticated caller learns nothing about versions
+	if code, _, _ := e.mcpRaw("", legacy, map[string]string{"Mcp-Protocol-Version": "1999-01-01"}); code != 401 {
+		t.Errorf("no token: %d want 401", code)
+	}
+	// supported versions, and no header at all, still work
+	for _, h := range []map[string]string{{}, {"Mcp-Protocol-Version": "2025-06-18"}} {
+		if code, _, raw := e.mcpRaw(e.read, legacy, h); code != 200 {
+			t.Errorf("legacy request %v: %d %s", h, code, raw)
+		}
+	}
+	if code, _, raw := e.mcpRaw(e.read, modern("tools/list", "", "2026-07-28"), map[string]string{"Mcp-Protocol-Version": "2026-07-28", "Mcp-Method": "tools/list"}); code != 200 {
+		t.Errorf("modern request: %d %s", code, raw)
+	}
+}
+
+func TestMCPRejectsHeadersThatDisagreeWithTheBody(t *testing.T) {
+	e := newEnv(t)
+	seedMCP(e)
+	const v = "2026-07-28"
+	call := modern("tools/call", `"name":"list_projects","arguments":{}`, v)
+	for _, c := range []struct {
+		name, body string
+		headers    map[string]string
+	}{
+		{"Mcp-Method differs", modern("tools/list", "", v), map[string]string{"Mcp-Protocol-Version": v, "Mcp-Method": "tools/call"}},
+		{"Mcp-Method missing", modern("tools/list", "", v), map[string]string{"Mcp-Protocol-Version": v}},
+		{"Mcp-Name differs", call, map[string]string{"Mcp-Protocol-Version": v, "Mcp-Method": "tools/call", "Mcp-Name": "list_sessions"}},
+		{"Mcp-Name missing", call, map[string]string{"Mcp-Protocol-Version": v, "Mcp-Method": "tools/call"}},
+		{"MCP-Protocol-Version missing", modern("tools/list", "", v), map[string]string{"Mcp-Method": "tools/list"}},
+		{"MCP-Protocol-Version differs from _meta", modern("tools/list", "", "2025-11-25"), map[string]string{"Mcp-Protocol-Version": v, "Mcp-Method": "tools/list"}},
+	} {
+		code, r, raw := e.mcpRaw(e.read, c.body, c.headers)
+		if code != 400 || r.Error == nil || r.Error.Code != mcp.CodeHeaderMismatch || string(r.ID) != "7" {
+			t.Errorf("%s: %d %s (want 400 with HeaderMismatch -32020)", c.name, code, raw)
+		}
+	}
+	// matching headers are accepted
+	code, _, raw := e.mcpRaw(e.read, call, map[string]string{"Mcp-Protocol-Version": v, "Mcp-Method": "tools/call", "Mcp-Name": "list_projects"})
+	if code != 200 || !strings.Contains(raw, `"result"`) {
+		t.Errorf("matching headers: %d %s", code, raw)
 	}
 }

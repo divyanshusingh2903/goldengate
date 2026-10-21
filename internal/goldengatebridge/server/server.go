@@ -514,7 +514,7 @@ func (s *Server) mcpHandler() http.Handler {
 	if s.oauth != nil {
 		opts.ResourceMetadataURL = s.oauth.ResourceMetadataURL() // 401s tell OAuth clients where to start
 	}
-	protected := sdkauth.RequireBearerToken(verifier, opts)(h)
+	protected := sdkauth.RequireBearerToken(verifier, opts)(requireKnownProtocolVersion(h))
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ip := s.clientIP(r)
 		if !s.ipLimit.Allow(ip) || s.Auth.Blocked(ip) {
