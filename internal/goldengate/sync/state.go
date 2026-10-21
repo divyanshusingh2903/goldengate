@@ -219,7 +219,7 @@ func (s *State) ProjectStats(ctx context.Context) (map[string]ProjectStat, error
 	if err != nil {
 		return nil, fmt.Errorf("state: project stats: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := map[string]ProjectStat{}
 	for rows.Next() {
 		var p string
