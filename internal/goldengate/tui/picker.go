@@ -630,8 +630,6 @@ func (m *Model) stateStyle(s ShareState) lipgloss.Style {
 	return m.th.Dim
 }
 
-func (m *Model) stateStyled(s ShareState) string { return m.stateStyle(s).Render(stateGlyph(s)) }
-
 func (m *Model) listLines(w, h int) []string {
 	p := &m.pk
 	out := make([]string, 0, h)
@@ -701,8 +699,6 @@ func (m *Model) listLines(w, h int) []string {
 	}
 	return out
 }
-
-func lipglossWidth(s string) int { return len([]rune(stripANSI(s))) }
 
 func stripANSI(s string) string {
 	var b strings.Builder
@@ -1124,24 +1120,6 @@ func changeSummary(items []PreviewItem) string {
 		return "new or changed"
 	}
 	return strings.Join(parts, ", ")
-}
-
-func (m *Model) describe(r *Row) string {
-	switch r.State {
-	case Shared:
-		return "shared (" + r.Reason + ")"
-	case Partial:
-		var off []string
-		for _, s := range r.Sources {
-			if !s.Shared {
-				off = append(off, s.Name)
-			}
-		}
-		return "partly shared; off: " + strings.Join(off, ", ")
-	case Denied:
-		return "denied (" + r.Reason + ")"
-	}
-	return "not shared"
 }
 
 func totalRedactions(m map[string]int) int {

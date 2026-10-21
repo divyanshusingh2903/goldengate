@@ -19,7 +19,7 @@ func payload(source, id, project, title string, updated time.Time, items ...mode
 	return &model.SessionPayload{
 		Source: source, SessionID: id, Project: project, Level: model.LevelSummary,
 		StartedAt: updated.Add(-time.Hour), UpdatedAt: updated, ContentHash: strings.Repeat("b", 64),
-		Summary:   &model.Summary{Title: title, Goal: "goal of " + id, FilesTouched: []string{"src/a.go"}},
+		Summary:   &model.Summary{Title: title, Goals: []string{"goal of " + id}, FilesTouched: []string{"src/a.go"}},
 		WorkItems: items,
 	}
 }

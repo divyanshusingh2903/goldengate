@@ -47,6 +47,10 @@ type Config struct {
 	PublicURL          string
 	OAuthRedirectHosts []string      // optional allow-list of https redirect hosts
 	OAuthAccessTTL     time.Duration // default 1h
+
+	// AllowedOrigins are the browser origins (scheme://host[:port]) that may
+	// call /mcp, besides PublicURL. Requests without an Origin header always may.
+	AllowedOrigins []string
 }
 
 // Server is the bridge HTTP handler plus background maintenance.
@@ -55,6 +59,7 @@ type Server struct {
 	ipLimit, tokLimit, pairLimit *auth.Limiter
 	mux                          *http.ServeMux
 	oauth                        *oauth.Provider
+	origins                      originSet
 }
 
 // New builds a Server.
@@ -99,6 +104,11 @@ func New(cfg Config) (*Server, error) {
 		}
 		s.oauth = p
 	}
+	origins, err := newOriginSet(cfg.PublicURL, cfg.AllowedOrigins)
+	if err != nil {
+		return nil, fmt.Errorf("server: %w", err)
+	}
+	s.origins = origins
 	s.routes()
 	return s, nil
 }
@@ -509,6 +519,10 @@ func (s *Server) mcpHandler() http.Handler {
 		ip := s.clientIP(r)
 		if !s.ipLimit.Allow(ip) || s.Auth.Blocked(ip) {
 			tooMany(w)
+			return
+		}
+		if !s.origins.allows(r) { // DNS rebinding: checked before the token, so a browser page learns nothing
+			forbiddenOrigin(w)
 			return
 		}
 		protected.ServeHTTP(w, r)

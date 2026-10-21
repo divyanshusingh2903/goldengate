@@ -103,7 +103,7 @@ func (o *OpenAI) post(ctx context.Context, path string, body map[string]any) ([]
 	if err != nil {
 		return nil, 0, fmt.Errorf("llm: %s: %w", o.provider, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	return raw, resp.StatusCode, nil
 }
@@ -159,7 +159,7 @@ func (o *OpenAI) Models(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("llm: %s: %w", o.provider, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 	if resp.StatusCode/100 != 2 {
 		return nil, fmt.Errorf("llm: %s: %s", o.provider, resp.Status)

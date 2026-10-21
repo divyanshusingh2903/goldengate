@@ -77,7 +77,7 @@ func (a *app) open(ctx context.Context) (store.Store, error) { return store.Open
 func (a *app) serveCmd() *cobra.Command {
 	var addr, cert, key, publicURL string
 	var behindProxy, enableOAuth bool
-	var redirectHosts []string
+	var redirectHosts, origins []string
 	var hops, perProject, total int
 	var retention time.Duration
 	cmd := &cobra.Command{
@@ -98,7 +98,7 @@ func (a *app) serveCmd() *cobra.Command {
 				publicURL, redirectHosts = "", nil
 			}
 			return a.serve(cmd.Context(), serveOpts{addr: addr, cert: cert, key: key, behindProxy: behindProxy, hops: hops,
-				publicURL: publicURL, redirectHosts: redirectHosts,
+				publicURL: publicURL, redirectHosts: redirectHosts, origins: origins,
 				limits: store.Limits{MaxSessionsPerProject: perProject, MaxSessionsTotal: total}, retention: retention})
 		},
 	}
@@ -113,6 +113,7 @@ func (a *app) serveCmd() *cobra.Command {
 	f.BoolVar(&enableOAuth, "oauth", false, "enable the built-in OAuth 2.1 server so OAuth-only assistants (e.g. Gemini) can connect")
 	f.StringVar(&publicURL, "public-url", "", "with --oauth: the externally visible https URL of this server (env GOLDENGATE_PUBLIC_URL)")
 	f.StringSliceVar(&redirectHosts, "oauth-redirect-host", nil, "with --oauth: only allow https redirect URIs on these hosts (repeatable)")
+	f.StringSliceVar(&origins, "allowed-origin", nil, "browser origin (scheme://host[:port]) allowed to call /mcp; requests with any other Origin get 403 (repeatable)")
 	f.DurationVar(&retention, "audit-retention", 90*24*time.Hour, "how long to keep the audit log")
 	return cmd
 }
@@ -125,6 +126,7 @@ type serveOpts struct {
 	retention       time.Duration
 	publicURL       string
 	redirectHosts   []string
+	origins         []string
 }
 
 func (a *app) serve(ctx context.Context, o serveOpts) error {
@@ -156,7 +158,7 @@ func (a *app) serve(ctx context.Context, o serveOpts) error {
 	log := slog.New(slog.NewJSONHandler(a.Stderr, nil))
 	srv, err := server.New(server.Config{Store: st, Auth: au, Log: log, Now: a.Now, Version: Version, Limits: o.limits,
 		BehindProxy: o.behindProxy, ProxyHops: o.hops, AuditRetention: o.retention,
-		PublicURL: o.publicURL, OAuthRedirectHosts: o.redirectHosts})
+		PublicURL: o.publicURL, OAuthRedirectHosts: o.redirectHosts, AllowedOrigins: o.origins})
 	if err != nil {
 		return err
 	}

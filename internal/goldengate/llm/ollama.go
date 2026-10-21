@@ -107,7 +107,7 @@ func (o *Ollama) Models(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, fmt.Errorf("llm: ollama: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
 	if resp.StatusCode/100 != 2 {
 		return nil, fmt.Errorf("llm: ollama: %s", resp.Status)
@@ -142,7 +142,7 @@ func (o *Ollama) do(ctx context.Context, method, path string, body any) ([]byte,
 	if err != nil {
 		return nil, 0, fmt.Errorf("llm: ollama: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	return raw, resp.StatusCode, nil
 }

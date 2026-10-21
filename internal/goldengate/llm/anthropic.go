@@ -35,7 +35,7 @@ func (a *Anthropic) Name() string { return ProviderAnthropic + ":" + a.model }
 // against schema.
 func (a *Anthropic) JSON(ctx context.Context, system, user string, schema map[string]any) ([]byte, error) {
 	resp, err := a.client.Messages.New(ctx, anthropic.MessageNewParams{
-		Model:     anthropic.Model(a.model),
+		Model:     a.model,
 		MaxTokens: MaxOutputTokens,
 		// no thinking: a summary needs none, and it would eat the answer's room
 		// (Haiku 5.5 allows turning it off at low effort)
