@@ -1,0 +1,58 @@
+name: pr-template
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, edited, synchronize, reopened]
+
+permissions: {}
+
+jobs:
+  pr-template:
+    # Dependabot PR bodies are generated and do not follow the template.
+    if: github.actor != 'dependabot[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check PR body follows the template
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          python3 - <<'PY'
+          import os, re, sys
+
+          body = re.sub(r"<!--.*?-->", "", os.environ.get("PR_BODY") or "", flags=re.S)
+          sections = {}
+          current = None
+          for line in body.splitlines():
+              m = re.match(r"##\s+(.+?)\s*$", line)
+              if m:
+                  current = m.group(1)
+                  sections[current] = []
+              elif current:
+                  sections[current].append(line)
+
+          errors = []
+          for name in ("Summary", "Changes", "Testing", "Checklist"):
+              if name not in sections:
+                  errors.append(f"missing '## {name}' section")
+
+          def has_text(name):
+              return any(l.strip() and not re.match(r"^[-*]\s*(\[[ xX]\])?\s*$", l.strip())
+                         for l in sections.get(name, []))
+
+          for name in ("Summary", "Changes"):
+              if name in sections and not has_text(name):
+                  errors.append(f"'## {name}' is empty")
+
+          items = [l for l in sections.get("Checklist", []) if re.match(r"^\s*[-*]\s*\[[ xX]\]", l)]
+          if "Checklist" in sections and not items:
+              errors.append("'## Checklist' has no checklist items")
+          unticked = [l.strip() for l in items if re.match(r"^\s*[-*]\s*\[ \]", l)]
+          errors += [f"checklist item not ticked: {l}" for l in unticked]
+
+          if errors:
+              print("PR description does not follow .github/pull_request_template.md:")
+              for e in errors:
+                  print(f"::error::{e}")
+              sys.exit(1)
+          print("PR description follows the template.")
+          PY
