@@ -1,4 +1,24 @@
-# Golden Gate
+<p align="center">
+  <img src="docs/brand/logo-mark.svg" width="112" alt="Golden Gate logo: two bridge towers joined by a suspension cable">
+</p>
+
+<h1 align="center">Golden Gate</h1>
+
+<p align="center"><em>A bridge you can see across.</em><br>Choose what your assistant knows.</p>
+
+<p align="center">
+  <a href="https://github.com/divyanshusingh2903/goldengate/actions/workflows/ci.yml"><img src="https://github.com/divyanshusingh2903/goldengate/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-D03A2B" alt="License: Apache-2.0"></a>
+  <img src="https://img.shields.io/badge/go-1.26-0B5F94" alt="Go 1.26">
+  <img src="https://img.shields.io/badge/status-pre--release%20(M4)-B05A00" alt="Status: pre-release (M4)">
+</p>
+
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/brand/walkthrough-dark.gif">
+    <img src="docs/brand/walkthrough-light.gif" width="800" alt="Walkthrough of the goldengate terminal UI: picking projects to share, previewing the redacted payload, and syncing">
+  </picture>
+</p>
 
 Let a remote AI assistant know what you have been working on in your coding tools, with **you choosing which projects are shared**.
 
@@ -111,4 +131,8 @@ govulncheck ./...
 
 The pre-commit hook (`git config core.hooksPath .githooks`) blocks secret-shaped strings, real home paths, `.env` files and raw transcripts. Test fixtures are synthetic or scrubbed; never commit real session data.
 
-License: Apache-2.0.
+## License
+
+Golden Gate is licensed under the [Apache License 2.0](LICENSE). Copyright 2026 Divyanshu Singh.
+
+The name, logo and brand guide live in [docs/brand](docs/brand/BRAND.md).
