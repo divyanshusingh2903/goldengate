@@ -1,0 +1,33 @@
+name: pr-template
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, edited, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  # Required by the main branch ruleset. Checks that the PR description
+  # follows .github/pull_request_template.md: the Summary, Changes and
+  # Testing sections are present, and Summary is filled in.
+  pr-template:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check the PR description
+        env:
+          BODY: ${{ github.event.pull_request.body }}
+        run: |
+          fail=0
+          for h in "## Summary" "## Changes" "## Testing"; do
+            if ! printf '%s\n' "$BODY" | grep -qxF "$h"; then
+              echo "::error::The PR description is missing the \"$h\" section from the template."
+              fail=1
+            fi
+          done
+          summary=$(printf '%s\n' "$BODY" | awk '/^## Summary$/{f=1;next} /^## /{f=0} f' | sed -e 's/<!--.*-->//g' | tr -d '[:space:]')
+          if [ -z "$summary" ]; then
+            echo "::error::Fill in the Summary section: what the change does and why, with the issue it closes."
+            fail=1
+          fi
+          exit $fail
