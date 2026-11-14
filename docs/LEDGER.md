@@ -6,6 +6,35 @@ This file lets any Claude Code session (or person) pick up the Product v2 work w
 - Each issue's body is its spec: scope, rules, and "Done when". Read it in full with `gh issue view <n>` before writing code.
 - Target: every issue in the queue merged by **2026-11-30**.
 
+## Status
+
+_Last updated 2026-11-14. Update this section whenever a row in the queue changes._
+
+**Progress:** 2 of 31 scheduled issues done (plus 2 stretch). Phase 1, Foundations, is under way.
+**Next up:** #18 Named projects with members (client), size L, planned Nov 14. Its only dependency, #17, is done.
+
+### Done
+
+| Issue | What changed | PR | Merged |
+|---|---|---|---|
+| #17 | DESIGN.md 1.1 product principles, 1.2 glossary, revised non-goals, M7 milestone | #50 | 2026-11-14 |
+| #37 | MCP time-bounded tools default to the last 5 days; `since`/`until` on every one; results state their window; store queries gain `Until` | #55 | 2026-11-14 |
+
+Supporting changes (not queue issues):
+
+| What | PR | Merged |
+|---|---|---|
+| Go toolchain go1.26.11 (GO-2026-6859 broke `security` on every branch) | #51 | 2026-11-14 |
+| First `pr-template` check (unblocked the `main` ruleset); later replaced | #52 | 2026-11-14 |
+| The user's stricter `pr-template` check (Checklist with every item ticked; skips Dependabot) | #9 | 2026-11-14 |
+| This ledger, then its checklist rule | #54, #56 | 2026-11-14 |
+
+### Open loose ends
+
+- **User's stash** `list-tools wip (user)` (branch `fix/list-tools-empty-hint`): not touched by the loop. Popping it will conflict with #37 in `listWork` (`bridgemcp/tools.go`).
+- **Dependabot #53**: shows a `pr-template` failure from before #9 merged. It clears once the PR is rebased or updated (the user's call).
+- **#37 follow-up**: the per-agent maximum window is enforced in `resolveWindow` once agents exist (#24).
+
 ## The loop
 
 Work one issue at a time, in queue order. For each issue:
@@ -30,7 +59,7 @@ Work one issue at a time, in queue order. For each issue:
     gh pr merge <pr> --merge --delete-branch
     ```
     If `main` moved since the branch was cut, run `gh pr update-branch <pr>` and wait for CI again. If the ruleset blocks a merge while every check is green, find out which rule (`gh api repos/divyanshusingh2903/goldengate/rules/branches/main`) and fix the cause. Never merge with `--admin` without the user's explicit OK.
-11. **Sync main again** (step 1), confirm the issue closed, add a log line below, and go back to step 2.
+11. **Sync main again** (step 1), confirm the issue closed, update the Status section (progress, done table, next up), add a log line below, and go back to step 2. Status changes ride on the next issue branch's first commit, with step 4.
 
 ### Rules that hold across sessions
 
@@ -95,3 +124,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-14: Merged #52 (pr-template check), #51 (go1.26.11), then #50: #17 done.
 - 2026-11-14: Merged #54 (this ledger). #37 implemented: 5-day default, since/until on every time-bounded tool. The per-agent maximum window waits for #24.
 - 2026-11-14: #37 done (#55). Replaced the pr-template check from #52 with the user's stricter version from #9 (merged): adds the Checklist section, requires every item ticked, skips Dependabot PRs.
+- 2026-11-14: Merged #56 (ledger checklist rule). Added the Status section.
