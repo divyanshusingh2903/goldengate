@@ -15,9 +15,11 @@ package oauth
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -27,12 +29,14 @@ import (
 	"net/http"
 	"net/url"
 	"slices"
+	"sort"
 	"strings"
 	"time"
 	"unicode"
 
 	"github.com/divyanshusingh2903/goldengate/internal/goldengatebridge/server/auth"
 	"github.com/divyanshusingh2903/goldengate/internal/goldengatebridge/server/store"
+	"github.com/divyanshusingh2903/goldengate/internal/model"
 )
 
 // Scope is the only scope this server issues.
@@ -436,6 +440,148 @@ func (p *Provider) renderConsent(w http.ResponseWriter, status int, c *store.OAu
 	})
 }
 
+// --- choosing the agent and its projects (second consent step) ---
+//
+// The first page asks only for the admin secret and shows nothing about the
+// server's contents, because anyone can open it. Agents and project names
+// are listed on the second page, which exists only for a request the owner
+// has just approved with the secret.
+
+type accessAgent struct {
+	ID, Name, Sees string
+}
+
+type accessProject struct {
+	ID, Name string
+	Sessions int
+}
+
+const maxAgentName = 60
+
+// renderAccess shows the second step for an approved request.
+func (p *Provider) renderAccess(w http.ResponseWriter, r *http.Request, status int, c *store.OAuthClient, txID, errMsg string) {
+	ctx := r.Context()
+	agents, err := p.Store.ListAgents(ctx)
+	if err != nil {
+		p.Log.Error("oauth consent failed", "err", err)
+		p.errorPage(w, http.StatusInternalServerError, "Something went wrong. Try again.")
+		return
+	}
+	projects, err := p.Store.ListProjects(ctx)
+	if err != nil {
+		p.Log.Error("oauth consent failed", "err", err)
+		p.errorPage(w, http.StatusInternalServerError, "Something went wrong. Try again.")
+		return
+	}
+	names := map[string]string{}
+	var ps []accessProject
+	for _, pr := range projects {
+		names[pr.ID] = pr.Project
+		ps = append(ps, accessProject{ID: pr.ID, Name: pr.Project, Sessions: pr.Sessions})
+	}
+	sort.Slice(ps, func(i, j int) bool { return strings.ToLower(ps[i].Name) < strings.ToLower(ps[j].Name) })
+	var as []accessAgent
+	suggested := c.Name
+	for _, a := range agents {
+		if strings.EqualFold(a.Name, suggested) {
+			suggested = ""
+		}
+		sees := "nothing yet"
+		if a.AllProjects {
+			sees = "every project"
+		} else if ids, err := p.Store.Grants(ctx, a.ID); err == nil && len(ids) > 0 {
+			var ns []string
+			for _, id := range ids {
+				if n, ok := names[id]; ok {
+					ns = append(ns, n)
+				}
+			}
+			sort.Strings(ns)
+			if len(ns) > 0 {
+				sees = strings.Join(ns, ", ")
+			}
+		}
+		as = append(as, accessAgent{ID: a.ID, Name: a.Name, Sees: sees})
+	}
+	secureHeaders(w)
+	w.WriteHeader(status)
+	_ = p.tmpl.ExecuteTemplate(w, "access", map[string]any{
+		"ClientName": c.Name, "Tx": txID, "Error": errMsg, "Server": p.issuer.Host,
+		"Agents": as, "Projects": ps, "NewName": suggested,
+	})
+}
+
+func newAgentID() string {
+	var b [6]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		panic("oauth: system randomness unavailable: " + err.Error())
+	}
+	return "agt_" + hex.EncodeToString(b[:])
+}
+
+// chooseAccess applies the second step's form: it attaches the client to an
+// existing or a new agent and grants that agent the ticked projects. Nothing
+// is ticked by default, and ticks only ever add access. It returns the agent
+// id, or a message for the user when the form cannot be accepted (nothing
+// has been changed then).
+func (p *Provider) chooseAccess(ctx context.Context, c *store.OAuthClient, form url.Values) (string, string, error) {
+	var grant []string
+	seen := map[string]bool{}
+	for _, id := range form["project"] {
+		if seen[id] {
+			continue
+		}
+		seen[id] = true
+		pr, err := p.Store.ResolveProject(ctx, id)
+		if err != nil || pr.ID != id {
+			return "", "One of the ticked projects no longer exists. Review the list and try again.", nil
+		}
+		grant = append(grant, id)
+	}
+	all := form.Get("all") == "1"
+	agentID := form.Get("agent")
+	switch agentID {
+	case "":
+		return "", "Choose which assistant this is: an existing one, or a new one with a name.", nil
+	case "new":
+		name := strings.TrimSpace(form.Get("agent_name"))
+		if name == "" || model.CheckText("name", name, maxAgentName) != nil {
+			return "", "Give the new assistant a name of 1 to 60 characters.", nil
+		}
+		a := store.Agent{ID: newAgentID(), Name: name, CreatedAt: p.Now().UTC(), AllProjects: all}
+		if err := p.Store.CreateAgent(ctx, a); err != nil {
+			if errors.Is(err, store.ErrDuplicate) {
+				return "", "An assistant with that name already exists. Pick it from the list, or choose another name.", nil
+			}
+			return "", "", err
+		}
+		agentID = a.ID
+	default:
+		a, err := p.Store.Agent(ctx, agentID)
+		if errors.Is(err, store.ErrNotFound) {
+			return "", "That assistant no longer exists. Choose another, or create a new one.", nil
+		}
+		if err != nil {
+			return "", "", err
+		}
+		if all && !a.AllProjects {
+			a.AllProjects = true
+			if err := p.Store.UpdateAgent(ctx, *a); err != nil {
+				return "", "", err
+			}
+		}
+	}
+	for _, id := range grant {
+		if err := p.Store.Grant(ctx, agentID, id, p.Now()); err != nil {
+			return "", "", err
+		}
+	}
+	if err := p.Store.SetOAuthClientAgent(ctx, c.ID, agentID); err != nil {
+		return "", "", err
+	}
+	return agentID, "", nil
+}
+
 func (p *Provider) handleConsent(w http.ResponseWriter, r *http.Request) {
 	if !p.Allow(w, r, "consent") {
 		return
@@ -457,6 +603,27 @@ func (p *Provider) handleConsent(w http.ResponseWriter, r *http.Request) {
 		p.errorPage(w, http.StatusBadRequest, "This application is no longer registered.")
 		return
 	}
+	if txn.Approved {
+		// second step: the owner already proved the admin secret for this request
+		if r.PostForm.Get("decision") != "grant" {
+			p.audit(r.Context(), r, "oauth_deny", c.ID)
+			p.redirectWithError(w, r, txn.RedirectURI, txn.State, "access_denied", "the owner declined")
+			return
+		}
+		agentID, msg, err := p.chooseAccess(r.Context(), c, r.PostForm)
+		if err != nil {
+			p.Log.Error("oauth consent failed", "err", err)
+			p.errorPage(w, http.StatusInternalServerError, "Something went wrong. Start the connection again from your assistant.")
+			return
+		}
+		if msg != "" {
+			_ = p.Store.PutOAuthTxn(r.Context(), hash, *txn, p.Now().Add(10*time.Minute)) // let them fix the form
+			p.renderAccess(w, r, http.StatusBadRequest, c, txID, msg)
+			return
+		}
+		p.issueCode(w, r, c, txn, agentID)
+		return
+	}
 	if r.PostForm.Get("decision") != "approve" {
 		p.audit(r.Context(), r, "oauth_deny", c.ID)
 		p.redirectWithError(w, r, txn.RedirectURI, txn.State, "access_denied", "the owner declined")
@@ -475,6 +642,23 @@ func (p *Provider) handleConsent(w http.ResponseWriter, r *http.Request) {
 		p.renderConsent(w, http.StatusUnauthorized, c, txn.RedirectURI, txID, "That is not the admin secret.")
 		return
 	}
+	// The secret is right. Nothing is issued yet: the owner now chooses which
+	// assistant this is and what it may see, on a page bound to a fresh
+	// single-use id that only this response carries.
+	next := auth.RandomSecret("", 24)
+	approved := *txn
+	approved.Approved = true
+	if err := p.Store.PutOAuthTxn(r.Context(), hashOf("txn", next), approved, p.Now().Add(10*time.Minute)); err != nil {
+		p.Log.Error("oauth consent failed", "err", err)
+		p.errorPage(w, http.StatusInternalServerError, "Something went wrong. Try again.")
+		return
+	}
+	p.renderAccess(w, r, http.StatusOK, c, next, "")
+}
+
+// issueCode finishes an approved request: it mints the authorization code
+// and sends the browser back to the application.
+func (p *Provider) issueCode(w http.ResponseWriter, r *http.Request, c *store.OAuthClient, txn *store.OAuthTxn, agentID string) {
 	code := auth.RandomSecret("ggc_", 32)
 	family := auth.RandomSecret("fam_", 12)
 	oc := store.OAuthCode{ClientID: c.ID, RedirectURI: txn.RedirectURI, Challenge: txn.Challenge, Resource: txn.Resource, Scope: txn.Scope,
@@ -485,7 +669,7 @@ func (p *Provider) handleConsent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	_ = p.Store.TouchOAuthClient(r.Context(), c.ID, p.Now())
-	p.audit(r.Context(), r, "oauth_approve", c.ID)
+	p.Audit(r.Context(), store.AuditEvent{At: p.Now(), TokenID: c.ID, AgentID: agentID, Scope: "oauth", Action: "oauth_approve", IP: p.ClientIP(r)})
 	u, _ := url.Parse(txn.RedirectURI)
 	q := u.Query()
 	q.Set("code", code)
@@ -667,7 +851,8 @@ body{font:16px/1.5 system-ui,sans-serif;max-width:34rem;margin:3rem auto;padding
 @media (prefers-color-scheme:dark){body{color:#e6e6ea;background:#16161a}.box{background:#202026;border-color:#3a3a44}input[type=password]{background:#16161a;color:inherit;border-color:#555}}
 .box{border:1px solid #d6d6dc;border-radius:10px;padding:1rem 1.25rem;background:#fff;margin:1rem 0}
 code{word-break:break-all}.err{color:#b00020;font-weight:600}
-input[type=password]{width:100%;padding:.6rem;font-size:1rem;border:1px solid #999;border-radius:6px;box-sizing:border-box}
+input[type=password],input[type=text]{width:100%;padding:.6rem;font-size:1rem;border:1px solid #999;border-radius:6px;box-sizing:border-box}
+fieldset{border:1px solid #d6d6dc;border-radius:10px;margin:1rem 0;padding:.5rem 1.25rem}fieldset p{margin:.4rem 0}small{opacity:.75}
 button{font-size:1rem;padding:.6rem 1.1rem;border-radius:6px;border:1px solid #888;cursor:pointer}
 button.go{background:#1a5fb4;color:#fff;border-color:#1a5fb4}
 </style></head><body>{{end}}
@@ -685,5 +870,27 @@ button.go{background:#1a5fb4;color:#fff;border-color:#1a5fb4}
 <button type="submit" name="decision" value="deny" formnovalidate>Deny</button></p>
 </form>
 <p><small>You can revoke this later with <code>goldengatebridge oauth clients delete</code>. It can never write or delete anything.</small></p>
+</body></html>{{end}}
+{{define "access"}}{{template "page-head"}}
+<h1>What may it see?</h1>
+<div class="box"><p><strong>{{.ClientName}}</strong> will get read-only access through <strong>{{.Server}}</strong>. Choose which assistant this is and which projects it may see. Nothing is ticked: it sees only what you tick here or grant later.</p></div>
+{{if .Error}}<p class="err">{{.Error}}</p>{{end}}
+<form method="post" action="/oauth/authorize">
+<input type="hidden" name="tx" value="{{.Tx}}">
+<fieldset><legend>Which assistant is this?</legend>
+<p><label><input type="radio" name="agent" value="new" checked> A new assistant named</label>
+<input type="text" name="agent_name" value="{{.NewName}}" maxlength="60" autocomplete="off"></p>
+{{range .Agents}}<p><label><input type="radio" name="agent" value="{{.ID}}"> {{.Name}}</label> <small>already sees: {{.Sees}}</small></p>
+{{end}}</fieldset>
+<fieldset><legend>Projects it may see</legend>
+{{range .Projects}}<p><label><input type="checkbox" name="project" value="{{.ID}}"> {{.Name}}</label> <small>{{.Sessions}} session(s)</small></p>
+{{else}}<p><small>The server holds no projects yet. You can grant projects later with <code>goldengate agents grant</code>.</small></p>
+{{end}}<p><label><input type="checkbox" name="all" value="1"> Every project, including ones I share later</label></p>
+</fieldset>
+<p><small>For an assistant that already exists, ticks add to what it sees; they never take anything away.</small></p>
+<p><button class="go" type="submit" name="decision" value="grant">Connect with this access</button>
+<button type="submit" name="decision" value="deny" formnovalidate>Deny</button></p>
+</form>
+<p><small>Change this later with <code>goldengate agents</code>. It can never write or delete anything.</small></p>
 </body></html>{{end}}
 {{define "error"}}{{template "page-head"}}<h1>Cannot continue</h1><div class="box"><p>{{.Message}}</p></div></body></html>{{end}}`
