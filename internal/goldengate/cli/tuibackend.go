@@ -508,7 +508,10 @@ func (b *tuiBackend) Plan(ctx context.Context, o tui.SyncOpts) (tui.PlanInfo, er
 		return tui.PlanInfo{}, err
 	}
 	defer closeFn()
-	batch, rep, err := s.Plan(ctx, gsync.RunOpts{Resummarize: o.Resummarize})
+	// The Sync screen shows every session exactly as it would be sent and
+	// sends only after the user presses Send, so sending approves what was
+	// reviewed: sessions waiting in the inbox are part of the plan.
+	batch, rep, err := s.Plan(ctx, gsync.RunOpts{Resummarize: o.Resummarize, Approve: true})
 	if err != nil {
 		return tui.PlanInfo{}, err
 	}
@@ -526,7 +529,7 @@ func planInfo(cfg config.Config, s *gsync.Syncer, batch gsync.Batch, rep gsync.R
 		counts[p.Project]++
 	}
 	info := tui.PlanInfo{Sessions: batch.Len(), NotSelected: rep.NotSelected, Unchanged: rep.Unchanged, Warnings: rep.Warnings, Redactions: rep.Redactions, Server: cfg.Server.URL,
-		Stale: rep.Stale, Resummarized: rep.Resummarized}
+		Stale: rep.Stale, Resummarized: rep.Resummarized, Approving: rep.Approving, Excluded: rep.Excluded}
 	if s.Summarizer != nil {
 		info.Summarizer = s.Summarizer.Name()
 	}
@@ -576,7 +579,7 @@ func (b *tuiBackend) Sync(ctx context.Context, dry bool, o tui.SyncOpts, emit fu
 	var plan *tui.PlanInfo // only when planned now; a reused review was already shown
 	if !reused {
 		var rep gsync.Report
-		batch, rep, err = s.Plan(ctx, gsync.RunOpts{Resummarize: o.Resummarize, OnPlanned: func(p *model.SessionPayload) {
+		batch, rep, err = s.Plan(ctx, gsync.RunOpts{Resummarize: o.Resummarize, Approve: true, OnPlanned: func(p *model.SessionPayload) {
 			ev := tui.SyncEvent{Kind: tui.SyncPrepared, Sessions: 1, Project: p.Project, Title: p.TitleOnly, By: "heuristic"}
 			if sm := p.Summary; sm != nil {
 				ev.Title, ev.By = sm.Title, sm.SummarizedBy

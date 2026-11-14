@@ -24,7 +24,7 @@ func TestProjectsCommandsLifecycle(t *testing.T) {
 	if out := must("projects", "list"); !strings.Contains(out, "no projects yet") {
 		t.Fatalf("empty list: %s", out)
 	}
-	out := must("projects", "create", "Widgets", "~/projects/demo")
+	out := must("projects", "create", "Widgets", "~/projects/demo", "--auto-approve")
 	if !strings.Contains(out, `created project "Widgets"`) || !strings.Contains(out, "added ~/projects/demo (shared)") {
 		t.Fatalf("create: %s", out)
 	}
@@ -35,7 +35,7 @@ func TestProjectsCommandsLifecycle(t *testing.T) {
 		t.Fatalf("share list shows the project as the reason: %s", out)
 	}
 
-	must("projects", "create", "Empty")
+	must("projects", "create", "Empty", "--auto-approve")
 	must("projects", "rename", "widgets", "Widget work")
 	out = must("projects", "add", "Empty", "~/projects/demo")
 	if !strings.Contains(out, `moved ~/projects/demo from "Widget work"`) {
@@ -93,7 +93,7 @@ func TestShareAddCreatesAProjectNamedAfterTheFolder(t *testing.T) {
 		t.Skip("unix path fixtures")
 	}
 	h := newHarness(t)
-	if err := h.run("share", "add", "~/projects/demo"); err != nil {
+	if err := h.run("share", "add", "~/projects/demo", "--auto-approve"); err != nil {
 		t.Fatal(err)
 	}
 	if err := h.run("projects", "list"); err != nil {

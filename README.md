@@ -48,9 +48,11 @@ Status: pre-release (M4). Sources: Claude Code, Codex, OpenCode, and claude.ai /
 
    ```bash
    goldengate share add ~/code/myproject
-   goldengate sync --dry-run     # exactly what would be sent
-   goldengate sync
+   goldengate sync --dry-run --approve    # exactly what would be sent
+   goldengate sync --approve              # approve what you just looked at, and send it
    ```
+
+   Sessions of a project you share wait for your approval; `--approve` approves and sends what is waiting. Later sessions wait again (see the inbox below), unless you share with `--auto-approve`.
 
 4. **Connect the assistant.**
    - If its connector lets you set a header: use `https://bridge.example.com/mcp` and send the read token as `Authorization: Bearer <token>`.
@@ -125,6 +127,20 @@ goldengate projects merge "Old name" "Pharmfindr app"
 goldengate projects remove "Pharmfindr app" ~/code/pharmfindr-web   # stops sharing it
 goldengate projects delete "Pharmfindr app"                          # stops sharing every member
 ```
+
+**The inbox: nothing new leaves without your approval.** When you share a project, its sessions wait until you approve them. In the terminal UI that is the Sync screen: Review shows every session exactly as it would be sent, and Send approves what you reviewed. From the command line, `goldengate sync` (and a hook or timer running it) sends only what is approved:
+
+```bash
+goldengate inbox                        # what is waiting, and what you excluded
+goldengate sync --dry-run --approve     # look first: exactly what approving would send
+goldengate inbox approve --all          # or name session ids
+goldengate inbox exclude <session-id>   # keep one on this machine for good
+goldengate inbox reset <session-id>     # undo a decision
+goldengate sync                         # sends what is approved
+goldengate sync --approve               # approve and send everything waiting, in one step
+```
+
+A session that continues after you approved or sent it comes back to the inbox. To skip the inbox for a project you trust, turn on auto-approve: `goldengate projects auto <project> on`, or share with `goldengate share add <folder> --auto-approve`. Projects you were already sharing before this existed keep sending as they did.
 
 **Which assistant sees what.** Each assistant you connect is an *agent* with its own read token and its own list of projects. The assistant you set up first sees every project you share; any other starts with nothing. These commands ask for the admin secret (or read `GOLDENGATE_ADMIN_TOKEN`) and never store it:
 

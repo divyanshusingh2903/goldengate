@@ -34,7 +34,14 @@ type Config struct {
 	// shared. Share.Allow and Share.SourceDeny are derived from them in
 	// memory (see Flatten and Fold) and are not written once projects exist.
 	Projects []Project `toml:"projects,omitempty"`
+	// Version is the configuration's shape. Files written before the inbox
+	// existed have none: their projects were sending everything, so they are
+	// loaded with auto-approve on and nothing changes for them.
+	Version int `toml:"version,omitempty"`
 }
+
+// CurrentVersion is the Version written by this build.
+const CurrentVersion = 2
 
 // Summarize chooses how session summaries are written. The default is the
 // local heuristic; a model is opt-in, and then the redacted conversation of
@@ -115,6 +122,7 @@ type Redact struct {
 // Default returns the default-deny configuration.
 func Default() Config {
 	return Config{
+		Version: CurrentVersion,
 		Share: Share{
 			Default:        "deny",
 			IncludeSources: []string{"claude-code", "codex", "opencode", "claude-ai", "chatgpt"},
@@ -261,6 +269,7 @@ func Load(path string) (Config, error) {
 	if err != nil {
 		return c, fmt.Errorf("config: read %s: %w", path, err)
 	}
+	c.Version = 0 // the file says which shape it has; none means the first
 	dec := toml.NewDecoder(strings.NewReader(string(b)))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&c); err != nil {
@@ -270,6 +279,17 @@ func Load(path string) (Config, error) {
 		return Default(), err
 	}
 	c.migrate()
+	if c.Version < CurrentVersion {
+		// Everything shared before the inbox existed keeps being sent as it
+		// was. Projects shared from now on wait for approval.
+		for i := range c.Projects {
+			c.Projects[i].AutoApprove = true
+		}
+		c.Version = CurrentVersion
+	}
+	if c.Version > CurrentVersion {
+		return Default(), fmt.Errorf("config: %s was written by a newer goldengate (version %d); upgrade this one", path, c.Version)
+	}
 	if err := c.Validate(); err != nil {
 		return Default(), err
 	}

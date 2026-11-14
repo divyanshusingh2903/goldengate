@@ -9,6 +9,7 @@ Use GitHub private vulnerability reporting on this repository (channel to be con
 - **Default deny.** Nothing is sent until you select a project. A deny rule always beats an allow rule.
 - **One door.** Every payload leaves through `sync.Push`, which validates it first. Sessions from unselected projects are dropped before they are even parsed, and are never named in logs.
 - **Previews are exact.** `goldengate sync --dry-run` prints the payloads that would be sent and records nothing.
+- **Nothing new leaves without approval.** Sessions of a project you share wait in an inbox until you approve them, and a session that changes after approval waits again. Unattended sync (a hook or timer) sends only what you approved. Auto-approve is a per-project switch you turn on yourself; projects shared before the inbox existed keep it on so their behaviour did not change.
 - **Redaction is best-effort.** Secret patterns, high-entropy strings and absolute paths are scrubbed before and after summarization. Regexes miss things. Use `titles-only` for sensitive projects and read the preview.
 - **No telemetry.** Neither binary makes network calls other than to the server you configured, and, only if you turn it on, the summarizer model you chose.
 

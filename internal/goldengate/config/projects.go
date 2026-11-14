@@ -31,6 +31,11 @@ type Project struct {
 	// WorkItems are work-item key prefixes that belong to this project, such
 	// as "linear:ENG". Rules (a later issue) use them; matching ignores them.
 	WorkItems []string `toml:"work_items,omitempty"`
+	// AutoApprove sends every new and changed session of the project on the
+	// next sync. Without it they wait in the inbox until the user approves
+	// them. Off for a project the user shares; on for projects that were
+	// shared before the inbox existed.
+	AutoApprove bool `toml:"auto_approve,omitempty"`
 }
 
 // Member is one thing a project is made of.
