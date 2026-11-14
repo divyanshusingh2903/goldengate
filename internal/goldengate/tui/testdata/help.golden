@@ -1,28 +1,29 @@
 ┌ goldengate [1 Projects] 2 Sync  3 Server  4 Settings  ─────────── ● connected bridge.example.com ┐
-│ [All 8]  Shared 4   To sync 3   Not shared 4                                                     │
-├─────────────────┌ Keys ────────────────────────────────────────────────────────┐─────────────────┤
-│ / search project│ Projects                                                     │                 │
-│▌ [x] ~/code/phar│ ↑ ↓ j k   move   (pgup/pgdn, g/G jump)                       │                 │
-│  [x] …ndr/.claud│ space     share / un-share (marked rows, or this row)        │                 │
-│  [x] ~/code/forg│ v         start/end range selection                          │                 │
-│  [ ] ~/code/viha│ a  A      mark all visible / clear marks                     │anged since the  │
-│  [~] ~/code/webs│ d         deny (beats any allow rule)                        │                 │
-│  [-] ~/work/clie│ u         undo the last change                               │                 │
-│  [ ] ~/scratch/t│ e         choose which sources are shared                    │ssions           │
-│  [ ] claude-ai:C│ /         fuzzy search   (esc clears)                        │1, CX Codex 6    │
-│                 │ f         view: all / shared / to sync / not shared          │                 │
-│                 │ t         folder tree: space on a folder shares all of it    │rver             │
-│                 │ o         sort: recent / name / size                         │                 │
-│                 │ p enter   preview exactly what would be sent                 │rmfindr          │
-│                 │ P         paranoid: raw payloads, every string               │                 │
-│                 │ Everywhere                                                   │ Preview]        │
+│ [All 8]  Shared ┌ Keys ────────────────────────────────────────────────────────┐                 │
+├─────────────────│ Projects                                                     │─────────────────┤
+│ / search project│ ↑ ↓ j k   move   (pgup/pgdn, g/G jump)                       │                 │
+│▌ [x] ~/code/phar│ space     share / un-share (marked rows, or this row)        │                 │
+│  [x] …ndr/.claud│ v         start/end range selection                          │                 │
+│  [x] ~/code/forg│ a  A      mark all visible / clear marks                     │                 │
+│  [ ] ~/code/viha│ d         deny (beats any allow rule)                        │anged since the  │
+│  [~] ~/code/webs│ u         undo the last change                               │                 │
+│  [-] ~/work/clie│ e         choose which sources are shared                    │                 │
+│  [ ] ~/scratch/t│ n         put in a project (type a new name to create one)   │ssions           │
+│  [ ] claude-ai:C│ N         rename the project (an existing name merges them)  │1, CX Codex 6    │
+│                 │ /         fuzzy search   (esc clears)                        │                 │
+│                 │ f         view: all / shared / to sync / not shared          │rver             │
+│                 │ t         folder tree: space on a folder shares all of it    │                 │
+│                 │ o         sort: recent / name / size                         │rmfindr          │
+│                 │ p enter   preview exactly what would be sent                 │                 │
+│                 │ P         paranoid: raw payloads, every string               │ Preview]        │
+│                 │ Everywhere                                                   │                 │
 │                 │ 1-4 tab   projects / sync / server / settings                │                 │
 │                 │ s         sync: review first, then send                      │                 │
-│                 │ r         refresh                                            │                 │
-│                 │ ?         this help                                          │ · changed       │
-│                 │ q ctrl+c  quit                                               │w                │
-│                 │ Mouse                                                        │                 │
-│                 │ click     select · on the box: share / un-share              │ding             │
+│                 │ r         refresh                                            │ · changed       │
+│                 │ ?         this help                                          │w                │
+│                 │ q ctrl+c  quit                                               │                 │
+│                 │ Mouse                                                        │ding             │
+│                 │ click     select · on the box: share / un-share              │                 │
 │                 │ dbl-click preview   (ctrl+click marks)                       │                 │
 │                 │ wheel     scroll; tabs, chips, buttons and keys below click  │                 │
 │                 │                                                              │                 │
@@ -34,7 +35,6 @@
 │                 │ chat  AI claude.ai  GPT ChatGPT                              │                 │
 │                 │                                                              │                 │
 │                 │ Nothing is sent until you sync, and previews are exact.      │                 │
-│                 └──────────────────────────────────────────────────────────────┘                 │
-├────────────────────────────────────────────────┴─────────────────────────────────────────────────┤
+├─────────────────└──────────────────────────────────────────────────────────────┘─────────────────┤
 │ space unshare  p preview  s sync  f view  / search  d deny  u undo  t tree  ? help               │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘

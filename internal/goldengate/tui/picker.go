@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -39,12 +40,27 @@ type picker struct {
 	srcCursor   int
 	paranoid    bool
 	view        listView
+	// naming is the project-name prompt: putting the targets in a project
+	// (n) or renaming the current one (N).
+	naming    nameMode
+	nameInput textinput.Model
+	nameFrom  string   // the project being renamed
+	nameKeys  []string // the folders being put in a project
 }
+
+type nameMode int
+
+const (
+	nameOff nameMode = iota
+	nameSet
+	nameRename
+)
 
 func newPicker(blink bool) picker {
 	f := newInput("", false, blink)
 	f.Prompt = ""
-	return picker{marks: map[string]bool{}, expanded: map[string]bool{}, filter: f}
+	ni := newInput("project name", false, blink)
+	return picker{marks: map[string]bool{}, expanded: map[string]bool{}, filter: f, nameInput: ni}
 }
 
 // item is one visible line: a project (list mode) or a node (tree mode).
@@ -211,6 +227,9 @@ func (m *Model) onKeyProjects(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if p.filtering {
 		return m.onKeyFilter(k)
 	}
+	if p.naming != nameOff {
+		return m.onKeyName(k)
+	}
 	if p.srcOpen {
 		return m.onKeySources(k)
 	}
@@ -291,6 +310,10 @@ func (m *Model) onKeyProjects(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case "p":
 		return m, m.openPreview()
+	case "n":
+		return m, m.startNaming(nameSet)
+	case "N":
+		return m, m.startNaming(nameRename)
 	case "enter":
 		if it, ok := m.current(); ok && it.node != nil && len(it.node.Children) > 0 {
 			p.expanded[it.node.Path] = !p.expanded[it.node.Path]
@@ -359,6 +382,63 @@ func (m *Model) onKeyFilter(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	p.query = p.filter.Value()
 	p.cursor, p.top = 0, 0
 	p.clamp(m)
+	return m, cmd
+}
+
+// startNaming opens the project-name prompt.
+func (m *Model) startNaming(mode nameMode) tea.Cmd {
+	p := &m.pk
+	it, ok := m.current()
+	var current string
+	if ok && it.row != nil {
+		current = it.row.Project
+	}
+	switch mode {
+	case nameSet:
+		keys := m.targets()
+		if len(keys) == 0 {
+			return nil
+		}
+		p.nameKeys = keys
+		p.nameInput.SetValue(current)
+	case nameRename:
+		if current == "" {
+			m.setStatus("This is in no project yet: press n to put it in one.", true)
+			return nil
+		}
+		p.nameFrom = current
+		p.nameInput.SetValue(current)
+	}
+	p.naming = mode
+	p.nameInput.CursorEnd()
+	return p.nameInput.Focus()
+}
+
+func (m *Model) onKeyName(k tea.KeyMsg) (tea.Model, tea.Cmd) {
+	p := &m.pk
+	switch k.String() {
+	case "esc":
+		p.naming = nameOff
+		p.nameInput.Blur()
+		return m, nil
+	case "enter":
+		mode, name := p.naming, strings.TrimSpace(p.nameInput.Value())
+		p.naming = nameOff
+		p.nameInput.Blur()
+		if name == "" {
+			m.setStatus("A project needs a name.", true)
+			return m, nil
+		}
+		if mode == nameRename {
+			if name == p.nameFrom {
+				return m, nil
+			}
+			return m, m.actKeys(Action{Kind: ActRenameProject, Project: p.nameFrom, To: name}, "rename")
+		}
+		return m, m.actKeys(Action{Kind: ActSetProject, Keys: p.nameKeys, Project: name}, "move")
+	}
+	var cmd tea.Cmd
+	p.nameInput, cmd = p.nameInput.Update(k)
 	return m, cmd
 }
 
@@ -598,6 +678,10 @@ func (m *Model) projectHints() string {
 	}
 	p := m.pk
 	switch {
+	case p.naming == nameSet:
+		return m.hints(m.w-2, "enter", "put in project (new names create one)", "esc", "cancel")
+	case p.naming == nameRename:
+		return m.hints(m.w-2, "enter", "rename (an existing name merges)", "esc", "cancel")
 	case p.filtering:
 		return m.hints(m.w-2, "enter", "accept", "esc", "clear")
 	case p.srcOpen:
@@ -635,6 +719,10 @@ func (m *Model) listLines(w, h int) []string {
 	out := make([]string, 0, h)
 	var search string
 	switch {
+	case p.naming == nameSet:
+		search = m.th.Accent.Render(fmt.Sprintf("Put %s in project: ", plural(len(p.nameKeys), "folder"))) + p.nameInput.Value() + m.th.Accent.Render("▏")
+	case p.naming == nameRename:
+		search = m.th.Accent.Render("Rename project "+strconv.Quote(p.nameFrom)+" to: ") + p.nameInput.Value() + m.th.Accent.Render("▏")
 	case p.filtering:
 		search = m.th.Accent.Render("/ ") + p.filter.Value() + m.th.Accent.Render("▏")
 	case p.query != "":
@@ -973,6 +1061,13 @@ func (m *Model) cardLines(w, h, x0 int) []string {
 	para(m.th.Dim, detail)
 	add("")
 
+	// A shared row's rule already names its project; say it only otherwise.
+	switch {
+	case r.Project == "":
+		field("Project", m.th.Dim.Render("none · n puts it in one"))
+	case r.State == NotShared || !strings.Contains(r.Reason, "project "+r.Project):
+		field("Project", r.Project)
+	}
 	field("Kind", m.kindLabel(rowKind(r)))
 	var srcs []string
 	for _, s := range r.Sources {

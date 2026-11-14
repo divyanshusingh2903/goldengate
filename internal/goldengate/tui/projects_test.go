@@ -414,3 +414,64 @@ func TestSourceEditorOnDeniedProject(t *testing.T) {
 	}
 	h.contains("this project is denied")
 }
+
+func TestPutInProjectCreatesOrJoinsOne(t *testing.T) {
+	h := newHarness(t, 100, 30)
+	h.contains("Rule      shared in project Pharmfindr")
+	h.key("n")
+	h.contains("Put 1 folder in project: Pharmfindr", "new names create one")
+	for range "Pharmfindr" {
+		h.key("backspace")
+	}
+	h.typeText("Health apps")
+	h.key("enter")
+	a := h.be.actions[len(h.be.actions)-1]
+	if a.Kind != ActSetProject || a.Project != "Health apps" || len(a.Keys) != 1 || a.Keys[0] != "/home/u/code/pharmfindr" {
+		t.Fatalf("action = %+v", a)
+	}
+	h.contains("Rule      shared in project Health apps")
+
+	h.key("esc") // nothing open: a no-op
+	n := len(h.be.actions)
+	h.key("n", "esc")
+	if len(h.be.actions) != n {
+		t.Error("esc must cancel the prompt without acting")
+	}
+}
+
+func TestRenameProjectNeedsAProject(t *testing.T) {
+	h := newHarness(t, 100, 30)
+	h.key("N")
+	h.contains(`Rename project "Pharmfindr" to: Pharmfindr`, "an existing name merges")
+	for range "Pharmfindr" {
+		h.key("backspace")
+	}
+	h.typeText("Pharm")
+	h.key("enter")
+	a := h.be.actions[len(h.be.actions)-1]
+	if a.Kind != ActRenameProject || a.Project != "Pharmfindr" || a.To != "Pharm" {
+		t.Fatalf("action = %+v", a)
+	}
+	h.contains("Rule      shared in project Pharm")
+
+	h.key("down", "down", "down") // ~/code/vihayas, in no project
+	h.contains("Project   none · n puts it in one")
+	n := len(h.be.actions)
+	h.key("N")
+	h.contains("in no project yet")
+	if len(h.be.actions) != n {
+		t.Error("renaming without a project must not act")
+	}
+}
+
+func TestTypingAProjectNameDoesNotRunCommands(t *testing.T) {
+	h := newHarness(t, 100, 30)
+	h.key("n")
+	h.typeText("sdq") // sync, deny and quit keys are text here
+	h.contains("Put 1 folder in project: Pharmfindrsdq")
+	for _, a := range h.be.actions {
+		if a.Kind == ActDeny {
+			t.Fatal("d typed into the prompt denied a project")
+		}
+	}
+}

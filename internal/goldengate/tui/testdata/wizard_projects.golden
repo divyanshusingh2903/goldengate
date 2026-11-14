@@ -9,7 +9,8 @@
 │  [ ] ~/code/website                  not shared│ If you share it, the next sync sends 47         │
 │  [ ] ~/work/client-x                 not shared│ sessions.                                       │
 │  [ ] ~/scratch/tmp                   not shared│                                                 │
-│  [ ] claude-ai:Chats                 not shared│ Kind      code · coding-tool sessions           │
+│  [ ] claude-ai:Chats                 not shared│ Project   Pharmfindr                            │
+│                                                │ Kind      code · coding-tool sessions           │
 │                                                │ Sessions  47 · CC Claude Code 41, CX Codex 6    │
 │                                                │ Activity  2h ago                                │
 │                                                │ Level     titles-only                           │
@@ -21,7 +22,6 @@
 │                                                │  CX Add gRPC health checks                      │
 │                                                │  CC Refactor token store · cli                  │
 │                                                │ 2 secret(s) redacted before sending             │
-│                                                │                                                 │
 │                                                │                                                 │
 │                                                │                                                 │
 │                                                │                                                 │

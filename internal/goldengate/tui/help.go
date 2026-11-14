@@ -11,6 +11,8 @@ func (m *Model) helpBox() []string {
 		k("d", "deny (beats any allow rule)"),
 		k("u", "undo the last change"),
 		k("e", "choose which sources are shared"),
+		k("n", "put in a project (type a new name to create one)"),
+		k("N", "rename the project (an existing name merges them)"),
 		k("/", "fuzzy search   (esc clears)"),
 		k("f", "view: all / shared / to sync / not shared"),
 		k("t", "folder tree: space on a folder shares all of it"),

@@ -65,7 +65,7 @@ Run `goldengate` in a terminal. The first run starts a short setup (find your to
 
 | Screen | What it does |
 |---|---|
-| Projects (`1`) | Every project folder, with its sync state: `▲ 3 to sync`, `✓ synced 2h`, `not shared`, `✕ denied`. Views: All / Shared / To sync / Not shared (`f`). `space` share or un-share · `v` range · `a`/`A` mark all/none · `d` deny · `u` undo · `e` choose which tools are sent · `/` search · `t` folder tree (space on a folder shares everything below it) · `o` sort · `p` preview · `P` paranoid (raw payloads) |
+| Projects (`1`) | Every project folder, with its sync state: `▲ 3 to sync`, `✓ synced 2h`, `not shared`, `✕ denied`. Views: All / Shared / To sync / Not shared (`f`). `space` share or un-share · `v` range · `a`/`A` mark all/none · `d` deny · `n` put in a project · `N` rename or merge a project · `u` undo · `e` choose which tools are sent · `/` search · `t` folder tree (space on a folder shares everything below it) · `o` sort · `p` preview · `P` paranoid (raw payloads) |
 | Sync (`2`, or `s`) | Two steps. **Review** runs at once: every session is read and redacted exactly as it would be sent, and nothing leaves the machine. **Send** (`enter`) sends exactly what was reviewed. Progress follows each session; a failed project can be retried and skips what already arrived. |
 | Server (`3`) | Health, token check, what the server holds (code or chat), `D` delete a project from it |
 | Settings (`4`) | Theme, share level, look-back window, sources, redaction patterns, commit verification |
@@ -108,7 +108,21 @@ Turning a model on only affects new and changed sessions. Sessions synced earlie
 
 Everything the UI does is also available as a command.
 
-The tools sent for one project can be chosen with `e`: on a shared project, untick a tool to stop sending it; on one that is not shared yet, ticking a tool shares the project with only that tool. That is stored as `deny_source = ["codex@~/code/app"]` in the config.
+The tools sent for one project can be chosen with `e`: on a shared project, untick a tool to stop sending it; on one that is not shared yet, ticking a tool shares the project with only that tool. That is stored as `exclude_sources` on the folder in the config.
+
+**Named projects.** What you share is grouped into named projects: one project can hold several folders and chat groupings, and the card names the project a folder is in. Press `n` to put the marked folders in a project (typing a new name creates it), and `N` to rename one (typing an existing name merges them). Putting a folder in a project shares it, and a deny rule still wins. From the command line:
+
+```bash
+goldengate projects create "Pharmfindr" ~/code/pharmfindr ~/code/pharmfindr-web
+goldengate projects add Pharmfindr 'claude-ai:Pharmfindr'
+goldengate projects list
+goldengate projects rename Pharmfindr "Pharmfindr app"
+goldengate projects merge "Old name" "Pharmfindr app"
+goldengate projects remove "Pharmfindr app" ~/code/pharmfindr-web   # stops sharing it
+goldengate projects delete "Pharmfindr app"                          # stops sharing every member
+```
+
+`goldengate share add <folder>` still works and puts the folder in a project of its own, named after it. Configs that use `[share] allow` are read as projects and written back in the new shape on the next save.
 
 ## Sources
 

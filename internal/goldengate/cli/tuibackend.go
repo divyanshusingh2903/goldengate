@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -64,10 +65,13 @@ func (b *tuiBackend) takeReview(cfg config.Config, o tui.SyncOpts) (gsync.Batch,
 }
 
 // shareRules is the part of the config the share actions edit, kept for undo.
-type shareRules struct{ allow, deny, sourceDeny []string }
+type shareRules struct {
+	allow, deny, sourceDeny []string
+	projects                []config.Project
+}
 
 func rulesOf(c config.Config) shareRules {
-	return shareRules{slices.Clone(c.Share.Allow), slices.Clone(c.Share.Deny), slices.Clone(c.Share.SourceDeny)}
+	return shareRules{slices.Clone(c.Share.Allow), slices.Clone(c.Share.Deny), slices.Clone(c.Share.SourceDeny), config.CloneProjects(c.Projects)}
 }
 
 func (a *app) tuiBackend() *tuiBackend { return &tuiBackend{a: a} }
@@ -129,6 +133,7 @@ func (b *tuiBackend) Snapshot(ctx context.Context) (tui.Snapshot, error) {
 		if p.Root != "" {
 			row.Root = pathutil.Scrub(p.Root, a.Home)
 		}
+		row.Project = s.Matcher.Project(p.Key)
 		names := make([]string, 0, len(p.Sources))
 		for src := range p.Sources {
 			names = append(names, src)
@@ -285,6 +290,10 @@ func (b *tuiBackend) Apply(ctx context.Context, act tui.Action) (tui.ActionResul
 				notes = append(notes, pretty(act.Source)+" is sent again for this project")
 			}
 		}
+	case tui.ActSetProject:
+		edit, err = b.setProjectEdit(cfg, m, act.Keys, act.Project, &notes)
+	case tui.ActRenameProject:
+		edit, err = renameProjectEdit(cfg, act.Project, act.To, &notes)
 	default:
 		return tui.ActionResult{}, errors.New("unknown action")
 	}
@@ -351,6 +360,71 @@ func (b *tuiBackend) allowEdit(cfg config.Config, m *selection.Matcher, keys []s
 	}, nil
 }
 
+// setProjectEdit puts folders or chat groupings into a named project,
+// creating it when no project has that name. They become shared, as with
+// ActAllow; a member of another project moves.
+func (b *tuiBackend) setProjectEdit(cfg config.Config, m *selection.Matcher, keys []string, name string, notes *[]string) (func(*config.Config), error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return nil, errors.New("type a project name")
+	}
+	if len(keys) == 0 {
+		return nil, errors.New("choose a project folder first")
+	}
+	var ignored []string
+	share, err := b.allowEdit(cfg, m, keys, &ignored)
+	if err != nil {
+		return nil, err
+	}
+	verb := "added to"
+	if cfg.ProjectIndex(name) < 0 {
+		verb = "created project " + strconv.Quote(name) + " with"
+	}
+	a := b.a
+	edit := func(c *config.Config) {
+		share(c)
+		c.Fold()
+		for _, k := range keys {
+			_, _ = c.AddMember(name, a.ruleFor(k))
+		}
+	}
+	probe := cfg
+	probe.Projects = config.CloneProjects(cfg.Projects)
+	probe.Share.Allow, probe.Share.Deny, probe.Share.SourceDeny = slices.Clone(cfg.Share.Allow), slices.Clone(cfg.Share.Deny), slices.Clone(cfg.Share.SourceDeny)
+	edit(&probe)
+	if err := probe.Validate(); err != nil {
+		return nil, err
+	}
+	if strings.HasPrefix(verb, "created") {
+		*notes = append(*notes, fmt.Sprintf("%s %d", verb, len(keys)))
+	} else {
+		*notes = append(*notes, fmt.Sprintf("%d %s %q", len(keys), verb, name))
+	}
+	return edit, nil
+}
+
+// renameProjectEdit renames a project, or merges it into another when the new
+// name is already taken.
+func renameProjectEdit(cfg config.Config, from, to string, notes *[]string) (func(*config.Config), error) {
+	from, to = strings.TrimSpace(from), strings.TrimSpace(to)
+	i := cfg.ProjectIndex(from)
+	if i < 0 {
+		return nil, fmt.Errorf("no project named %q", from)
+	}
+	if j := cfg.ProjectIndex(to); j >= 0 && j != i {
+		into := cfg.Projects[j].Name
+		*notes = append(*notes, fmt.Sprintf("merged %q into %q", cfg.Projects[i].Name, into))
+		return func(c *config.Config) { c.Fold(); _ = c.MergeProjects(from, into) }, nil
+	}
+	probe := cfg
+	probe.Projects = config.CloneProjects(cfg.Projects)
+	if err := probe.RenameProject(from, to); err != nil {
+		return nil, err
+	}
+	*notes = append(*notes, fmt.Sprintf("renamed %q to %q", cfg.Projects[i].Name, to))
+	return func(c *config.Config) { c.Fold(); _ = c.RenameProject(from, to) }, nil
+}
+
 func (b *tuiBackend) removeEdit(cfg config.Config, m *selection.Matcher, keys []string, notes *[]string) func(*config.Config) {
 	a := b.a
 	excluded := 0
@@ -393,7 +467,9 @@ func (b *tuiBackend) Undo(ctx context.Context) (string, error) {
 		return "", err
 	}
 	if _, err := b.a.applyChange(ctx, cfg, func(c *config.Config) {
-		c.Share.Allow, c.Share.Deny, c.Share.SourceDeny = slices.Clone(prev.allow), slices.Clone(prev.deny), slices.Clone(prev.sourceDeny)
+		c.Projects = config.CloneProjects(prev.projects)
+		c.Share.Deny, c.Share.SourceDeny = slices.Clone(prev.deny), slices.Clone(prev.sourceDeny)
+		c.Flatten()
 	}); err != nil {
 		return "", err
 	}

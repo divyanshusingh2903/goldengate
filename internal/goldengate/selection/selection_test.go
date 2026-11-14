@@ -191,3 +191,58 @@ func TestSourceDenyExcludesOneToolOnly(t *testing.T) {
 		}
 	}
 }
+
+func TestDenyBeatsProjectMembership(t *testing.T) {
+	m := mustNew(t, Policy{
+		Allow:    []string{"~/code/app"},
+		Deny:     []string{"~/code/app/secrets"},
+		Projects: map[string]string{"~/code/app": "App"},
+	}, false)
+	if d := m.Decide("/home/u/code/app/secrets", "claude-code"); d.Shared {
+		t.Fatalf("deny must beat membership: %+v", d)
+	}
+	if d := m.Decide("/home/u/code/app", "claude-code"); !d.Shared || d.Reason != "shared in project App" {
+		t.Fatalf("member decision = %+v", d)
+	}
+	if got := m.Project("/home/u/code/app/secrets"); got != "App" {
+		t.Errorf("a denied folder can still be listed in its project: %q", got)
+	}
+}
+
+func TestMostSpecificMemberDecidesTheProject(t *testing.T) {
+	m := mustNew(t, Policy{
+		Allow:    []string{"~/code", "~/code/app", "claude-ai:*", "claude-ai:Work"},
+		Projects: map[string]string{"~/code": "Everything", "~/code/app": "App", "claude-ai:*": "Chats", "claude-ai:Work": "Work chats"},
+	}, false)
+	for key, want := range map[string]string{
+		"/home/u/code/app/sub": "App",
+		"/home/u/code/other":   "Everything",
+		"claude-ai:Work":       "Work chats",
+		"claude-ai:Chats":      "Chats",
+		"/home/u/elsewhere":    "",
+	} {
+		if got := m.Project(key); got != want {
+			t.Errorf("%s: project %q, want %q", key, got, want)
+		}
+	}
+	if d := m.Decide("/home/u/code/app/sub", ""); d.Reason != "shared in project App" {
+		t.Errorf("reason names the most specific project: %+v", d)
+	}
+}
+
+func TestOneFolderInTwoProjectsIsRejected(t *testing.T) {
+	_, err := New(Policy{
+		Allow:    []string{"~/code/app", "/home/u/code/app/"},
+		Projects: map[string]string{"~/code/app": "A", "/home/u/code/app/": "B"},
+	}, Options{Home: "/home/u", CaseInsensitive: bptr(false)})
+	if err == nil {
+		t.Fatal("the same folder written two ways in two projects must be rejected")
+	}
+}
+
+func TestAllowRulesOutsideProjectsStillWork(t *testing.T) {
+	m := mustNew(t, Policy{Allow: []string{"~/code/app"}}, false)
+	if d := m.Decide("/home/u/code/app", ""); !d.Shared || d.Reason != "allowed by ~/code/app" || m.Project("/home/u/code/app") != "" {
+		t.Errorf("plain allow rule: %+v", d)
+	}
+}

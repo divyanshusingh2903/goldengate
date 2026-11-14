@@ -44,6 +44,7 @@ type Row struct {
 	State    ShareState
 	Reason   string
 	Virtual  bool // a chat export bucket rather than a folder
+	Project  string // the named project this folder or chat grouping belongs to; "" when none
 }
 
 // SourceStatus is a tool's presence and whether it is enabled.
@@ -100,6 +101,8 @@ const (
 	ActRemove
 	ActDeny
 	ActToggleSource
+	ActSetProject    // put Keys in the project named Project, creating it if needed; they become shared
+	ActRenameProject // rename the project named Project to To; an existing To merges the two
 )
 
 // Action changes the share rules for a set of folders or chat projects.
@@ -108,6 +111,9 @@ type Action struct {
 	Keys   []string
 	Source string   // ActToggleSource only
 	Others []string // ActToggleSource: the project's other sources
+	// Project names the project for ActSetProject and ActRenameProject; To is
+	// the new name for ActRenameProject.
+	Project, To string
 }
 
 // RemotePrompt offers to delete un-shared projects from the server too.

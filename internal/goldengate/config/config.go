@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -29,6 +30,10 @@ type Config struct {
 	Redact    Redact    `toml:"redact"`
 	UI        UI        `toml:"ui"`
 	Summarize Summarize `toml:"summarize"`
+	// Projects are the user's named projects; their members are what is
+	// shared. Share.Allow and Share.SourceDeny are derived from them in
+	// memory (see Flatten and Fold) and are not written once projects exist.
+	Projects []Project `toml:"projects,omitempty"`
 }
 
 // Summarize chooses how session summaries are written. The default is the
@@ -64,13 +69,17 @@ type Server struct {
 
 // Share is the selection policy.
 type Share struct {
-	Default        string   `toml:"default"`
-	Allow          []string `toml:"allow"`
+	Default string `toml:"default"`
+	// Allow is read from configurations written before projects existed and
+	// migrated into Projects on load. In memory it is the list of every
+	// project member; it is not written back.
+	Allow          []string `toml:"allow,omitempty"`
 	Deny           []string `toml:"deny"`
 	IncludeSources []string `toml:"include_sources"`
 	// SourceDeny excludes one source from a folder ("codex@~/code/app") while
-	// the rest of the folder stays shared.
-	SourceDeny []string `toml:"deny_source"`
+	// the rest of the folder stays shared. Rules for project members live in
+	// the member's exclude_sources; only rules naming no member stay here.
+	SourceDeny []string `toml:"deny_source,omitempty"`
 	Since      string   `toml:"since"`
 	Level      string   `toml:"level"`
 }
@@ -155,7 +164,7 @@ func (c Config) Validate() error {
 			return err
 		}
 	}
-	return nil
+	return c.validateProjects()
 }
 
 // CheckServerURL refuses plain http except for loopback hosts.
@@ -249,6 +258,10 @@ func Load(path string) (Config, error) {
 	if err := dec.Decode(&c); err != nil {
 		return Default(), fmt.Errorf("config: parse %s: %w", path, err)
 	}
+	if err := c.validateProjects(); err != nil { // as written, before allow rules are migrated in
+		return Default(), err
+	}
+	c.migrate()
 	if err := c.Validate(); err != nil {
 		return Default(), err
 	}
@@ -258,9 +271,22 @@ func Load(path string) (Config, error) {
 // Save writes the config atomically with mode 0600. Comments in an existing
 // file are not preserved.
 func Save(path string, c Config) error {
+	c.Projects = CloneProjects(c.Projects)
+	c.Share.Allow = slices.Clone(c.Share.Allow)
+	c.Share.SourceDeny = slices.Clone(c.Share.SourceDeny)
+	c.Fold()
 	if err := c.Validate(); err != nil {
 		return err
 	}
+	// Members carry what allow and deny_source used to; write only the source
+	// rules that name no member.
+	var leftover []string
+	for _, r := range c.Share.SourceDeny {
+		if _, pat, ok := selection.SplitSourceRule(r); ok && c.memberIndex(pat) == nil {
+			leftover = append(leftover, r)
+		}
+	}
+	c.Share.Allow, c.Share.SourceDeny = nil, leftover
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return fmt.Errorf("config: mkdir: %w", err)
 	}
