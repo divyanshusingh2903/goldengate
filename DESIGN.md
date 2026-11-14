@@ -282,6 +282,8 @@ max_input_chars = 0              # conversation sent per session; 0 = 24000 (abo
 length = "standard"              # narrative a model writes per session: short | standard | detailed
 ```
 
+**Inbox (per-session approval).** Sharing a project selects it; it does not send its sessions. Each named project has `auto_approve`. Without it, a new or changed session waits as *pending* and is sent only once the user approved exactly that content (the decision stores the session's content hash). A session that changes after it was approved or sent is pending again. An *excluded* session is never read or sent again, in any project, until the user resets the decision. Decisions live in the local state DB (`decisions`: session, state, content hash, time, and the redacted title for listing); the states are approved, excluded and (from #29) retracted, while sent is the existing record of what was pushed. `RunOpts.Approve` plans pending sessions too: the TUI sets it because its Sync screen shows every session as it would be sent and sends only on the user's command, so sending is the approval (`PlanInfo.Approving` says how many); the CLI sets it only with `sync --approve`. Unattended sync (hooks, timers) never sets it. Configurations written before the inbox (`version` absent) load with `auto_approve` on for every existing project, once, so nothing changes for them; projects shared afterwards wait. A folder shared without any named project (a default-allow configuration) is treated as auto-approved.
+
 Per-source rules: `exclude_sources` on a member keeps one tool's sessions of that folder out while the rest stays shared. `deny_source = ["codex@~/code/app"]` under `[share]` still works for a folder that is in no project.
 
 Rules
@@ -361,6 +363,9 @@ goldengate init [--server URL] [--pair-code CODE]   # first-run wizard; headless
 goldengate sync [--dry-run] [--project PATH] [--since 7d] [--source codex]
 goldengate share add|remove|list
 goldengate projects list|create|rename|merge|add|remove|delete   # named projects; members are what is shared
+goldengate inbox [list|approve|exclude|reset]                      # sessions waiting for approval; sync sends only approved ones
+goldengate sync --approve                                          # approve and send what waits (with --dry-run: look first)
+goldengate projects auto <project> on|off                          # skip the inbox for a project
 goldengate agents list|add|rename|limit|remove                    # one agent per assistant; needs the admin token
 goldengate agents grant|revoke <agent> <project>... | --all       # which projects an agent sees
 goldengate agents token <agent>                                   # a read token for that agent, shown once

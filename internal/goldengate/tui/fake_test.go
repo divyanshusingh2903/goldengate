@@ -54,7 +54,11 @@ type fakeBackend struct {
 	initErr    error
 	saveErr    error
 	snapshotFn func() (Snapshot, error)
-	stale      int // synced sessions with heuristic summaries (a model is configured when > 0)
+	approving  int // planned sessions that were waiting in the inbox
+	excluded   int
+	inbox      Inbox
+	inboxDecs  []string // "decision:id" in order
+	stale      int      // synced sessions with heuristic summaries (a model is configured when > 0)
 }
 
 func ago(d time.Duration) time.Time { return clock.Add(-d) }
@@ -231,6 +235,7 @@ func (f *fakeBackend) Plan(_ context.Context, o SyncOpts) (PlanInfo, error) {
 	f.planOpts = append(f.planOpts, o)
 	p := PlanInfo{Sessions: 7, NotSelected: 120, Unchanged: 30, Warnings: 1, Redactions: map[string]int{"aws-access-key": 2}, Server: f.server,
 		Projects: []ProjectPlan{{"~/code/pharmfindr", 4}, {"~/code/forge", 1}, {"~/code/pharmfindr/.claude/worktrees/fox", 2}}}
+	p.Approving, p.Excluded = f.approving, f.excluded
 	if f.stale > 0 {
 		p.Summarizer = "anthropic:claude-haiku-5-5"
 		if o.Resummarize {

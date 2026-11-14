@@ -89,7 +89,7 @@ func TestShareAndDryRunOnlySelectedProject(t *testing.T) {
 		t.Skip("unix path fixtures")
 	}
 	h := newHarness(t)
-	if err := h.run("share", "add", "~/projects/demo"); err != nil {
+	if err := h.run("share", "add", "~/projects/demo", "--auto-approve"); err != nil {
 		t.Fatal(err)
 	}
 	cfgPath := filepath.Join(h.xdgCfg, "goldengate", "config.toml")
@@ -130,7 +130,7 @@ func TestShareAndDryRunOnlySelectedProject(t *testing.T) {
 
 func TestRealSyncNeedsInit(t *testing.T) {
 	h := newHarness(t)
-	_ = h.run("share", "add", "~/projects/demo")
+	_ = h.run("share", "add", "~/projects/demo", "--auto-approve")
 	if err := h.run("sync"); err == nil || !strings.Contains(err.Error(), "goldengate init") {
 		t.Fatalf("got %v", err)
 	}
@@ -141,7 +141,7 @@ func TestShareListRemoveDeny(t *testing.T) {
 		t.Skip("unix path fixtures")
 	}
 	h := newHarness(t)
-	_ = h.run("share", "add", "~/projects")
+	_ = h.run("share", "add", "~/projects", "--auto-approve")
 	if err := h.run("share", "deny", "~/projects/client-secret"); err != nil {
 		t.Fatal(err)
 	}
@@ -168,8 +168,8 @@ func TestShareListRemoveDeny(t *testing.T) {
 
 func TestShareAddIdempotent(t *testing.T) {
 	h := newHarness(t)
-	_ = h.run("share", "add", "~/projects/demo")
-	if err := h.run("share", "add", "~/projects/demo"); err != nil || !strings.Contains(h.out.String(), "already shared") {
+	_ = h.run("share", "add", "~/projects/demo", "--auto-approve")
+	if err := h.run("share", "add", "~/projects/demo", "--auto-approve"); err != nil || !strings.Contains(h.out.String(), "already shared") {
 		t.Fatalf("%v %s", err, h.out.String())
 	}
 }

@@ -36,6 +36,10 @@ CREATE TABLE IF NOT EXISTS sessions(
 CREATE INDEX IF NOT EXISTS sessions_project ON sessions(project);
 CREATE TABLE IF NOT EXISTS tombstones(project TEXT PRIMARY KEY, created_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS model_summaries(key TEXT PRIMARY KEY, answer TEXT NOT NULL, created_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS decisions(
+  source TEXT NOT NULL, session_id TEXT NOT NULL, state TEXT NOT NULL, content_hash TEXT NOT NULL,
+  decided_at INTEGER NOT NULL, project TEXT NOT NULL DEFAULT '', title TEXT NOT NULL DEFAULT '',
+  PRIMARY KEY(source, session_id));
 CREATE TABLE IF NOT EXISTS imports(
   id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT NOT NULL, path TEXT NOT NULL, added_at INTEGER NOT NULL, UNIQUE(source, path));
 `

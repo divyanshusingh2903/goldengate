@@ -129,3 +129,18 @@ func (f *fakeBackend) RevokeAgentToken(_ context.Context, admin, tokenID string)
 	}
 	return nil
 }
+
+func (f *fakeBackend) Inbox(context.Context) (Inbox, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.inbox, nil
+}
+
+func (f *fakeBackend) InboxDecide(_ context.Context, items []InboxItem, decision string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, it := range items {
+		f.inboxDecs = append(f.inboxDecs, decision+":"+it.ID)
+	}
+	return nil
+}

@@ -300,8 +300,8 @@ func TestBackendSyncReportsProgressAndDryRunRecordsNothing(t *testing.T) {
 	l := newLaptop(t)
 	l.addClaudeSession("55555555-5555-4555-8555-555555555555", "/home/user/projects/other", "other prompt")
 	l.must(l.initEnv(b), "init", "--non-interactive")
-	l.must(nil, "share", "add", "~/projects/demo")
-	l.must(nil, "share", "add", "~/projects/other")
+	l.must(nil, "share", "add", "~/projects/demo", "--auto-approve")
+	l.must(nil, "share", "add", "~/projects/other", "--auto-approve")
 	be := backend(l)
 	ctx := context.Background()
 
@@ -354,7 +354,7 @@ func TestBackendSendReusesTheReviewOnlyWhileItIsValid(t *testing.T) {
 	b := startBridge(t)
 	l := newLaptop(t)
 	l.must(l.initEnv(b), "init", "--non-interactive")
-	l.must(nil, "share", "add", "~/projects/demo")
+	l.must(nil, "share", "add", "~/projects/demo", "--auto-approve")
 	be := backend(l)
 	ctx := context.Background()
 	prepared := 0
@@ -396,8 +396,8 @@ func TestBackendSyncFailureOfOneProjectDoesNotStopTheRest(t *testing.T) {
 	l := newLaptop(t)
 	l.addClaudeSession("55555555-5555-4555-8555-555555555555", "/home/user/projects/other", "other prompt")
 	l.must(l.initEnv(b), "init", "--non-interactive")
-	l.must(nil, "share", "add", "~/projects/demo")
-	l.must(nil, "share", "add", "~/projects/other")
+	l.must(nil, "share", "add", "~/projects/demo", "--auto-approve")
+	l.must(nil, "share", "add", "~/projects/other", "--auto-approve")
 	// revoke the ingest token behind the laptop's back: every push fails with 401
 	toks, _ := b.st.ListTokens(context.Background())
 	for _, tk := range toks {
@@ -436,7 +436,7 @@ func TestBackendServerScreenAndRemoteDelete(t *testing.T) {
 		t.Fatalf("no server yet: %+v %v", info, err)
 	}
 	l.must(l.initEnv(b), "init", "--non-interactive")
-	l.must(nil, "share", "add", "~/projects/demo")
+	l.must(nil, "share", "add", "~/projects/demo", "--auto-approve")
 	l.must(nil, "sync")
 	info, err := be.Server(ctx)
 	if err != nil || !info.Configured || !info.Healthy || !info.TokenOK || info.TokenStore != "memory" || len(info.Projects) != 1 || info.Projects[0].Label != "demo" || !strings.HasPrefix(info.Projects[0].ID, "p_") {
@@ -465,7 +465,7 @@ func TestBackendUnshareOffersRemoteDelete(t *testing.T) {
 	b := startBridge(t)
 	l := newLaptop(t)
 	l.must(l.initEnv(b), "init", "--non-interactive")
-	l.must(nil, "share", "add", "~/projects/demo")
+	l.must(nil, "share", "add", "~/projects/demo", "--auto-approve")
 	l.must(nil, "sync")
 	be := backend(l)
 	ctx := context.Background()
@@ -531,7 +531,7 @@ func TestBackendSettings(t *testing.T) {
 		t.Error("a rejected save changed the config")
 	}
 	// the CLI sees the new level
-	l.must(nil, "share", "add", "~/projects/demo")
+	l.must(nil, "share", "add", "~/projects/demo", "--auto-approve")
 	l.must(nil, "sync", "--dry-run")
 	if !strings.Contains(l.out.String(), `"level": "titles-only"`) {
 		t.Errorf("sync uses the level chosen in the UI:\n%s", l.out)

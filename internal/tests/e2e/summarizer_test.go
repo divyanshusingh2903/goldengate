@@ -86,7 +86,7 @@ func TestSyncWithAModelSummarizer(t *testing.T) {
 	fake := &fakeChatServer{}
 	ts := fake.start(t)
 	l.must(l.initEnv(b), "init", "--non-interactive")
-	l.must(nil, "share", "add", "~/projects/demo")
+	l.must(nil, "share", "add", "~/projects/demo", "--auto-approve")
 	l.must(nil, "summarizer", "use", "custom", "--model", "tiny", "--base-url", ts.URL+"/v1")
 	if out := l.must(nil, "summarizer", "test"); !strings.Contains(out, "custom:tiny ok") {
 		t.Fatalf("test reaches the endpoint: %s", out)
@@ -149,7 +149,7 @@ func TestResummarizeUpgradesSessionsSyncedWithTheHeuristic(t *testing.T) {
 	fake := &fakeChatServer{}
 	ts := fake.start(t)
 	l.must(l.initEnv(b), "init", "--non-interactive")
-	l.must(nil, "share", "add", "~/projects/demo")
+	l.must(nil, "share", "add", "~/projects/demo", "--auto-approve")
 	l.must(nil, "sync") // with the heuristic
 	if held := everythingTheServerHolds(t, b); !strings.Contains(held, `"summarized_by":"heuristic"`) {
 		t.Fatalf("first synced with the heuristic:\n%s", held)
@@ -200,7 +200,7 @@ func TestRenamingOrMergingAProjectReachesTheServerOnTheNextSync(t *testing.T) {
 	ts := fake.start(t)
 	ctx := context.Background()
 	l.must(l.initEnv(b), "init", "--non-interactive")
-	l.must(nil, "projects", "create", "Widgets", "~/projects/demo")
+	l.must(nil, "projects", "create", "Widgets", "~/projects/demo", "--auto-approve")
 	l.must(nil, "sync")
 	ps, _ := b.st.ListProjects(ctx)
 	if len(ps) != 1 || ps[0].Project != "Widgets" || ps[0].Sessions != 1 {
@@ -236,7 +236,7 @@ func TestRenamingOrMergingAProjectReachesTheServerOnTheNextSync(t *testing.T) {
 	l.must(nil, "summarizer", "use", "heuristic")
 
 	// a merge moves the sessions to the other project's id; the emptied one goes
-	l.must(nil, "projects", "create", "Everything")
+	l.must(nil, "projects", "create", "Everything", "--auto-approve")
 	l.must(nil, "projects", "merge", "Widget work", "Everything")
 	l.must(nil, "sync")
 	ps, _ = b.st.ListProjects(ctx)

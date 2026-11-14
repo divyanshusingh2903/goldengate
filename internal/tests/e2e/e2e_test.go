@@ -93,6 +93,7 @@ type laptop struct {
 	root    string
 	claude  string
 	secrets *secrets.Memory
+	turns   int // messages appended by addClaudeTurn
 	out     *bytes.Buffer
 	errOut  *bytes.Buffer
 	home    string
@@ -282,7 +283,7 @@ func TestFirstRunToAssistantAnswer(t *testing.T) {
 	}
 
 	// --- share one project, preview, sync ---
-	l.must(noAdmin, "share", "add", "~/projects/demo")
+	l.must(noAdmin, "share", "add", "~/projects/demo", "--auto-approve")
 	preview := l.must(noAdmin, "sync", "--dry-run")
 	if !strings.Contains(preview, "~/projects/demo") || strings.Contains(preview, "client-secret") {
 		t.Fatalf("preview:\n%s", preview)
@@ -372,7 +373,7 @@ func TestFirstRunToAssistantAnswer(t *testing.T) {
 	}
 
 	// --- re-share, then purge on demand ---
-	l.must(noAdmin, "share", "add", "~/projects/demo")
+	l.must(noAdmin, "share", "add", "~/projects/demo", "--auto-approve")
 	l.must(noAdmin, "sync")
 	if ps, _ := b.st.ListProjects(context.Background()); len(ps) != 1 {
 		t.Fatalf("re-share must push again: %+v", ps)
@@ -435,7 +436,7 @@ func TestPairingSetup(t *testing.T) {
 	if err != nil || !strings.HasPrefix(ing, "ggb_ingest_") {
 		t.Fatalf("%q %v", ing, err)
 	}
-	l.must(nil, "share", "add", "~/projects/demo")
+	l.must(nil, "share", "add", "~/projects/demo", "--auto-approve")
 	l.must(nil, "sync")
 	if ps, _ := b.st.ListProjects(context.Background()); len(ps) != 1 {
 		t.Fatalf("paired laptop could not sync: %+v", ps)
@@ -540,7 +541,7 @@ func TestWorktreeSessionsShareTheirRepositoryProject(t *testing.T) {
 	l := newLaptop(t)
 	l.addClaudeSession("33333333-3333-4333-8333-333333333333", "/home/user/projects/demo/.claude/worktrees/fox", "worktree-only prompt WTMARK")
 	l.must(l.initEnv(b), "init", "--non-interactive")
-	l.must(nil, "share", "add", "~/projects/demo")
+	l.must(nil, "share", "add", "~/projects/demo", "--auto-approve")
 	l.must(nil, "sync")
 
 	ps, _ := b.st.ListProjects(context.Background())

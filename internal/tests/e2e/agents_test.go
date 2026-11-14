@@ -23,8 +23,8 @@ func TestTwoAssistantsWithDifferentProjectsFromTheCLI(t *testing.T) {
 		t.Fatalf("init says what the first assistant sees:\n%s", out)
 	}
 	first := readTokenRe.FindString(out)
-	l.must(nil, "projects", "create", "Demo", "~/projects/demo")
-	l.must(nil, "projects", "create", "Client work", "~/projects/client-secret")
+	l.must(nil, "projects", "create", "Demo", "~/projects/demo", "--auto-approve")
+	l.must(nil, "projects", "create", "Client work", "~/projects/client-secret", "--auto-approve")
 	l.must(nil, "sync")
 
 	// Without the admin secret nothing about agents can be read or changed.
@@ -153,8 +153,8 @@ func TestBackendAgentsGridViewAsAndRevoke(t *testing.T) {
 	l := newLaptop(t)
 	admin := l.initEnv(b)
 	l.must(admin, "init", "--non-interactive")
-	l.must(nil, "projects", "create", "Demo", "~/projects/demo")
-	l.must(nil, "projects", "create", "Client work", "~/projects/client-secret")
+	l.must(nil, "projects", "create", "Demo", "~/projects/demo", "--auto-approve")
+	l.must(nil, "projects", "create", "Client work", "~/projects/client-secret", "--auto-approve")
 	l.must(nil, "sync")
 	l.must(admin, "agents", "add", "ChatGPT")
 	gptTok := readTokenRe.FindString(l.must(admin, "agents", "token", "ChatGPT", "--label", "connector"))

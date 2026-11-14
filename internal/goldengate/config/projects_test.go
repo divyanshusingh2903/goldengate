@@ -198,3 +198,67 @@ func TestCloneProjectsIsDeep(t *testing.T) {
 		t.Errorf("clone shares memory with the original: %+v", ps)
 	}
 }
+
+func TestProjectsSharedBeforeTheInboxKeepSendingAndNewOnesWait(t *testing.T) {
+	// A file from before the inbox: no version. Its projects, and the ones
+	// made from its allow rules, were sending everything and still do.
+	p := write(t, `[share]
+default = "deny"
+allow = ["~/code/legacy"]
+level = "summary"
+
+[[projects]]
+id = "p_old1"
+name = "Old"
+[[projects.members]]
+path = "~/code/old"
+`)
+	c, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(c.Projects) != 2 || !c.Projects[0].AutoApprove || !c.Projects[1].AutoApprove || c.Version != CurrentVersion {
+		t.Fatalf("existing projects are auto-approved: %+v v%d", c.Projects, c.Version)
+	}
+	// A project shared from now on waits for approval.
+	if _, err := c.AddMember("New", "~/code/new"); err != nil {
+		t.Fatal(err)
+	}
+	c.Share.Allow = append(c.Share.Allow, "~/code/viaallow")
+	if err := Save(p, c); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ := os.ReadFile(p)
+	if !strings.Contains(string(raw), "version = 2") || strings.Count(string(raw), "auto_approve = true") != 2 {
+		t.Fatalf("the file records its version and the switch:\n%s", raw)
+	}
+	back, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]bool{}
+	for _, pr := range back.Projects {
+		got[pr.Name] = pr.AutoApprove
+	}
+	if want := map[string]bool{"Old": true, "legacy": true, "New": false, "viaallow": false}; !reflect.DeepEqual(got, want) {
+		t.Fatalf("after a save and reload: %v", got)
+	}
+	// Turning the switch off sticks: a second load must not turn it on again.
+	back.Projects[0].AutoApprove = false
+	if err := Save(p, back); err != nil {
+		t.Fatal(err)
+	}
+	if again, _ := Load(p); again.Projects[0].AutoApprove {
+		t.Fatal("the migration runs once: a switch the user turned off stays off")
+	}
+	// A fresh install has no file: nothing is auto-approved by default.
+	if d := Default(); d.Version != CurrentVersion {
+		t.Fatalf("default version: %d", d.Version)
+	}
+	if _, err := Load(write(t, "version = 99\n")); err == nil || !strings.Contains(err.Error(), "newer goldengate") {
+		t.Fatalf("a file from a newer build is refused: %v", err)
+	}
+	if cp := CloneProjects(back.Projects); cp[1].AutoApprove != back.Projects[1].AutoApprove {
+		t.Error("clone keeps the switch")
+	}
+}

@@ -330,6 +330,13 @@ func (m *Model) resummarizeOffer(add func(string), buttons func(...btn)) {
 	add("")
 }
 
+func wasWere(n int) string {
+	if n == 1 {
+		return "was"
+	}
+	return "were"
+}
+
 func haveHas(n int) string {
 	if n == 1 {
 		return "has"
@@ -457,6 +464,12 @@ func (m *Model) viewSync() string {
 		add(strings.Join(parts, m.th.Dim.Render(" · ")))
 		if s.plan.NotSelected > 0 {
 			add(m.th.Dim.Render(fmt.Sprintf("%s in projects you don't share stay on this machine.", plural(s.plan.NotSelected, "session"))))
+		}
+		if s.plan.Approving > 0 {
+			add(m.th.Changed.Render(fmt.Sprintf("%s waiting for your approval: sending approves what you reviewed here.", plural(s.plan.Approving, "session")+" "+wasWere(s.plan.Approving))))
+		}
+		if s.plan.Excluded > 0 {
+			add(m.th.Dim.Render(fmt.Sprintf("%s you excluded %s on this machine.", plural(s.plan.Excluded, "session"), map[bool]string{true: "stays", false: "stay"}[s.plan.Excluded == 1])))
 		}
 		if s.opts.Resummarize && s.plan.Resummarized > 0 {
 			add(m.th.Dim.Render(fmt.Sprintf("Includes %s re-summarized by %s.", plural(s.plan.Resummarized, "synced session"), s.plan.Summarizer)))

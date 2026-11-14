@@ -15,7 +15,7 @@ import (
 // adding a member shares it, removing one stops sharing it.
 func (a *app) projectsCmd() *cobra.Command {
 	cmd := &cobra.Command{Use: "projects", Short: "Manage named projects and their members (folders and chat groupings)"}
-	var purgeRemote, keepRemote bool
+	var purgeRemote, keepRemote, autoApprove bool
 	mode := func() (string, error) {
 		switch {
 		case purgeRemote && keepRemote:
@@ -30,7 +30,8 @@ func (a *app) projectsCmd() *cobra.Command {
 	list := &cobra.Command{Use: "list", Short: "List projects and their members", Args: cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error { return a.projectsList() }}
 	create := &cobra.Command{Use: "create <name> [member...]", Short: "Create a project, optionally with members (they become shared)", Args: cobra.MinimumNArgs(1),
-		RunE: func(c *cobra.Command, args []string) error { return a.projectsCreate(c.Context(), args[0], args[1:]) }}
+		RunE: func(c *cobra.Command, args []string) error { return a.projectsCreate(c.Context(), args[0], args[1:], autoApprove) }}
+	create.Flags().BoolVar(&autoApprove, "auto-approve", false, "send this project's new and changed sessions without asking")
 	rename := &cobra.Command{Use: "rename <project> <new name>", Short: "Rename a project (its id stays the same)", Args: cobra.ExactArgs(2),
 		RunE: func(c *cobra.Command, args []string) error { return a.projectsRename(args[0], args[1]) }}
 	merge := &cobra.Command{Use: "merge <from> <into>", Short: "Move every member of one project into another and remove the first", Args: cobra.ExactArgs(2),
@@ -57,7 +58,9 @@ func (a *app) projectsCmd() *cobra.Command {
 		c.Flags().BoolVar(&purgeRemote, "purge-remote", false, "also delete the un-shared members' data from the server")
 		c.Flags().BoolVar(&keepRemote, "keep-remote", false, "leave data already on the server in place")
 	}
-	cmd.AddCommand(list, create, rename, merge, add, remove, del)
+	auto := &cobra.Command{Use: "auto <project> on|off", Short: "Auto-approve: send a project's new sessions without asking (off: they wait in the inbox)", Args: cobra.ExactArgs(2),
+		RunE: func(c *cobra.Command, args []string) error { return a.projectsAuto(args[0], args[1]) }}
+	cmd.AddCommand(list, create, rename, merge, add, remove, del, auto)
 	return cmd
 }
 
@@ -75,7 +78,11 @@ func (a *app) projectsList() error {
 		return err
 	}
 	for _, p := range cfg.Projects {
-		fmt.Fprintf(a.Stdout, "%s  (%s)\n", p.Name, p.ID)
+		mode := "new sessions wait in the inbox"
+		if p.AutoApprove {
+			mode = "auto-approve: new sessions are sent"
+		}
+		fmt.Fprintf(a.Stdout, "%s  (%s)  [%s]\n", p.Name, p.ID, mode)
 		if len(p.Members) == 0 {
 			fmt.Fprintln(a.Stdout, "  (no members: nothing is shared)")
 		}
@@ -96,7 +103,7 @@ func (a *app) projectsList() error {
 	return nil
 }
 
-func (a *app) projectsCreate(ctx context.Context, name string, members []string) error {
+func (a *app) projectsCreate(ctx context.Context, name string, members []string, auto bool) error {
 	cfg, err := a.load()
 	if err != nil {
 		return err
@@ -108,13 +115,21 @@ func (a *app) projectsCreate(ctx context.Context, name string, members []string)
 		if _, err := cfg.CreateProject(name); err != nil {
 			return err
 		}
+		cfg.Projects[cfg.ProjectIndex(name)].AutoApprove = auto
 		if err := config.Save(a.cfgPath(), cfg); err != nil {
 			return err
 		}
 		fmt.Fprintf(a.Stdout, "created project %q (no members yet: nothing is shared)\n", name)
 		return nil
 	}
-	return a.projectsAdd(ctx, name, members)
+	if err := a.projectsAdd(ctx, name, members); err != nil {
+		return err
+	}
+	if !auto {
+		fmt.Fprintln(a.Stdout, "its sessions wait for your approval: `goldengate inbox`, or review and send from the Sync screen")
+		return nil
+	}
+	return a.projectsAuto(name, "on")
 }
 
 func (a *app) projectsRename(ref, name string) error {
@@ -242,4 +257,33 @@ func (a *app) projectsDelete(ctx context.Context, ref, purge string) error {
 	p := cfg.Projects[i]
 	return a.change(ctx, cfg, func(c *config.Config) { _, _ = c.DeleteProject(p.ID) },
 		fmt.Sprintf("deleted project %q; its %d member(s) are no longer shared", p.Name, len(p.Members)), purge)
+}
+
+func (a *app) projectsAuto(ref, v string) error {
+	var on bool
+	switch strings.ToLower(v) {
+	case "on":
+		on = true
+	case "off":
+	default:
+		return fmt.Errorf("say on or off, got %q", v)
+	}
+	cfg, err := a.load()
+	if err != nil {
+		return err
+	}
+	i := cfg.ProjectIndex(ref)
+	if i < 0 {
+		return fmt.Errorf("no project named %q", ref)
+	}
+	cfg.Projects[i].AutoApprove = on
+	if err := config.Save(a.cfgPath(), cfg); err != nil {
+		return err
+	}
+	if on {
+		fmt.Fprintf(a.Stdout, "%q: new and changed sessions are sent on the next sync without asking\n", cfg.Projects[i].Name)
+	} else {
+		fmt.Fprintf(a.Stdout, "%q: new and changed sessions wait in the inbox until you approve them\n", cfg.Projects[i].Name)
+	}
+	return nil
 }

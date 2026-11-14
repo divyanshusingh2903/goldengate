@@ -109,7 +109,7 @@ func New(d Deps) *cobra.Command {
 	root.SetOut(d.Stdout)
 	root.SetErr(d.Stderr)
 	root.PersistentFlags().StringVar(&a.configPath, "config", "", "config file (default: XDG config dir)")
-	root.AddCommand(a.syncCmd(), a.shareCmd(), a.projectsCmd(), a.agentsCmd(), a.doctorCmd(), a.summarizerCmd(), a.initCmd(), a.tokenCmd(), a.purgeCmd(), a.importsCmd(), &cobra.Command{
+	root.AddCommand(a.syncCmd(), a.shareCmd(), a.projectsCmd(), a.agentsCmd(), a.inboxCmd(), a.doctorCmd(), a.summarizerCmd(), a.initCmd(), a.tokenCmd(), a.purgeCmd(), a.importsCmd(), &cobra.Command{
 		Use: "version", Short: "Print the version",
 		Run: func(*cobra.Command, []string) {
 			fmt.Fprintln(a.Stdout, "goldengate", Version, runtime.GOOS+"/"+runtime.GOARCH)
@@ -144,7 +144,7 @@ func (a *app) openState() (*gsync.State, error) {
 // --- sync ---
 
 func (a *app) syncCmd() *cobra.Command {
-	var dry, quiet, resummarize bool
+	var dry, quiet, resummarize, approve bool
 	var project, source, since string
 	cmd := &cobra.Command{
 		Use:   "sync",
@@ -194,7 +194,7 @@ func (a *app) syncCmd() *cobra.Command {
 			if resummarize && s.Summarizer == nil {
 				return errors.New("--resummarize needs a model summarizer: run `goldengate summarizer use anthropic` (or openai) first")
 			}
-			rep, err := s.Run(cmd.Context(), gsync.RunOpts{Project: project, Source: source, Since: sinceD, Resummarize: resummarize}, sink, dry)
+			rep, err := s.Run(cmd.Context(), gsync.RunOpts{Project: project, Source: source, Since: sinceD, Resummarize: resummarize, Approve: approve}, sink, dry)
 			if err != nil {
 				return err
 			}
@@ -213,6 +213,9 @@ func (a *app) syncCmd() *cobra.Command {
 					sort.Strings(kinds)
 					fmt.Fprintf(a.Stderr, "redactions: %s\n", strings.Join(kinds, " "))
 				}
+				if rep.Pending > 0 {
+					fmt.Fprintf(a.Stderr, "%d sessions wait in the inbox and were not sent: see them with `goldengate inbox`, approve with `goldengate inbox approve --all`, or send them now with `goldengate sync --approve`\n", rep.Pending)
+				}
 				if rep.Refiled > 0 {
 					fmt.Fprintf(a.Stderr, "%d synced sessions re-sent as they were, under their project's current name and id\n", rep.Refiled)
 				}
@@ -228,6 +231,7 @@ func (a *app) syncCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().BoolVar(&dry, "dry-run", false, "print the payloads that would be sent; send and record nothing")
+	cmd.Flags().BoolVar(&approve, "approve", false, "also send the sessions that wait in the inbox (with --dry-run: print them too, to look before you approve)")
 	cmd.Flags().BoolVar(&quiet, "quiet", false, "only print warnings and errors")
 	cmd.Flags().StringVar(&project, "project", "", "only this project folder")
 	cmd.Flags().StringVar(&source, "source", "", "only this source (e.g. claude-code)")
@@ -274,11 +278,11 @@ func (a *app) shareCmd() *cobra.Command {
 		c.Flags().BoolVar(&purgeRemote, "purge-remote", false, "also delete the un-shared projects' data from the server")
 		c.Flags().BoolVar(&keepRemote, "keep-remote", false, "leave data already on the server in place")
 	}
-	cmd.AddCommand(
-		&cobra.Command{Use: "add <path>", Short: "Share a folder (and everything under it)", Args: cobra.ExactArgs(1),
-			RunE: func(c *cobra.Command, args []string) error { return a.shareAdd(c.Context(), args[0]) }},
-		remove, deny, a.shareListCmd(),
-	)
+	var auto bool
+	add := &cobra.Command{Use: "add <path>", Short: "Share a folder (and everything under it); its sessions wait in the inbox unless --auto-approve", Args: cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error { return a.shareAdd(c.Context(), args[0], auto) }}
+	add.Flags().BoolVar(&auto, "auto-approve", false, "send this folder's new and changed sessions without asking")
+	cmd.AddCommand(add, remove, deny, a.shareListCmd())
 	return cmd
 }
 
@@ -313,7 +317,7 @@ func sameRule(a *app, x, y string) bool {
 	return nx == ny
 }
 
-func (a *app) shareAdd(ctx context.Context, p string) error {
+func (a *app) shareAdd(ctx context.Context, p string, auto bool) error {
 	cfg, err := a.load()
 	if err != nil {
 		return err
@@ -326,6 +330,12 @@ func (a *app) shareAdd(ctx context.Context, p string) error {
 		}
 	}
 	cfg.Share.Allow = append(cfg.Share.Allow, rule)
+	if auto {
+		cfg.Fold() // the folder gets its project now, so the switch can be set on it
+		if i := cfg.ProjectOfMember(rule); i >= 0 {
+			cfg.Projects[i].AutoApprove = true
+		}
+	}
 	if err := config.Save(a.cfgPath(), cfg); err != nil {
 		return err
 	}
@@ -341,6 +351,11 @@ func (a *app) shareAdd(ctx context.Context, p string) error {
 		return err
 	}
 	fmt.Fprintf(a.Stdout, "sharing %s\n", rule)
+	if auto {
+		fmt.Fprintln(a.Stdout, "its new and changed sessions are sent on every sync without asking")
+	} else {
+		fmt.Fprintln(a.Stdout, "its sessions wait for your approval: `goldengate inbox`, or review and send from the Sync screen")
+	}
 	return nil
 }
 

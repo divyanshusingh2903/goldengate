@@ -117,7 +117,7 @@ func TestOneFolderAcrossThreeToolsIsOneProject(t *testing.T) {
 	if strings.Count(listing, "~/projects/demo ") != 1 {
 		t.Fatalf("the same folder in three tools must be one project:\n%s", listing)
 	}
-	if err := m.run("share", "add", "~/projects/demo"); err != nil {
+	if err := m.run("share", "add", "~/projects/demo", "--auto-approve"); err != nil {
 		t.Fatal(err)
 	}
 	if err := m.run("sync", "--dry-run"); err != nil {
@@ -150,7 +150,7 @@ func TestOneFolderAcrossThreeToolsIsOneProject(t *testing.T) {
 
 func TestSourceFilterPicksOneTool(t *testing.T) {
 	m := newMulti(t)
-	_ = m.run("share", "add", "~/projects/demo")
+	_ = m.run("share", "add", "~/projects/demo", "--auto-approve")
 	if err := m.run("sync", "--dry-run", "--source", "codex"); err != nil {
 		t.Fatal(err)
 	}
@@ -197,7 +197,7 @@ func TestChatExportsNeedAnExplicitAllow(t *testing.T) {
 	_ = os.WriteFile(cfgPath, b, 0o600)
 
 	// one explicit project
-	if err := m.run("share", "add", "claude-ai:Demo Project"); err != nil {
+	if err := m.run("share", "add", "claude-ai:Demo Project", "--auto-approve"); err != nil {
 		t.Fatal(err)
 	}
 	if err := m.run("sync", "--dry-run"); err != nil {
@@ -228,7 +228,7 @@ func TestChatExportsNeedAnExplicitAllow(t *testing.T) {
 		t.Errorf("artifacts and uploads travel as metadata: %d", arts)
 	}
 	// a chatgpt project glob
-	if err := m.run("share", "add", "chatgpt:*"); err != nil {
+	if err := m.run("share", "add", "chatgpt:*", "--auto-approve"); err != nil {
 		t.Fatal(err)
 	}
 	_ = m.run("sync", "--dry-run")
@@ -285,7 +285,7 @@ func TestImportsListRemoveAndRefusals(t *testing.T) {
 	if err := m.run("imports", "remove", "1"); err == nil {
 		t.Error("removing twice")
 	}
-	_ = m.run("share", "add", "claude-ai:Chats")
+	_ = m.run("share", "add", "claude-ai:Chats", "--auto-approve")
 	_ = m.run("sync", "--dry-run")
 	if len(m.payloads()) != 0 {
 		t.Error("a removed import must stop being read")
@@ -295,7 +295,7 @@ func TestImportsListRemoveAndRefusals(t *testing.T) {
 func TestUnsharingChatProject(t *testing.T) {
 	m := newMulti(t)
 	_ = m.run("import-claude-ai", exporttest.ZipDir(t, "../../../testdata/claude-ai/export"))
-	_ = m.run("share", "add", "claude-ai:Chats")
+	_ = m.run("share", "add", "claude-ai:Chats", "--auto-approve")
 	if err := m.run("share", "remove", "claude-ai:Chats"); err != nil {
 		t.Fatalf("%v\n%s", err, m.errOut)
 	}

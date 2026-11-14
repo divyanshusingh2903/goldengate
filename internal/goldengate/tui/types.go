@@ -177,6 +177,11 @@ type PlanInfo struct {
 	Summarizer   string
 	Stale        int
 	Resummarized int
+	// Approving counts sessions in the plan that were waiting for approval:
+	// sending the plan approves them. Excluded counts sessions the user
+	// excluded; they are in no plan.
+	Approving int
+	Excluded  int
 }
 
 // SyncOpts narrows a plan and its sync.
@@ -281,6 +286,12 @@ type Backend interface {
 	Detect(ctx context.Context) ([]ToolStatus, error)
 	Init(ctx context.Context, p InitParams) (InitResult, error)
 
+	// Inbox lists the sessions that wait for approval, and the excluded
+	// ones. InboxDecide approves or excludes waiting sessions, or resets a
+	// decision (InboxReset) so the session waits again.
+	Inbox(ctx context.Context) (Inbox, error)
+	InboxDecide(ctx context.Context, items []InboxItem, decision string) error
+
 	// The agents methods manage which assistant sees which project. Each
 	// takes the admin secret, which the UI holds in memory for the run and
 	// the backend uses for that call only; it is never stored.
@@ -294,6 +305,31 @@ type Backend interface {
 	AgentView(ctx context.Context, admin, agentID string) (AgentView, error)
 	// RevokeAgentToken revokes one of an agent's read tokens.
 	RevokeAgentToken(ctx context.Context, admin, tokenID string) error
+}
+
+// Inbox decisions for InboxDecide.
+const (
+	InboxApprove = "approve"
+	InboxExclude = "exclude"
+	InboxReset   = "reset"
+)
+
+// Inbox is what waits for the user's approval, and what they excluded.
+type Inbox struct {
+	Pending  []InboxItem
+	Excluded []InboxItem
+}
+
+// InboxItem is one session in the inbox.
+type InboxItem struct {
+	Source, ID string
+	Project    string // the named project, or the folder
+	Title      string // redacted, as it would be sent
+	Updated    time.Time
+	// Changed is set when an earlier version was approved or sent.
+	Changed bool
+	// Hash is the content a decision is made for; pass it back unchanged.
+	Hash string
 }
 
 // AgentsInfo is the Agents screen's content.

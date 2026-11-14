@@ -194,6 +194,10 @@ type RunOpts struct {
 	// what the server holds. Their redacted conversations go to the model
 	// unless its answer is cached. Without a summarizer it does nothing.
 	Resummarize bool
+	// Approve also sends sessions that wait in the inbox. Set it only when
+	// the user has seen them (a reviewed plan) or asked for it outright:
+	// sending is then the approval.
+	Approve bool
 }
 
 // Report summarizes a run. Counts only: no project names or content.
@@ -217,6 +221,16 @@ type Report struct {
 	// only because their project was renamed, merged or given an id. They
 	// are included in Planned.
 	Refiled int
+	// Pending counts sessions that wait for approval in the inbox and were
+	// therefore not planned; PendingItems lists them. Excluded counts
+	// sessions the user excluded or retracted.
+	Pending      int
+	Excluded     int
+	PendingItems []PendingItem
+	// Approving counts planned sessions that were waiting in the inbox and
+	// are in the plan only because RunOpts.Approve is set: sending the plan
+	// approves them.
+	Approving int
 }
 
 func (s *Syncer) log() *slog.Logger {
@@ -291,6 +305,16 @@ func (s *Syncer) Plan(ctx context.Context, o RunOpts) (Batch, Report, error) {
 				rep.Tombstoned++
 				continue
 			}
+			// The user's decision about this very session comes before
+			// everything else: excluded and retracted sessions are not read.
+			dec, decided, err := s.State.Decision(ctx, ref.Source, ref.ID)
+			if err != nil {
+				return b, rep, err
+			}
+			if decided && dec.Blocks() {
+				rep.Excluded++
+				continue
+			}
 			prev, seen, err := s.State.Get(ctx, ref.Source, ref.ID)
 			if err != nil {
 				return b, rep, err
@@ -351,6 +375,27 @@ func (s *Syncer) Plan(ctx context.Context, o RunOpts) (Batch, Report, error) {
 				b.refresh = append(b.refresh, prev)
 				rep.Unchanged++
 				continue
+			}
+			// New or changed content. In a project that is not auto-approved
+			// it is sent only if the user approved exactly this content.
+			if !s.autoApprove(ref) {
+				dec, decided, err := s.State.Decision(ctx, ref.Source, ref.ID)
+				if err != nil {
+					return b, rep, err
+				}
+				waiting := !decided || dec.State != DecisionApproved || dec.ContentHash != p.ContentHash
+				if waiting && o.Approve {
+					rep.Approving++
+				} else if waiting {
+					title := p.TitleOnly
+					if p.Summary != nil {
+						title = p.Summary.Title
+					}
+					rep.Pending++
+					rep.PendingItems = append(rep.PendingItems, PendingItem{Source: ref.Source, SessionID: ref.ID, Project: ref.ProjectKey,
+						ProjectName: p.ProjectName, Title: title, Updated: p.UpdatedAt, ContentHash: p.ContentHash, Changed: seen || decided})
+					continue
+				}
 			}
 			for k, n := range p.Redactions {
 				rep.Redactions[k] += n
@@ -505,6 +550,22 @@ func (s *Syncer) projectOf(ref model.SessionRef) (id, name string) {
 		}
 	}
 	return "", ""
+}
+
+// autoApprove reports whether a session's project sends new and changed
+// sessions without asking. A folder shared outside any named project (a
+// default-allow configuration) has always sent everything and still does.
+func (s *Syncer) autoApprove(ref model.SessionRef) bool {
+	id, _ := s.projectOf(ref)
+	if id == "" {
+		return true
+	}
+	for _, p := range s.Config.Projects {
+		if p.ID == id {
+			return p.AutoApprove
+		}
+	}
+	return true
 }
 
 // projectFields reads which project a stored payload was sent under. ok is
