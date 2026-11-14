@@ -239,7 +239,7 @@ default = "deny"                 # deny | allow
 allow = ["~/code/pharmfindr", "~/code/forge"]
 deny  = ["~/code/**/secrets", "~/work/client-x"]   # deny always wins over allow
 include_sources = ["claude-code", "codex", "opencode"]
-since = "90d"                    # ignore older sessions
+since = "90d"                    # ignore older sessions (upload look-back; agents still default to the last 5 days, see section 9)
 level = "summary"                # summary | titles-only | full (full requires --i-understand)
 
 [artifacts]
@@ -450,15 +450,21 @@ Run in **stateless mode with plain JSON responses** (no server-held sessions, no
 ### MCP tools (all annotated read-only)
 | Tool | Purpose |
 |---|---|
-| `recent_activity(days=7, project?, source?)` | What was worked on, grouped by project, newest first |
+| `recent_activity(days=5, since?, until?, project?, source?)` | What was worked on, grouped by project, newest first |
 | `list_projects(source?)` | Shared projects with last activity and session counts |
 | `get_project_context(project)` | Rolling summary: goals, recent sessions, files, open threads |
 | `search_work(query, project?, limit=10)` | Keyword search over titles/summaries |
 | `get_session(id)` | One session's summary and its work items |
-| `list_commits(project?, days=14, status?)` | Commits created or mentioned, with evidence and verification state |
-| `list_pull_requests(project?, state?, days=30)` | PRs opened, merged, closed, plus "mentioned but not confirmed" |
-| `list_artifacts(project?, source?, days=14)` | Files and artifacts created in coding and chat sessions (metadata only) |
-| `list_issues(project?, provider?, state?, days=14)` | Linear, Jira and GitHub issues created, updated, completed or mentioned, with state as of the session |
+| `list_commits(project?, days=5, since?, until?, status?)` | Commits created or mentioned, with evidence and verification state |
+| `list_pull_requests(project?, state?, days=5, since?, until?)` | PRs opened, merged, closed, plus "mentioned but not confirmed" |
+| `list_artifacts(project?, source?, days=5, since?, until?)` | Files and artifacts created in coding and chat sessions (metadata only) |
+| `list_issues(project?, provider?, state?, days=5, since?, until?)` | Linear, Jira and GitHub issues created, updated, completed or mentioned, with state as of the session |
+
+Time window (all time-bounded tools above)
+- Default: the last 5 days. Agents see recent work by default and more only when they ask (principle 5 in 1.1).
+- `days` widens it (at most 365). `since` and `until` take a `YYYY-MM-DD` date (UTC) or an RFC 3339 time; a bare `until` date includes that whole day. `since` takes precedence over `days`; `until` alone means `days` before `until`. A range may span at most 365 days.
+- Every result states its window (a `Window:` line and a structured `window` field), and an empty result says how to look further back.
+- This is separate from the client's upload look-back (`[share] since`), which decides what reaches the server at all.
 
 `get_project_context` should also surface unfinished threads, such as PRs that were opened or mentioned but never confirmed merged.
 

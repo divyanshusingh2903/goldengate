@@ -221,7 +221,7 @@ func (m *Memory) Sessions(_ context.Context, q SessionQuery) ([]SessionRecord, e
 	var out []SessionRecord
 	for _, r := range m.sessions {
 		p := r.Payload
-		if (q.Project != "" && p.Project != q.Project) || (q.Source != "" && p.Source != q.Source) || (!q.Since.IsZero() && p.UpdatedAt.Before(q.Since)) {
+		if (q.Project != "" && p.Project != q.Project) || (q.Source != "" && p.Source != q.Source) || (!q.Since.IsZero() && p.UpdatedAt.Before(q.Since)) || (!q.Until.IsZero() && !p.UpdatedAt.Before(q.Until)) {
 			continue
 		}
 		out = append(out, *r)
@@ -316,7 +316,7 @@ func (m *Memory) WorkItems(_ context.Context, q WorkItemQuery) ([]WorkItemRecord
 		it := w.Item
 		if (q.Project != "" && w.Project != q.Project) || (q.Kind != "" && it.Kind != q.Kind) ||
 			(q.Provider != "" && it.Provider != q.Provider) || (q.Status != "" && it.Status != q.Status) ||
-			(!q.Since.IsZero() && it.ObservedAt.Before(q.Since)) {
+			(!q.Since.IsZero() && it.ObservedAt.Before(q.Since)) || (!q.Until.IsZero() && !it.ObservedAt.Before(q.Until)) {
 			continue
 		}
 		cp := *w

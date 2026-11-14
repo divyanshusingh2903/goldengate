@@ -400,6 +400,9 @@ func (s *SQLite) Sessions(ctx context.Context, q SessionQuery) ([]SessionRecord,
 	if !q.Since.IsZero() {
 		where, args = append(where, "updated_at>=?"), append(args, nano(q.Since))
 	}
+	if !q.Until.IsZero() {
+		where, args = append(where, "updated_at<?"), append(args, nano(q.Until))
+	}
 	rows, err := s.db.QueryContext(ctx, `SELECT payload, ingested_at FROM sessions WHERE `+strings.Join(where, " AND ")+ //nolint:gosec // G202: only fixed predicates are concatenated; every value is a bound parameter
 		` ORDER BY updated_at DESC, source, session_id`+limitClause(q.Limit, q.Offset), args...)
 	if err != nil {
@@ -471,6 +474,9 @@ func (s *SQLite) WorkItems(ctx context.Context, q WorkItemQuery) ([]WorkItemReco
 	add("status", q.Status)
 	if !q.Since.IsZero() {
 		where, args = append(where, "observed_at>=?"), append(args, nano(q.Since))
+	}
+	if !q.Until.IsZero() {
+		where, args = append(where, "observed_at<?"), append(args, nano(q.Until))
 	}
 	rows, err := s.db.QueryContext(ctx, `SELECT project, kind, provider, key, item, first_seen, last_seen FROM work_items WHERE `+strings.Join(where, " AND ")+ //nolint:gosec // G202: only fixed predicates are concatenated; every value is a bound parameter
 		` ORDER BY observed_at DESC, project, key`+limitClause(q.Limit, q.Offset), args...)
