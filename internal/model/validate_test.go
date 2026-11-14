@@ -55,6 +55,18 @@ func TestValidateRejects(t *testing.T) {
 		"too much evidence":  func(p *SessionPayload) { p.WorkItems[0].Evidence = make([]Evidence, 4) },
 		"title only + items": func(p *SessionPayload) { p.Level = LevelTitlesOnly },
 		"too many files":     func(p *SessionPayload) { p.Summary.FilesTouched = make([]string, MaxFiles+1) },
+		"narrative too long": func(p *SessionPayload) {
+			p.Summary.Narrative, p.Summary.NarrativeBy = strings.Repeat("x", MaxNarrativeLen+1), "m"
+		},
+		"narrative control":  func(p *SessionPayload) { p.Summary.Narrative, p.Summary.NarrativeBy = "a\x1b[31mb", "m" },
+		"narrative bidi":     func(p *SessionPayload) { p.Summary.Narrative, p.Summary.NarrativeBy = "a\u202eb", "m" },
+		"narrative unsigned": func(p *SessionPayload) { p.Summary.Narrative = "text with no writer" },
+		"narrative bytes": func(p *SessionPayload) {
+			p.Summary.Narrative, p.Summary.NarrativeBy = strings.Repeat("\u4e16", MaxNarrativeLen), "m"
+		},
+		"narrative length": func(p *SessionPayload) { p.Summary.NarrativeLength = "epic" },
+		"newline abstract": func(p *SessionPayload) { p.Summary.Abstract = "a\nb" },
+		"long abstract":    func(p *SessionPayload) { p.Summary.Abstract = strings.Repeat("x", MaxAbstractLen+1) },
 	}
 	for name, mutate := range cases {
 		p := good()
@@ -63,5 +75,29 @@ func TestValidateRejects(t *testing.T) {
 		if err == nil {
 			t.Errorf("%s: expected rejection", name)
 		}
+	}
+}
+
+func TestNarrativeHasItsOwnCap(t *testing.T) {
+	p := good()
+	// Facts close to their cap, plus a full-length narrative with paragraphs.
+	for i := 0; i < MaxListItems; i++ {
+		p.Summary.Goals = append(p.Summary.Goals, strings.Repeat("g", 280))
+	}
+	p.Summary.Narrative = strings.Repeat("A paragraph of prose.\n\n", MaxNarrativeLen/23)
+	p.Summary.NarrativeBy = "anthropic:claude"
+	if err := p.Validate(now); err != nil {
+		t.Fatalf("a full narrative does not count against the facts cap: %v", err)
+	}
+	if got := p.Summary.AbstractText(); got != "A paragraph of prose." {
+		t.Errorf("abstract = %q", got)
+	}
+	p.Summary.Abstract = "Written by the model."
+	if p.Summary.AbstractText() != "Written by the model." {
+		t.Error("a written abstract wins over the derived one")
+	}
+	long := &Summary{Narrative: strings.Repeat("word ", 200)}
+	if a := long.AbstractText(); len([]rune(a)) != MaxAbstractLen || strings.Contains(a, "\n") {
+		t.Errorf("a derived abstract is cut to the cap: %d", len([]rune(a)))
 	}
 }

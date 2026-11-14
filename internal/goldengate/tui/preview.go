@@ -9,6 +9,8 @@ import (
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/ansi"
+
+	"github.com/divyanshusingh2903/goldengate/internal/model"
 )
 
 const previewLimit = 20
@@ -169,6 +171,23 @@ func (m *Model) renderPreview(pv Preview, width int) string {
 				}
 			}
 			list("Goals", s.GoalList())
+			if s.Narrative != "" {
+				by := s.NarrativeBy
+				if by == model.NarrativeByUser {
+					by = "you"
+				}
+				b.WriteString("  Narrative (written by " + by + "):\n")
+				for _, para := range strings.Split(s.Narrative, "\n") {
+					if strings.TrimSpace(para) == "" {
+						b.WriteString("\n")
+						continue
+					}
+					wrap("    ", m.highlight(para))
+				}
+				if s.Abstract != "" {
+					wrap("  ", "Abstract (what list views show): "+m.highlight(s.Abstract))
+				}
+			}
 			list("Done", s.Description)
 			list("Outcomes", s.OutcomeList())
 			list("Open problems", s.OpenProblems)

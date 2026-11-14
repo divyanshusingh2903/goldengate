@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/divyanshusingh2903/goldengate/internal/model"
@@ -51,9 +52,12 @@ type Options struct {
 	ProjectKey string
 	// ExtraRedactions are user regexes added to the built-in rules.
 	ExtraRedactions []string
-	// Model, when set, writes goals, description and outcomes with a language
-	// model on top of the heuristic summary (summary level only).
+	// Model, when set, writes the title, goals, open problems and a narrative
+	// with a language model on top of the heuristic's facts (summary level only).
 	Model *ModelOptions
+	// UserNarrative returns the narrative the user wrote for a session, if
+	// any. It wins over a model's and is never replaced by one.
+	UserNarrative func(source, sessionID string) (string, bool)
 }
 
 // Build produces the payload for one session. It never mutates s.
@@ -89,6 +93,13 @@ func Build(s *model.RawSession, o Options) (*model.SessionPayload, error) {
 	} else {
 		sum := heuristic(s, r)
 		sum.Title = title
+		if o.UserNarrative != nil {
+			if n, ok := o.UserNarrative(s.Ref.Source, s.Ref.ID); ok {
+				if n = r.prose(n, model.MaxNarrativeLen); n != "" {
+					sum.Narrative, sum.NarrativeBy = n, model.NarrativeByUser
+				}
+			}
+		}
 		if o.Model != nil {
 			o.Model.apply(s, rd, r, sum)
 		}
@@ -120,6 +131,62 @@ func (r *scoped) str(s string, max int) string {
 	s, c2 := r.rd.String(s)
 	r.counts.Merge(c2)
 	return s
+}
+
+var (
+	reFence    = regexp.MustCompile("(?s)```.*?(```|$)")
+	reBlank    = regexp.MustCompile(`\n{3,}`)
+	reLineTail = regexp.MustCompile(`[ \t]+\n`)
+)
+
+// prose is str for a multi-paragraph narrative: it redacts, removes code
+// blocks, keeps paragraph breaks, cuts at a paragraph or sentence end when
+// over max, then redacts again.
+func (r *scoped) prose(s string, max int) string {
+	s, c := r.rd.String(s)
+	r.counts.Merge(c)
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	s = reFence.ReplaceAllString(s, "[code omitted]")
+	s = strings.Map(func(c rune) rune {
+		switch {
+		case c == '\n':
+			return c
+		case c == '\t':
+			return ' '
+		case unicode.IsControl(c), c >= 0x202A && c <= 0x202E, c >= 0x2066 && c <= 0x2069, c == 0x200B, c == 0xFEFF:
+			return -1
+		}
+		return c
+	}, s)
+	s = reBlank.ReplaceAllString(reLineTail.ReplaceAllString(s, "\n"), "\n\n")
+	s = cutProse(strings.TrimSpace(s), max)
+	s, c2 := r.rd.String(s)
+	r.counts.Merge(c2)
+	if utf8.RuneCountInString(s) > max { // a marker can be longer than what it replaced
+		s = truncate(s, max)
+	}
+	// The server also bounds the narrative in bytes (wide scripts, escapes).
+	for b, _ := json.Marshal(s); len(b) > model.MaxNarrativeJSON; b, _ = json.Marshal(s) {
+		s = cutProse(s, utf8.RuneCountInString(s)*3/4)
+	}
+	return s
+}
+
+// cutProse shortens s to at most max characters, ending at the last paragraph
+// break in the kept part, or else the last sentence end, or else mid-text.
+func cutProse(s string, max int) string {
+	rs := []rune(s)
+	if len(rs) <= max {
+		return s
+	}
+	kept := string(rs[:max-1])
+	if i := strings.LastIndex(kept, "\n\n"); i > len(kept)/2 {
+		return strings.TrimSpace(kept[:i])
+	}
+	if i := strings.LastIndex(kept, ". "); i > len(kept)/2 {
+		return kept[:i+1]
+	}
+	return kept + "…"
 }
 
 var ws = regexp.MustCompile(`\s+`)
@@ -375,9 +442,16 @@ func isGit(inv shellcmd.Invocation, sub string) bool {
 	return ok && got == sub
 }
 
-// capSummary shrinks the summary until its JSON fits MaxSummaryBytes.
+// capSummary shrinks the summary until its JSON fits MaxSummaryBytes. The
+// narrative is not counted: it has its own cap (model.MaxNarrativeLen, or
+// less by the length setting), applied when it is written.
 func capSummary(sum *model.Summary) {
-	size := func() int { b, _ := json.Marshal(sum); return len(b) }
+	size := func() int {
+		facts := *sum
+		facts.Narrative = ""
+		b, _ := json.Marshal(facts)
+		return len(b)
+	}
 	shorten := func(l []string, n int) []string {
 		out := make([]string, len(l))
 		for i, v := range l {
@@ -388,6 +462,7 @@ func capSummary(sum *model.Summary) {
 	// Descriptive text (the model's, and the copied messages) shrinks first;
 	// the facts the rules extracted (files, commands, outcomes) go last.
 	steps := []func(){
+		func() { sum.Abstract = truncate(sum.Abstract, 160) },
 		func() { sum.FirstMessage = truncate(sum.FirstMessage, 200) },
 		func() { sum.LastMessage = truncate(sum.LastMessage, 200) },
 		func() { sum.Description = shorten(sum.Description, 160) },

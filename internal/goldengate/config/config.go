@@ -50,6 +50,9 @@ type Summarize struct {
 	BaseURL string `toml:"base_url,omitempty"`
 	// MaxInputChars bounds the conversation sent per session (default 24000).
 	MaxInputChars int `toml:"max_input_chars,omitempty"`
+	// Length is how long a narrative a model may write per session: "short",
+	// "standard" (default) or "detailed". The heuristic writes none.
+	Length string `toml:"length,omitempty"`
 }
 
 // UsesModel reports whether summaries are written by a language model.
@@ -147,6 +150,11 @@ func (c Config) Validate() error {
 	case "", "heuristic", "anthropic", "openai", "gemini", "opencode", "ollama", "custom":
 	default:
 		return fmt.Errorf("config: summarize.provider must be heuristic, anthropic, openai, gemini, opencode, ollama or custom, got %q", c.Summarize.Provider)
+	}
+	switch c.Summarize.Length {
+	case "", "short", "standard", "detailed":
+	default:
+		return fmt.Errorf("config: summarize.length must be short, standard or detailed, got %q", c.Summarize.Length)
 	}
 	if c.Summarize.MaxInputChars < 0 {
 		return errors.New("config: summarize.max_input_chars must not be negative")

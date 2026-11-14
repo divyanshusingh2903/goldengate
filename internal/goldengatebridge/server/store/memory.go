@@ -258,6 +258,8 @@ func SearchText(p *model.SessionPayload) string {
 		add(s.Title)
 		add(strings.Join(s.GoalList(), " "))
 		add(strings.Join(s.Description, " "))
+		add(s.Abstract)
+		add(s.Narrative)
 		add(strings.Join(s.OpenProblems, " "))
 		add(strings.Join(s.OutcomeList(), " "))
 		add(s.FirstMessage)

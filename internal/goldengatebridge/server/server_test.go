@@ -999,3 +999,68 @@ func TestMCPTimeWindowDefaultsToFiveDaysAndWidensOnRequest(t *testing.T) {
 		t.Error("an unparseable since must be an error")
 	}
 }
+
+func TestMCPListToolsReturnAnAbstractAndOnlyGetSessionTheNarrative(t *testing.T) {
+	e := newEnv(t)
+	const marker = "zebrafish"
+	narrative := "The redirect lost its path, so auth.go now keeps the original URL. A rewrite was rejected as too wide.\n\n" +
+		"Second paragraph with the " + marker + " detail that only the full narrative carries."
+	p := payload("n1", "~/code/app", "Fix the login redirect")
+	p.Summary = &model.Summary{Title: "Fix the login redirect", Goals: []string{"Fix the login bug"}, Outcomes: []string{"tests passed"},
+		SummarizedBy: "anthropic:claude-haiku-5-5", Narrative: narrative, NarrativeBy: "anthropic:claude-haiku-5-5"}
+	u := payload("u1", "~/code/app", "Planning chat")
+	u.Summary = &model.Summary{Title: "Planning chat", SummarizedBy: "heuristic", Abstract: "Planned the quarter.",
+		Narrative: "My own words about the plan.", NarrativeBy: model.NarrativeByUser}
+	e.ingestOK(p, u, payload("h1", "~/code/app", "A heuristic session"))
+	cs := e.mcpSession(e.read)
+
+	first := "The redirect lost its path, so auth.go now keeps the original URL."
+	for tool, args := range map[string]map[string]any{
+		"recent_activity":     nil,
+		"get_project_context": {"project": "~/code/app"},
+		"search_work":         {"query": marker},
+	} {
+		r, txt := call(t, cs, tool, args)
+		b, _ := json.Marshal(r.StructuredContent)
+		for _, out := range []string{txt, string(b)} {
+			if strings.Contains(out, marker) || strings.Contains(out, "A rewrite was rejected") || strings.Contains(out, `"narrative":`) {
+				t.Errorf("%s must not return the full narrative:\n%s", tool, out)
+			}
+			if !strings.Contains(out, first) {
+				t.Errorf("%s must return the abstract:\n%s", tool, out)
+			}
+		}
+	}
+	r, txt := call(t, cs, "get_session", map[string]any{"id": "n1"})
+	b, _ := json.Marshal(r.StructuredContent)
+	if !strings.Contains(txt, "narrative (written by anthropic:claude-haiku-5-5):") || !strings.Contains(txt, marker) || !strings.Contains(txt, "A rewrite was rejected") {
+		t.Errorf("get_session returns the full narrative:\n%s", txt)
+	}
+	if !strings.Contains(string(b), `"narrative":`) || !strings.Contains(string(b), marker) || !strings.Contains(string(b), `"narrative_by":"anthropic:claude-haiku-5-5"`) {
+		t.Errorf("structured get_session: %s", b)
+	}
+	_, txt = call(t, cs, "get_session", map[string]any{"id": "u1"})
+	if !strings.Contains(txt, "narrative (written by user):") || !strings.Contains(txt, "My own words about the plan.") {
+		t.Errorf("a user narrative says who wrote it:\n%s", txt)
+	}
+	_, txt = call(t, cs, "recent_activity", nil)
+	if !strings.Contains(txt, "abstract: Planned the quarter.") {
+		t.Errorf("a written abstract is used as is:\n%s", txt)
+	}
+	_, txt = call(t, cs, "get_session", map[string]any{"id": "h1"})
+	if strings.Contains(txt, "narrative") || strings.Contains(txt, "abstract") {
+		t.Errorf("a heuristic session has neither:\n%s", txt)
+	}
+}
+
+func TestIngestBoundsTheNarrativeSeparately(t *testing.T) {
+	e := newEnv(t)
+	p := payload("big", "~/code/app", "Big")
+	p.Summary.Narrative, p.Summary.NarrativeBy = strings.Repeat("A paragraph of prose.\n\n", model.MaxNarrativeLen/23), "m:x"
+	e.ingestOK(p)
+	p.SessionID = "toobig"
+	p.Summary.Narrative += strings.Repeat("x", 200)
+	if code, _ := e.post("/v1/ingest", e.ingest, map[string]any{"sessions": []model.SessionPayload{p}}); code == http.StatusOK {
+		t.Error("a narrative over its cap must be refused")
+	}
+}

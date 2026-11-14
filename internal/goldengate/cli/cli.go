@@ -217,7 +217,7 @@ func (a *app) syncCmd() *cobra.Command {
 					fmt.Fprintf(a.Stderr, "%d synced sessions re-summarized by %s\n", rep.Resummarized, s.Summarizer.Name())
 				}
 				if rep.Stale > 0 {
-					fmt.Fprintf(a.Stderr, "%d synced sessions still have summaries not written by %s; `goldengate sync --resummarize` upgrades them\n",
+					fmt.Fprintf(a.Stderr, "%d synced sessions still have summaries not written by %s with the current settings; `goldengate sync --resummarize` upgrades them\n",
 						rep.Stale, s.Summarizer.Name())
 				}
 			}

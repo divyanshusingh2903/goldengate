@@ -173,7 +173,7 @@ func (s *Syncer) summarizeOptions(ctx context.Context, ref model.SessionRef, wo 
 			max = p.MaxInputChars // 0 keeps the summarizer's own default
 		}
 		o.Model = &summarize.ModelOptions{Client: s.Summarizer, Ctx: ctx, Cache: s.State.SummaryCache(ctx, now), Offline: offline,
-			MaxInputChars: max, OnError: onErr}
+			MaxInputChars: max, Length: s.Config.Summarize.Length, OnError: onErr}
 	}
 	return o
 }
@@ -293,7 +293,7 @@ func (s *Syncer) Plan(ctx context.Context, o RunOpts) (Batch, Report, error) {
 			mtime := ref.UpdatedAt.UnixNano()
 			resum := false
 			if seen && prev.Size == ref.SizeBytes && prev.MTimeNS == mtime {
-				stale := s.Summarizer != nil && staleSummary(prev.Payload, s.Summarizer.Name())
+				stale := s.Summarizer != nil && staleSummary(prev.Payload, s.Summarizer.Name(), s.Config.Summarize.Length)
 				if !stale || !o.Resummarize {
 					if stale {
 						rep.Stale++
@@ -352,12 +352,16 @@ func (s *Syncer) Plan(ctx context.Context, o RunOpts) (Batch, Report, error) {
 }
 
 // staleSummary reports whether a pushed payload's summary was written by
-// something other than the summarizer named by. A payload stored before
-// payloads were kept, or unreadable, counts as stale.
-func staleSummary(payload []byte, by string) bool {
+// something other than the summarizer named by, or holds a model's narrative
+// written under another length setting. A narrative the user wrote is never
+// stale. A payload stored before payloads were kept, or unreadable, counts
+// as stale.
+func staleSummary(payload []byte, by, length string) bool {
 	var p struct {
 		Summary *struct {
-			SummarizedBy string `json:"summarized_by"`
+			SummarizedBy    string `json:"summarized_by"`
+			NarrativeBy     string `json:"narrative_by"`
+			NarrativeLength string `json:"narrative_length"`
 		} `json:"summary"`
 	}
 	if json.Unmarshal(payload, &p) != nil {
@@ -366,7 +370,10 @@ func staleSummary(payload []byte, by string) bool {
 	if p.Summary == nil {
 		return false // titles-only level: there is no summary to upgrade
 	}
-	return p.Summary.SummarizedBy != by
+	if p.Summary.SummarizedBy != by {
+		return true
+	}
+	return p.Summary.NarrativeBy == by && p.Summary.NarrativeLength != summarize.NormalLength(length)
 }
 
 // job is one session to summarize; payload is filled in by the pool.

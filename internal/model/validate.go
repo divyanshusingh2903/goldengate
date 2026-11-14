@@ -14,15 +14,20 @@ import (
 // fails Validate, and the server refuses to store one. They bound what a
 // leaked ingest token can stuff into the store.
 const (
-	MaxPayloadBytes   = 64 << 10
-	MaxSummaryJSON    = 4 << 10
-	MaxProjectLen     = 300
-	MaxTitleLen       = 200
-	MaxGoalLen        = 400
-	MaxLastLen        = 500
-	MaxListItems      = 8 // goals, description and outcomes each
-	MaxListItemLen    = 300
-	MaxSummarizedBy   = 80
+	MaxPayloadBytes = 64 << 10
+	MaxSummaryJSON  = 4 << 10
+	MaxProjectLen   = 300
+	MaxTitleLen     = 200
+	MaxGoalLen      = 400
+	MaxLastLen      = 500
+	MaxListItems    = 8 // goals, description and outcomes each
+	MaxListItemLen  = 300
+	MaxSummarizedBy = 80
+	MaxAbstractLen  = 300
+	// The narrative has its own caps, separate from MaxSummaryJSON, which
+	// bounds the facts and the short fields.
+	MaxNarrativeLen   = 4000
+	MaxNarrativeJSON  = 8 << 10
 	MaxPathLen        = 200
 	MaxFiles          = 20
 	MaxCommands       = 12
@@ -62,6 +67,12 @@ func CheckText(field, s string, max int) error {
 		}
 	}
 	return nil
+}
+
+// CheckProse is CheckText for multi-line prose: newlines and tabs are
+// allowed, every other control or invisible character is not.
+func CheckProse(field, s string, max int) error {
+	return CheckText(field, strings.NewReplacer("\n", " ", "\t", " ").Replace(s), max)
 }
 
 // Validate checks a payload strictly. now is injected for testing.
@@ -146,7 +157,8 @@ func (s *Summary) validate() error {
 	}{{"summary.title", s.Title, MaxTitleLen}, {"summary.goal", s.Goal, MaxGoalLen}, {"summary.last_assistant", s.LastAssistant, MaxLastLen},
 		{"summary.outcome", s.Outcome, 100}, {"summary.git_branch", s.GitBranch, 100},
 		{"summary.first_message", s.FirstMessage, MaxLastLen}, {"summary.last_message", s.LastMessage, MaxLastLen},
-		{"summary.summarized_by", s.SummarizedBy, MaxSummarizedBy}}
+		{"summary.summarized_by", s.SummarizedBy, MaxSummarizedBy}, {"summary.abstract", s.Abstract, MaxAbstractLen},
+		{"summary.narrative_by", s.NarrativeBy, MaxSummarizedBy}}
 	for _, c := range checks {
 		if err := CheckText(c.f, c.v, c.n); err != nil {
 			return err
@@ -189,7 +201,24 @@ func (s *Summary) validate() error {
 	if s.TurnCount < 0 || s.DurationSec < 0 {
 		return fmt.Errorf("summary: negative counts")
 	}
-	b, _ := json.Marshal(s)
+	if err := CheckProse("summary.narrative", s.Narrative, MaxNarrativeLen); err != nil {
+		return err
+	}
+	switch s.NarrativeLength {
+	case "", "short", "standard", "detailed":
+	default:
+		return fmt.Errorf("summary.narrative_length: unknown %q", s.NarrativeLength)
+	}
+	if s.Narrative != "" && s.NarrativeBy == "" {
+		return fmt.Errorf("summary.narrative_by: empty while a narrative is present")
+	}
+	nb, _ := json.Marshal(s.Narrative)
+	if len(nb) > MaxNarrativeJSON {
+		return fmt.Errorf("summary.narrative: %d bytes exceeds %d", len(nb), MaxNarrativeJSON)
+	}
+	facts := *s
+	facts.Narrative = ""
+	b, _ := json.Marshal(facts)
 	if len(b) > MaxSummaryJSON {
 		return fmt.Errorf("summary: %d bytes exceeds %d", len(b), MaxSummaryJSON)
 	}

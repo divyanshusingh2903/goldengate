@@ -69,9 +69,9 @@ func New(d Deps) *mcp.Server {
 	mcp.AddTool(m, &mcp.Tool{Name: "get_project_context", Annotations: ro,
 		Description: "Use for a rolling summary of one project: recent sessions, frequently touched files, and unfinished threads such as pull requests opened but not confirmed merged."}, s.projectContext)
 	mcp.AddTool(m, &mcp.Tool{Name: "search_work", Annotations: ro,
-		Description: "Use to find past sessions by keyword across titles, goals and summaries."}, s.searchWork)
+		Description: "Use to find past sessions by keyword across titles, goals, summaries and narratives. Results carry a short abstract; get_session has the full narrative."}, s.searchWork)
 	mcp.AddTool(m, &mcp.Tool{Name: "get_session", Annotations: ro,
-		Description: "Use to read one session's summary and its work items, given an id from another tool."}, s.getSession)
+		Description: "Use to read one session in full, given an id from another tool: its facts (goals, outcomes, files), its work items, and the full narrative when one was written (by a model or by the user). Other tools return only a short abstract."}, s.getSession)
 	mcp.AddTool(m, &mcp.Tool{Name: "list_commits", Annotations: ro,
 		Description: "Use when the user asks what was committed. Status 'created' is backed by a successful git commit in a session; 'mentioned' only appeared in conversation text. Covers the last 5 days unless you pass days or since/until."}, s.listCommits)
 	mcp.AddTool(m, &mcp.Tool{Name: "list_pull_requests", Annotations: ro,
@@ -247,19 +247,39 @@ type SessionView struct {
 	Commands     []string `json:"commands,omitempty"`
 	GitBranch    string   `json:"git_branch,omitempty"`
 	SummarizedBy string   `json:"summarized_by,omitempty"`
+	// Abstract is one or two sentences about the session, in every tool that
+	// has one. Narrative is the full prose and only get_session returns it.
+	Abstract    string `json:"abstract,omitempty"`
+	Narrative   string `json:"narrative,omitempty"`
+	NarrativeBy string `json:"narrative_by,omitempty"` // a model's name, or "user"
 }
 
+// viewOf builds the view. full adds the detail fields; the narrative itself is
+// added only by withNarrative, so list tools stay small.
 func viewOf(r store.SessionRecord, full bool) SessionView {
 	p := r.Payload
 	v := SessionView{ID: p.SessionID, Source: p.Source, Project: p.Project, UpdatedAt: ts(p.UpdatedAt), Level: p.Level, Origin: p.Origin, Title: p.TitleOnly}
 	if sm := p.Summary; sm != nil {
 		// older records carry goal/outcome/last_assistant; the accessors read either
 		v.Title, v.Outcomes, v.GitBranch = sm.Title, sm.OutcomeList(), sm.GitBranch
+		v.Abstract = sm.AbstractText()
+		if v.Abstract != "" {
+			v.NarrativeBy = sm.NarrativeBy
+		}
 		if full {
 			v.Goals, v.Description, v.FirstMessage, v.LastMessage = sm.GoalList(), sm.Description, sm.FirstMessage, sm.Closing()
 			v.OpenProblems = sm.OpenProblems
 			v.FilesTouched, v.Commands, v.SummarizedBy = sm.FilesTouched, sm.Commands, sm.SummarizedBy
 		}
+	}
+	return v
+}
+
+// withNarrative is the full view plus the whole narrative (get_session).
+func withNarrative(r store.SessionRecord) SessionView {
+	v := viewOf(r, true)
+	if sm := r.Payload.Summary; sm != nil {
+		v.Narrative = sm.Narrative
 	}
 	return v
 }
@@ -277,6 +297,19 @@ func sessionLines(now time.Time, v SessionView, detail bool) []string {
 		}
 	}
 	list("outcome", v.Outcomes)
+	switch {
+	case v.Narrative != "":
+		by := ""
+		if v.NarrativeBy != "" {
+			by = " (written by " + clean(v.NarrativeBy) + ")"
+		}
+		l = append(l, "    narrative"+by+":")
+		for _, line := range strings.Split(v.Narrative, "\n") {
+			l = append(l, strings.TrimRight("      "+clean(line), " "))
+		}
+	case v.Abstract != "":
+		l = append(l, "    abstract: "+clean(v.Abstract)+" (get_session has the full narrative)")
+	}
 	if detail {
 		list("goal", v.Goals)
 		list("done", v.Description)
@@ -633,7 +666,7 @@ func (s *srv) getSession(ctx context.Context, req *mcp.CallToolRequest, in GetSe
 		return nil, GetSessionOut{}, fmt.Errorf("no such session")
 	}
 	s.audit(ctx, req, "get_session", rec.Payload.Project)
-	out := GetSessionOut{Notice: notice, Session: viewOf(*rec, true), WorkItems: []WorkItemView{}}
+	out := GetSessionOut{Notice: notice, Session: withNarrative(*rec), WorkItems: []WorkItemView{}}
 	items, err := s.Store.WorkItems(ctx, store.WorkItemQuery{Project: rec.Payload.Project, Limit: 500})
 	if err != nil {
 		return nil, out, fmt.Errorf("could not read work items")

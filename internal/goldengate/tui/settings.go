@@ -24,6 +24,7 @@ const (
 	setSummarizer
 	setSumModel
 	setSumURL
+	setSumLength
 	setSumKey
 	setSumTest
 )
@@ -132,6 +133,7 @@ func (m *Model) settingRows() []settingRow {
 		if p.BaseURL != "" {
 			rows = append(rows, settingRow{kind: setSumURL, label: "  Endpoint", value: orDefault(sm.BaseURL, p.BaseURL+" (default)")})
 		}
+		rows = append(rows, settingRow{kind: setSumLength, label: "  Narrative", value: narrativeLabel(sm.Length)})
 		rows = append(rows,
 			settingRow{kind: setSumKey, label: "  API key", value: keyNote(sm, p)},
 			settingRow{kind: setSumTest, label: "  Test", value: m.st.test})
@@ -262,6 +264,9 @@ func (m *Model) onKeySettings(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			st.input.SetValue(v)
 			st.input.CursorEnd()
 			return m, st.input.Focus()
+		case setSumLength:
+			s.Summarize.Length = nextLength(s.Summarize.Length)
+			return m, m.save(s)
 		case setLevel:
 			if s.Level == "summary" {
 				s.Level = "titles-only"
@@ -462,4 +467,25 @@ func (m *Model) viewSettings() string {
 		out2 = overlayAt(out2, m.menuBox(x, top), x, top)
 	}
 	return out2
+}
+
+// nextLength cycles short → standard → detailed.
+func nextLength(l string) string {
+	switch l {
+	case "short":
+		return "standard"
+	case "detailed":
+		return "short"
+	}
+	return "detailed"
+}
+
+func narrativeLabel(l string) string {
+	switch l {
+	case "short":
+		return "short (one paragraph) · new and changed sessions; Sync offers the rest"
+	case "detailed":
+		return "detailed (several paragraphs) · new and changed sessions; Sync offers the rest"
+	}
+	return "standard (two to four paragraphs) · new and changed sessions; Sync offers the rest"
 }
