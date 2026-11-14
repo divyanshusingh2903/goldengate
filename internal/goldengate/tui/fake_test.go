@@ -33,6 +33,7 @@ type fakeBackend struct {
 
 	previews map[string]Preview
 	srvInfo  ServerInfo
+	ag       *fakeAgents
 
 	// recorded interactions
 	actions    []Action
@@ -86,6 +87,7 @@ func newFake() *fakeBackend {
 				Sources: []SourceInfo{{"claude-ai", 3, false}}},
 		},
 		previews: map[string]Preview{},
+		ag:       newFakeAgents(),
 		srvInfo: ServerInfo{URL: "https://bridge.example.com", Configured: true, Healthy: true, TokenOK: true, TokenStore: "keyring",
 			Projects: []RemoteProject{{Label: "~/code/pharmfindr", Sessions: 44, Last: ago(2 * time.Hour)}, {ID: "p_forge1", Label: "~/code/forge", Sessions: 11, Last: ago(6 * time.Hour)}}},
 		syncFail: map[string]string{},

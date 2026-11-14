@@ -20,7 +20,7 @@ func (m *Model) helpBox() []string {
 		k("p enter", "preview exactly what would be sent"),
 		k("P", "paranoid: raw payloads, every string"),
 		m.th.Title.Render("Everywhere"),
-		k("1-4 tab", "projects / sync / server / settings"),
+		k("1-5 tab", "projects / sync / server / settings / agents"),
 		k("s", "sync: review first, then send"),
 		k("r", "refresh"),
 		k("?", "this help"),

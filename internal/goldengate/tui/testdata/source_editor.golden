@@ -1,4 +1,4 @@
-┌ goldengate [1 Projects] 2 Sync  3 Server  4 Settings  ─────────── ● connected bridge.example.com ┐
+┌ goldengate [1 Projects] 2 Sync  3 Server  4 Settings  5 Agents  ─ ● connected bridge.example.com ┐
 │ [All 8]  Shared 4   To sync 3   Not shared 4                                                     │
 ├────────────────────────────────────────────────┬─────────────────────────────────────────────────┤
 │ / search projects…        sort recent · ▤ list │ Which tools to send from pharmfindr             │

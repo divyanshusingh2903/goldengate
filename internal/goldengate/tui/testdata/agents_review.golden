@@ -1,0 +1,40 @@
+┌ goldengate  1 Projects  2 Sync  3 Server  4 Settings [5 Agents] ───────────────────── ● connected bridge.example.com ┐
+│ Sources ● CC Claude Code 142  ● CX Codex 37  ● OC OpenCode 58  ○ AI claude.ai                                        │
+├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│                                          Default         ChatGPT         Claude desktop                              │
+│▌Every project, including future ones     [x]             [ ]            ›[x]+                                        │
+│ Forge                                    [*]             [x]+            [x]                                         │
+│ Pharmfindr                               [*]             [ ]-            [*]                                         │
+│ Website                                  [*]             [ ]             [x]                                         │
+│ claude-ai:Chats                          [*]             [ ]             [*]                                         │
+│                                                                                                                      │
+│ Claude desktop  0 tokens · OAuth: Claude · never used                                                                │
+│ 3 changes not applied yet  [enter Review 3 changes]                                                                  │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                              ┌ Review 3 changes ──────────────────────────────────────┐                              │
+│                              │ + ChatGPT can see Forge                                │                              │
+│                              │ - ChatGPT can no longer see Pharmfindr                 │                              │
+│                              │ + Claude desktop: every project, including future ones │                              │
+│                              │                                                        │                              │
+│                              │ Apply these changes? They take effect at once.         │                              │
+│                              │                                                        │                              │
+│                              │ [y Yes]  [n No]                                        │                              │
+│                              └────────────────────────────────────────────────────────┘                              │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ space toggle  enter review  v view as agent  d details  u clear  esc back                                            │
+└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘

@@ -81,9 +81,12 @@ func (f frame) render() string {
 		right = " " + f.right + " "
 	}
 	fill := inner - lipgloss.Width(left) - lipgloss.Width(right)
-	if fill < 1 {
-		right, fill = "", max(inner-lipgloss.Width(left), 0)
-		left = fit(left, inner)
+	if fill < 1 { // no room for both: the title stays, cut if it must be
+		right = ""
+		if lipgloss.Width(left) > inner {
+			left = ansi.Truncate(left, inner, "…")
+		}
+		fill = max(inner-lipgloss.Width(left), 0)
 	}
 	sb.WriteString(b("┌") + f.th.Title.Render(left) + b(strings.Repeat("─", fill)) + right + b("┐") + "\n")
 	sb.WriteString(b("│") + fit(f.top, inner) + b("│") + "\n")
