@@ -216,7 +216,7 @@ func tooMany(w http.ResponseWriter) {
 }
 
 func (s *Server) audit(ctx context.Context, p auth.Principal, ip, action, project string) {
-	e := store.AuditEvent{At: s.Now(), TokenID: p.TokenID, Scope: p.Scope, Action: action, Project: project, IP: ip}
+	e := store.AuditEvent{At: s.Now(), TokenID: p.TokenID, AgentID: p.AgentID, Scope: p.Scope, Action: action, Project: project, IP: ip}
 	if err := s.Store.AppendAudit(context.WithoutCancel(ctx), e); err != nil {
 		s.Log.Error("audit write failed", "err", err)
 	}
@@ -515,8 +515,16 @@ func (s *Server) mcpHandler() http.Handler {
 			}
 			return nil, err
 		}
+		// What this reader may see: its agent's granted projects and history
+		// window, looked up for every request so a revoked grant applies at
+		// once. An agent that is gone, or a token without one, sees nothing.
+		sc, err := s.agentScope(ctx, p.AgentID)
+		if err != nil {
+			return nil, err
+		}
 		return &sdkauth.TokenInfo{ // the SDK middleware compares Expiration with the real clock, so it must not use the injectable one
-			Scopes: []string{p.Scope}, Expiration: time.Now().Add(5 * time.Minute), UserID: p.TokenID, Extra: map[string]any{"ip": ip}}, nil
+			Scopes: []string{p.Scope}, Expiration: time.Now().Add(5 * time.Minute), UserID: p.TokenID,
+			Extra: map[string]any{"ip": ip, bridgemcp.ExtraAgent: p.AgentID, bridgemcp.ExtraScope: sc}}, nil
 	}
 	opts := &sdkauth.RequireBearerTokenOptions{Scopes: []string{auth.ScopeRead}}
 	if s.oauth != nil {
@@ -535,6 +543,29 @@ func (s *Server) mcpHandler() http.Handler {
 		}
 		protected.ServeHTTP(w, r)
 	})
+}
+
+// agentScope is what an agent may read: the projects granted to it and, when
+// it has a maximum history window, nothing older than that.
+func (s *Server) agentScope(ctx context.Context, agentID string) (store.Scope, error) {
+	if agentID == "" {
+		return store.Scope{}, nil
+	}
+	a, err := s.Store.Agent(ctx, agentID)
+	if errors.Is(err, store.ErrNotFound) {
+		return store.Scope{}, nil
+	}
+	if err != nil {
+		return store.Scope{}, fmt.Errorf("agent lookup: %w", err)
+	}
+	sc := store.Scope{}
+	if sc.Projects, err = s.Store.Grants(ctx, agentID); err != nil {
+		return store.Scope{}, fmt.Errorf("grants lookup: %w", err)
+	}
+	if a.MaxDays > 0 {
+		sc.NotBefore = s.Now().Add(-time.Duration(a.MaxDays) * 24 * time.Hour)
+	}
+	return sc, nil
 }
 
 // oauthAllow applies rate limits to the OAuth endpoints: registration and

@@ -44,6 +44,8 @@ type Principal struct {
 	TokenID string
 	Scope   string
 	Label   string
+	// AgentID is the agent a read token belongs to; empty for other scopes.
+	AgentID string
 }
 
 // Authenticator verifies bearer tokens.
@@ -114,6 +116,19 @@ func randomBytes(n int) []byte {
 // Mint creates and stores a token. The returned secret is shown once and is
 // not recoverable. expires <= 0 means no expiry.
 func (a *Authenticator) Mint(ctx context.Context, scope, label string, expires time.Duration) (string, store.Token, error) {
+	return a.mint(ctx, scope, label, "", expires)
+}
+
+// MintRead creates a read token that belongs to the given agent, so it sees
+// exactly the projects granted to that agent. The agent must exist.
+func (a *Authenticator) MintRead(ctx context.Context, agentID, label string, expires time.Duration) (string, store.Token, error) {
+	if agentID == "" {
+		return "", store.Token{}, errors.New("auth: a read token needs an agent")
+	}
+	return a.mint(ctx, ScopeRead, label, agentID, expires)
+}
+
+func (a *Authenticator) mint(ctx context.Context, scope, label, agentID string, expires time.Duration) (string, store.Token, error) {
 	if scope != ScopeIngest && scope != ScopeRead {
 		return "", store.Token{}, fmt.Errorf("auth: cannot mint a %q token (want ingest or read)", scope)
 	}
@@ -122,7 +137,7 @@ func (a *Authenticator) Mint(ctx context.Context, scope, label string, expires t
 	}
 	secret := "ggb_" + scope + "_" + base64.RawURLEncoding.EncodeToString(randomBytes(32))
 	now := a.now().UTC()
-	t := store.Token{ID: "tok_" + hex.EncodeToString(randomBytes(4)), Hash: HashToken(secret), Scope: scope, Label: label, CreatedAt: now}
+	t := store.Token{ID: "tok_" + hex.EncodeToString(randomBytes(4)), Hash: HashToken(secret), Scope: scope, Label: label, CreatedAt: now, AgentID: agentID}
 	if expires > 0 {
 		t.ExpiresAt = now.Add(expires)
 	}
@@ -163,7 +178,7 @@ func (a *Authenticator) Authenticate(ctx context.Context, header, ip string) (Pr
 		return Principal{}, ErrUnauthorized
 	}
 	a.touch(ctx, tok.ID, now)
-	return Principal{TokenID: tok.ID, Scope: tok.Scope, Label: tok.Label}, nil
+	return Principal{TokenID: tok.ID, Scope: tok.Scope, Label: tok.Label, AgentID: tok.AgentID}, nil
 }
 
 // touch records last use at most once a minute per token.

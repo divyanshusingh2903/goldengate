@@ -700,6 +700,7 @@ func TestFirstRunInTheTUI(t *testing.T) {
 		t.Fatal("an unselected project reached the server")
 	}
 	// the assistant, using the token the wizard showed, sees the project
+	grantEverythingToDefault(t, b)
 	cs := mcpSession(t, b, readToken)
 	if txt := tool(t, cs, "list_projects", nil); !strings.Contains(txt, "- demo: 1 sessions") || !strings.Contains(txt, "(id p_") || strings.Contains(txt, "client-secret") {
 		t.Fatalf("list_projects:\n%s", txt)

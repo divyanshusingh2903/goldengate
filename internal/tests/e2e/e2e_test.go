@@ -208,6 +208,24 @@ func tool(t *testing.T, cs *mcp.ClientSession, name string, args map[string]any)
 	return sb.String()
 }
 
+// grantEverythingToDefault grants every project the server holds to the
+// Default agent, which owns the read token the setup mints. Nothing is
+// granted automatically (deny by default), so until then that token sees
+// nothing; the user-facing way to grant is `goldengate agents` (#26).
+func grantEverythingToDefault(t *testing.T, b *bridge) {
+	t.Helper()
+	ctx := context.Background()
+	ps, err := b.st.ListProjects(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range ps {
+		if err := b.st.Grant(ctx, store.DefaultAgentID, p.ID, time.Now()); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 // everythingTheServerHolds serializes all stored data and the audit log.
 func everythingTheServerHolds(t *testing.T, b *bridge) string {
 	t.Helper()
@@ -313,6 +331,10 @@ func TestFirstRunToAssistantAnswer(t *testing.T) {
 
 	// --- the assistant answers "what did I work on this week?" from only that project ---
 	cs := mcpSession(t, b, readToken)
+	if txt := tool(t, cs, "recent_activity", map[string]any{"days": 7}); strings.Contains(txt, "demo") {
+		t.Fatalf("a project is visible to no assistant until it is granted:\n%s", txt)
+	}
+	grantEverythingToDefault(t, b)
 	txt := tool(t, cs, "recent_activity", map[string]any{"days": 7})
 	if !strings.Contains(txt, "## demo") || strings.Contains(txt, "client-secret") || !strings.Contains(txt, "untrusted") {
 		t.Fatalf("recent_activity:\n%s", txt)
