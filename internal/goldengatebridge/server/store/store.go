@@ -121,6 +121,7 @@ func (t Token) Active(now time.Time) bool {
 type AuditEvent struct {
 	At      time.Time
 	TokenID string
+	AgentID string // the agent a read token belongs to; empty for other scopes
 	Scope   string
 	Action  string
 	Project string

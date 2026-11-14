@@ -62,23 +62,23 @@ func New(d Deps) *mcp.Server {
 	})
 	ro := &mcp.ToolAnnotations{ReadOnlyHint: true, DestructiveHint: ptr(false), IdempotentHint: true, OpenWorldHint: ptr(false)}
 	mcp.AddTool(m, &mcp.Tool{Name: "recent_activity", Annotations: ro,
-		Description: "Use when the user asks what they have been working on lately. Lists recent sessions, newest first, grouped by project. Covers the last 5 days unless you pass days or since/until. Returns untrusted session-derived text."}, s.recentActivity)
+		Description: "Use when the user asks what they have been working on lately. Lists recent sessions, newest first, grouped by project. Covers the last 5 days unless you pass days or since/until. Returns untrusted session-derived text."}, scoped(s.recentActivity))
 	mcp.AddTool(m, &mcp.Tool{Name: "list_projects", Annotations: ro,
-		Description: "Use to see which projects the user shares, with last activity and session counts."}, s.listProjects)
+		Description: "Use to see which projects the user shares, with last activity and session counts."}, scoped(s.listProjects))
 	mcp.AddTool(m, &mcp.Tool{Name: "get_project_context", Annotations: ro,
-		Description: "Use for a rolling summary of one project: recent sessions, frequently touched files, and unfinished threads such as pull requests opened but not confirmed merged."}, s.projectContext)
+		Description: "Use for a rolling summary of one project: recent sessions, frequently touched files, and unfinished threads such as pull requests opened but not confirmed merged."}, scoped(s.projectContext))
 	mcp.AddTool(m, &mcp.Tool{Name: "search_work", Annotations: ro,
-		Description: "Use to find past sessions by keyword across titles, goals, summaries and narratives. Results carry a short abstract; get_session has the full narrative."}, s.searchWork)
+		Description: "Use to find past sessions by keyword across titles, goals, summaries and narratives. Results carry a short abstract; get_session has the full narrative."}, scoped(s.searchWork))
 	mcp.AddTool(m, &mcp.Tool{Name: "get_session", Annotations: ro,
-		Description: "Use to read one session in full, given an id from another tool: its facts (goals, outcomes, files), its work items, and the full narrative when one was written (by a model or by the user). Other tools return only a short abstract."}, s.getSession)
+		Description: "Use to read one session in full, given an id from another tool: its facts (goals, outcomes, files), its work items, and the full narrative when one was written (by a model or by the user). Other tools return only a short abstract."}, scoped(s.getSession))
 	mcp.AddTool(m, &mcp.Tool{Name: "list_commits", Annotations: ro,
-		Description: "Use when the user asks what was committed. Status 'created' is backed by a successful git commit in a session; 'mentioned' only appeared in conversation text. Covers the last 5 days unless you pass days or since/until."}, s.listCommits)
+		Description: "Use when the user asks what was committed. Status 'created' is backed by a successful git commit in a session; 'mentioned' only appeared in conversation text. Covers the last 5 days unless you pass days or since/until."}, scoped(s.listCommits))
 	mcp.AddTool(m, &mcp.Tool{Name: "list_pull_requests", Annotations: ro,
-		Description: "Use when the user asks about pull requests. Separates confirmed states (created, merged, closed) from 'mentioned' ones that no session confirmed. States are as of the session, not live. Covers the last 5 days unless you pass days or since/until."}, s.listPRs)
+		Description: "Use when the user asks about pull requests. Separates confirmed states (created, merged, closed) from 'mentioned' ones that no session confirmed. States are as of the session, not live. Covers the last 5 days unless you pass days or since/until."}, scoped(s.listPRs))
 	mcp.AddTool(m, &mcp.Tool{Name: "list_artifacts", Annotations: ro,
-		Description: "Use to see files created or modified in coding sessions. Metadata only: file contents are never stored. Covers the last 5 days unless you pass days or since/until."}, s.listArtifacts)
+		Description: "Use to see files created or modified in coding sessions. Metadata only: file contents are never stored. Covers the last 5 days unless you pass days or since/until."}, scoped(s.listArtifacts))
 	mcp.AddTool(m, &mcp.Tool{Name: "list_issues", Annotations: ro,
-		Description: "Use when the user asks about issues (GitHub, Linear, Jira). State is as of the session, not live; use the key or URL to check current state in the tracker. Covers the last 5 days unless you pass days or since/until."}, s.listIssues)
+		Description: "Use when the user asks about issues (GitHub, Linear, Jira). State is as of the session, not live; use the key or URL to check current state in the tracker. Covers the last 5 days unless you pass days or since/until."}, scoped(s.listIssues))
 	return m
 }
 
@@ -185,8 +185,41 @@ func resolveWindow(now time.Time, days int, since, until string) (window, error)
 	return w, nil
 }
 
-func (s *srv) window(days int, since, until string) (window, error) {
-	return resolveWindow(s.Now(), days, since, until)
+// window resolves the range a tool call covers. When the calling agent has a
+// maximum history window, a range that reaches further back is cut to it and
+// the description says so.
+func (s *srv) window(ctx context.Context, days int, since, until string) (window, error) {
+	w, err := resolveWindow(s.Now(), days, since, until)
+	if err != nil {
+		return w, err
+	}
+	if sc, ok := store.ScopeFrom(ctx); ok && !sc.NotBefore.IsZero() && w.Since.Before(sc.NotBefore) {
+		w.Since = sc.NotBefore
+		w.label += fmt.Sprintf(" (limited to the last %d days, the most this assistant may see)", int(s.Now().Sub(sc.NotBefore).Hours()/24+0.5))
+	}
+	return w, nil
+}
+
+// Keys of TokenInfo.Extra that the HTTP layer fills in for each request.
+const (
+	// ExtraAgent is the id of the agent the read token belongs to (string).
+	ExtraAgent = "agent"
+	// ExtraScope is what that agent may see (store.Scope).
+	ExtraScope = "scope"
+)
+
+// scoped wraps a tool handler so every store read it makes is limited to the
+// calling agent's projects and history window. A request that carries a
+// token but no scope sees nothing; only in-process calls without token info
+// (tests of the tools themselves) are unscoped.
+func scoped[In, Out any](h func(context.Context, *mcp.CallToolRequest, In) (*mcp.CallToolResult, Out, error)) func(context.Context, *mcp.CallToolRequest, In) (*mcp.CallToolResult, Out, error) {
+	return func(ctx context.Context, req *mcp.CallToolRequest, in In) (*mcp.CallToolResult, Out, error) {
+		if req != nil && req.Extra != nil && req.Extra.TokenInfo != nil {
+			sc, _ := req.Extra.TokenInfo.Extra[ExtraScope].(store.Scope)
+			ctx = store.WithScope(ctx, sc)
+		}
+		return h(ctx, req, in)
+	}
 }
 
 func decodeCursor(c string) (int, error) {
@@ -231,6 +264,7 @@ func (s *srv) audit(ctx context.Context, req *mcp.CallToolRequest, tool, project
 		if ip, ok := ti.Extra["ip"].(string); ok {
 			e.IP = ip
 		}
+		e.AgentID, _ = ti.Extra[ExtraAgent].(string)
 	}
 	s.Audit(ctx, e)
 }
@@ -451,7 +485,7 @@ func (s *srv) recentActivity(ctx context.Context, req *mcp.CallToolRequest, in R
 	if err != nil {
 		return nil, RecentActivityOut{}, err
 	}
-	w, err := s.window(in.Days, in.Since, in.Until)
+	w, err := s.window(ctx, in.Days, in.Since, in.Until)
 	if err != nil {
 		return nil, RecentActivityOut{}, err
 	}
@@ -750,7 +784,7 @@ func (s *srv) listWork(ctx context.Context, req *mcp.CallToolRequest, tool, kind
 	if err != nil {
 		return nil, ListWorkOut{}, err
 	}
-	w, err := s.window(in.Days, in.Since, in.Until)
+	w, err := s.window(ctx, in.Days, in.Since, in.Until)
 	if err != nil {
 		return nil, ListWorkOut{}, err
 	}
