@@ -220,6 +220,9 @@ type Settings struct {
 // projects to a model (opt-in).
 type SummarizeSettings struct {
 	Provider, Model, BaseURL string
+	// Length is how long a narrative the model writes: "short", "standard"
+	// ("" means standard) or "detailed".
+	Length    string
 	KeySource                string // where the API key comes from: "keyring", "$ANTHROPIC_API_KEY", "none" (read-only)
 }
 

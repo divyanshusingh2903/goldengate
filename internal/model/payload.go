@@ -1,6 +1,9 @@
 package model
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // Share levels.
 const (
@@ -31,6 +34,17 @@ type Summary struct {
 	DurationSec  int64          `json:"duration_sec"`
 	GitBranch    string         `json:"git_branch,omitempty"`
 	SummarizedBy string         `json:"summarized_by,omitempty"` // "heuristic" or "<provider>:<model>"
+
+	// The narrative is prose, written by a model (opt-in) or by the user; the
+	// fields above are the facts the local rules extracted. The heuristic
+	// writes no narrative. Abstract is one or two sentences for list views;
+	// when it is empty, AbstractText derives it from the narrative.
+	Abstract    string `json:"abstract,omitempty"`
+	Narrative   string `json:"narrative,omitempty"`    // markdown paragraphs, at most MaxNarrativeLen
+	NarrativeBy string `json:"narrative_by,omitempty"` // "<provider>:<model>" or NarrativeByUser
+	// NarrativeLength is the length setting a model wrote under: "short",
+	// "standard" or "detailed". Empty for a user's narrative.
+	NarrativeLength string `json:"narrative_length,omitempty"`
 
 	// Deprecated: sent by older clients and kept so stored records still read.
 	// New payloads carry Goals, Outcomes and LastMessage instead.
@@ -82,3 +96,40 @@ type SessionPayload struct {
 
 // Redactions counts redaction events by kind. Never contains the secrets.
 type Redactions map[string]int
+
+// NarrativeByUser marks a narrative the user wrote or edited. It always wins
+// over a model's.
+const NarrativeByUser = "user"
+
+// AbstractText is the short form for list views: Abstract, or else the first
+// sentence of the narrative, cut to MaxAbstractLen.
+func (s *Summary) AbstractText() string {
+	if s.Abstract != "" {
+		return s.Abstract
+	}
+	n := strings.TrimSpace(s.Narrative)
+	if n == "" {
+		return ""
+	}
+	if i := strings.Index(n, "\n\n"); i >= 0 {
+		n = n[:i]
+	}
+	n = strings.Join(strings.Fields(n), " ")
+	if i := firstSentenceEnd(n); i > 0 {
+		n = n[:i]
+	}
+	if r := []rune(n); len(r) > MaxAbstractLen {
+		n = string(r[:MaxAbstractLen-1]) + "…"
+	}
+	return n
+}
+
+// firstSentenceEnd is the index just past the first ". ", "! " or "? ", or -1.
+func firstSentenceEnd(s string) int {
+	for i := 0; i+1 < len(s); i++ {
+		if (s[i] == '.' || s[i] == '!' || s[i] == '?') && s[i+1] == ' ' {
+			return i + 1
+		}
+	}
+	return -1
+}

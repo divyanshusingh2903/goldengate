@@ -719,7 +719,7 @@ func (b *tuiBackend) Settings(ctx context.Context) (tui.Settings, error) {
 
 func (b *tuiBackend) summarizeSettings(cfg config.Config) tui.SummarizeSettings {
 	sc := cfg.Summarize
-	out := tui.SummarizeSettings{Model: sc.Model, BaseURL: sc.BaseURL}
+	out := tui.SummarizeSettings{Model: sc.Model, BaseURL: sc.BaseURL, Length: sc.Length}
 	if sc.UsesModel() {
 		out.Provider = sc.Provider
 		_, out.KeySource = b.a.summarizerKey(sc.Provider)
@@ -744,6 +744,10 @@ func (b *tuiBackend) SaveSettings(ctx context.Context, s tui.Settings) error {
 	cfg.Enrich.Git = s.EnrichGit
 	cfg.UI.Theme = s.Theme
 	cfg.Summarize.Provider, cfg.Summarize.Model, cfg.Summarize.BaseURL = s.Summarize.Provider, strings.TrimSpace(s.Summarize.Model), strings.TrimSpace(s.Summarize.BaseURL)
+	cfg.Summarize.Length = s.Summarize.Length
+	if !cfg.Summarize.UsesModel() {
+		cfg.Summarize.Length = ""
+	}
 	var include []string
 	for _, src := range s.Sources {
 		if src.Enabled {

@@ -80,3 +80,44 @@ func TestDiffPayload(t *testing.T) {
 		t.Error("no previous payload, no diff")
 	}
 }
+
+func TestPreviewShowsTheFullNarrativeAsSent(t *testing.T) {
+	h := newHarness(t, 100, 50)
+	pv := h.be.previews["/home/u/code/pharmfindr"]
+	s := pv.Items[0].Payload.Summary
+	s.SummarizedBy, s.NarrativeBy, s.Abstract = "anthropic:claude-haiku-5-5", "anthropic:claude-haiku-5-5", "Fixed the redirect; staging is untested."
+	s.Narrative = "The redirect lost its path, so the handler now keeps the URL. Key was [REDACTED:aws-access-key].\n\nA rewrite was considered and rejected as too wide."
+	u := pv.Items[1].Payload.Summary
+	u.Narrative, u.NarrativeBy = "My own notes on the health checks.", model.NarrativeByUser
+	h.key("p")
+	h.contains("Narrative (written by anthropic:claude-haiku-5-5):", "The redirect lost its path", "A rewrite was considered and rejected as too wide.",
+		"Abstract (what list views show): Fixed the redirect; staging is untested.", "Narrative (written by you):", "My own notes on the health checks.")
+	h.checkGeometry(100, 50)
+}
+
+func TestNarrativeLengthRowCyclesAndSaves(t *testing.T) {
+	h := newHarness(t, 120, 40)
+	h.key("4")
+	for _, r := range h.m.settingRows() {
+		if r.kind == setSumLength {
+			t.Fatal("the heuristic writes no narrative: no length row")
+		}
+	}
+	h.m.st.s.Summarize.Provider = "gemini"
+	for i, r := range h.m.settingRows() {
+		if r.kind == setSumLength {
+			h.m.st.cursor = i
+		}
+	}
+	h.contains("Narrative", "standard (two to four paragraphs)")
+	h.key("enter")
+	if s := h.be.saved[len(h.be.saved)-1].Summarize; s.Length != "detailed" {
+		t.Fatalf("enter cycles to detailed and saves: %+v", s)
+	}
+	h.contains("detailed (several paragraphs) · new and changed sessions; Sync offers the rest")
+	for want, got := range map[string]string{"standard": nextLength("short"), "short": nextLength("detailed"), "detailed": nextLength("")} {
+		if want != got {
+			t.Errorf("cycle: want %s, got %s", want, got)
+		}
+	}
+}

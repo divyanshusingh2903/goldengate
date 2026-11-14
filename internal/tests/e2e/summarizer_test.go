@@ -31,7 +31,7 @@ func (f *fakeChatServer) start(t *testing.T) *httptest.Server {
 			http.NotFound(w, r)
 			return
 		}
-		answer := `{"title":"Ship the widget","goals":["Ship the widget"],"description":["Built and committed the widget"],"outcomes":["Committed"]}`
+		answer := `{"title":"Ship the widget","abstract":"Shipped the widget.","narrative":"Built and committed the widget. A rewrite was considered and rejected.\n\nNothing is left open.","goals":["Ship the widget"],"open_problems":[]}`
 		_ = json.NewEncoder(w).Encode(map[string]any{"choices": []any{map[string]any{"finish_reason": "stop", "message": map[string]any{"content": answer}}}})
 	}))
 	t.Cleanup(ts.Close)
@@ -107,7 +107,8 @@ func TestSyncWithAModelSummarizer(t *testing.T) {
 		t.Errorf("the request carries the shared conversation, the schema and the key:\n%s", sent)
 	}
 	held := everythingTheServerHolds(t, b)
-	for _, want := range []string{`"summarized_by":"custom:tiny"`, "Built and committed the widget", `"title":"Ship the widget"`} {
+	for _, want := range []string{`"summarized_by":"custom:tiny"`, "Built and committed the widget", `"title":"Ship the widget"`,
+		`"narrative_by":"custom:tiny"`, `"narrative_length":"standard"`, `"abstract":"Shipped the widget."`, `rejected.\n\nNothing is left open.`} {
 		if !strings.Contains(held, want) {
 			t.Errorf("the server holds the model's summary (%s)", want)
 		}
@@ -117,6 +118,28 @@ func TestSyncWithAModelSummarizer(t *testing.T) {
 	l.must(nil, "sync")
 	if len(fake.bodies) != 0 {
 		t.Errorf("unchanged sessions are not summarized again: %d calls", len(fake.bodies))
+	}
+
+	// Changing the narrative length alone re-summarizes nothing: it waits
+	// for --resummarize, like turning a model on.
+	key := map[string]string{"GOLDENGATE_SUMMARIZER_KEY": "sk-local"}
+	l.must(nil, "summarizer", "use", "custom", "--model", "tiny", "--base-url", ts.URL+"/v1", "--length", "detailed")
+	l.must(key, "sync")
+	if len(fake.bodies) != 0 {
+		t.Fatalf("a new length does not re-summarize on its own: %d calls", len(fake.bodies))
+	}
+	if plan, err := backend(l).Plan(context.Background(), tui.SyncOpts{}); err != nil || plan.Stale != 1 {
+		t.Fatalf("the session counts as stale under the new length: %v %+v", err, plan)
+	}
+	l.must(key, "sync", "--resummarize")
+	if len(fake.bodies) != 1 || !strings.Contains(fake.bodies[0], "several paragraphs") {
+		t.Fatalf("with the flag the model is asked once, for the detailed length: %d calls", len(fake.bodies))
+	}
+	if held := everythingTheServerHolds(t, b); !strings.Contains(held, `"narrative_length":"detailed"`) {
+		t.Errorf("the server holds the new narrative:\n%s", held)
+	}
+	if err := l.run(nil, "summarizer", "use", "custom", "--length", "epic"); err == nil {
+		t.Error("an unknown length is refused")
 	}
 }
 

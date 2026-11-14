@@ -12,6 +12,7 @@ import (
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/config"
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/llm"
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/secrets"
+	"github.com/divyanshusingh2903/goldengate/internal/goldengate/summarize"
 )
 
 // summarizerSecret names the stored API key of a summarizer provider.
@@ -85,7 +86,7 @@ func (a *app) summarizerLine(cfg config.Config) string {
 	if p, _ := llm.Lookup(sc.Provider); p.BaseURL != "" {
 		line += ", endpoint " + firstNonEmptyStr(sc.BaseURL, p.BaseURL)
 	}
-	return line
+	return line + ", narrative: " + summarize.NormalLength(sc.Length)
 }
 
 func firstNonEmptyStr(a, b string) string {
@@ -116,7 +117,7 @@ func (a *app) summarizerCmd() *cobra.Command {
 		},
 	})
 
-	var model, baseURL string
+	var model, baseURL, length string
 	use := &cobra.Command{
 		Use:   "use heuristic|" + providerIDs(),
 		Short: "Switch the summarizer; a model is opt-in and receives the redacted conversation of shared projects",
@@ -133,6 +134,9 @@ func (a *app) summarizerCmd() *cobra.Command {
 				cfg.Summarize.Provider, cfg.Summarize.Model, cfg.Summarize.BaseURL = p, model, baseURL
 			} else {
 				return fmt.Errorf("unknown summarizer %q: use heuristic|%s", p, providerIDs())
+			}
+			if length != "" && cfg.Summarize.UsesModel() {
+				cfg.Summarize.Length = length
 			}
 			if err := cfg.Validate(); err != nil {
 				return err
@@ -161,6 +165,7 @@ func (a *app) summarizerCmd() *cobra.Command {
 	}
 	use.Flags().StringVar(&model, "model", "", "model id (default: the provider's, e.g. "+llm.DefaultAnthropicModel+")")
 	use.Flags().StringVar(&baseURL, "base-url", "", "endpoint override for OpenAI-compatible providers (custom: default http://localhost:11434/v1)")
+	use.Flags().StringVar(&length, "length", "", "how long a narrative the model writes per session: short, standard (default) or detailed (up to about 4000 characters)")
 	cmd.AddCommand(use)
 
 	var del bool

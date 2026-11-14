@@ -78,7 +78,9 @@ The preview is the exact outgoing payload, redactions marked, with what changed 
 
 **Themes.** Golden Gate Light (default) and Dark, plus GitHub, Gruvbox, Catppuccin and Solarized (light and dark), Dracula, Monokai, Nord and Tokyo Night. Pick one under Settings → Theme (a dropdown that previews as you move); it is saved as `[ui] theme` in the config. `GOLDENGATE_THEME=gruvbox-dark` overrides it for one run. While the UI runs it sets the terminal's background to the theme's and restores yours on exit. `NO_COLOR` turns color off; nothing relies on color alone.
 
-**Summaries.** Each session is summarized on your machine before anything is sent: a title, goals, what was done, outcomes (tests, commits, PRs), the first and last message, files touched and command names. Raw transcripts, tool output and file contents are never sent. By default fixed rules write the summary. For better summaries of sessions that cover several tasks, you can opt in to a small model; it then receives the redacted conversation of shared projects only. See [SECURITY.md](SECURITY.md).
+**Summaries.** Each session is summarized on your machine before anything is sent: a title, goals, what was done, outcomes (tests, commits, PRs), the first and last message, files touched and command names. Raw transcripts, tool output and file contents are never sent. By default fixed rules write the summary. For better summaries of sessions that cover several tasks, you can opt in to a small model; it then receives the redacted conversation of shared projects only.
+
+A summary has two parts. The **facts** (files, commands, test and commit outcomes, work items) always come from the local rules. The **narrative** is prose: with a model on, it is a few paragraphs on what was attempted, what was decided and why, what was rejected and what is left open. Choose its length under Settings → Summarizer → Narrative: short (one paragraph), standard, or detailed (up to about 4000 characters). The preview shows the whole narrative exactly as it will be sent. Assistants see a one or two sentence abstract in lists and the full narrative only when they open one session. See [SECURITY.md](SECURITY.md).
 
 Everything is in the TUI: **Settings → Summarizer** opens a dropdown (it asks before turning a model on), then the rows below it set the model, the endpoint, the API key (typed hidden, stored in the OS keyring) and run a test call.
 
@@ -95,6 +97,7 @@ Model names change often: every default can be overridden, and "Test connection"
 
 ```bash
 goldengate summarizer use gemini --model gemini-3.5-flash-lite
+goldengate summarizer use gemini --length detailed   # longer narratives; short | standard | detailed
 goldengate summarizer set-key gemini
 goldengate summarizer test                    # one tiny sample call (not your data)
 goldengate summarizer use custom --base-url http://localhost:1234/v1 --model qwen3
@@ -104,7 +107,7 @@ goldengate sync --resummarize                 # also upgrade sessions already sy
 
 A session is summarized once per content: answers are cached, and an unchanged session is not sent to the model again.
 
-Turning a model on only affects new and changed sessions. Sessions synced earlier keep their rule-based summaries until you ask: `goldengate sync --resummarize` (or, on the Sync screen, the "N synced sessions have rule-based summaries" line and its **Include them in this sync** button) rebuilds them and sends their redacted conversations to the model. Only sessions whose summary actually changes are pushed again.
+Turning a model on only affects new and changed sessions. Sessions synced earlier keep their rule-based summaries until you ask: `goldengate sync --resummarize` (or, on the Sync screen, the "N synced sessions have rule-based summaries" line and its **Include them in this sync** button) rebuilds them and sends their redacted conversations to the model. Only sessions whose summary actually changes are pushed again. Changing the narrative length works the same way: it applies to new and changed sessions, and synced ones are rebuilt only when you ask.
 
 Everything the UI does is also available as a command.
 

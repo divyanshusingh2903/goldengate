@@ -27,6 +27,8 @@ func DiffPayload(prev, cur *model.SessionPayload) []string {
 		out = append(out, setDiff("done", ps.Description, cs.Description)...)
 		out = append(out, setDiff("outcome", ps.OutcomeList(), cs.OutcomeList())...)
 		out = append(out, setDiff("open problem", ps.OpenProblems, cs.OpenProblems)...)
+		chg("narrative", ps.Narrative, cs.Narrative)
+		chg("narrative by", ps.NarrativeBy, cs.NarrativeBy)
 		chg("last message", ps.Closing(), cs.Closing())
 		chg("summarized by", ps.SummarizedBy, cs.SummarizedBy)
 		out = append(out, setDiff("file", ps.FilesTouched, cs.FilesTouched)...)
