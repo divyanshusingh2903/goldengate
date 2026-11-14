@@ -194,19 +194,20 @@ func (m *Memory) lastActivity(id string) time.Time {
 }
 
 // ResolveProject implements Store.
-func (m *Memory) ResolveProject(_ context.Context, ref string) (Project, error) {
+func (m *Memory) ResolveProject(ctx context.Context, ref string) (Project, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.resolve(ref)
+	return m.resolve(ctx, ref)
 }
 
-func (m *Memory) resolve(ref string) (Project, error) {
-	if p, ok := m.projects[ref]; ok {
+// resolve honours the context's scope: a project outside it does not resolve.
+func (m *Memory) resolve(ctx context.Context, ref string) (Project, error) {
+	if p, ok := m.projects[ref]; ok && sees(ctx, p.ID, time.Time{}) {
 		return *p, nil
 	}
 	var best *Project
 	for _, p := range m.projects {
-		if !strings.EqualFold(p.Name, ref) {
+		if !strings.EqualFold(p.Name, ref) || !sees(ctx, p.ID, time.Time{}) {
 			continue
 		}
 		if best == nil {
@@ -223,7 +224,7 @@ func (m *Memory) resolve(ref string) (Project, error) {
 	}
 	var newest *SessionRecord
 	for _, r := range m.sessions {
-		if r.Payload.Project == ref && (newest == nil || r.Payload.UpdatedAt.After(newest.Payload.UpdatedAt)) {
+		if r.Payload.Project == ref && sees(ctx, r.ProjectID, time.Time{}) && (newest == nil || r.Payload.UpdatedAt.After(newest.Payload.UpdatedAt)) {
 			newest = r
 		}
 	}
@@ -249,7 +250,7 @@ func (m *Memory) DeleteProject(_ context.Context, ref string) (int, error) {
 		if member {
 			match = func(r *SessionRecord) bool { return r.Payload.Project == ref }
 		} else {
-			p, err := m.resolve(ref)
+			p, err := m.resolve(context.Background(), ref)
 			if err != nil {
 				return 0, nil
 			}
@@ -285,12 +286,15 @@ func (m *Memory) DeleteSession(_ context.Context, source, id string) (int, error
 }
 
 // ListProjects implements Store.
-func (m *Memory) ListProjects(context.Context) ([]ProjectInfo, error) {
+func (m *Memory) ListProjects(ctx context.Context) ([]ProjectInfo, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	by := map[string]*ProjectInfo{}
 	for _, r := range m.sessions {
 		p := r.Payload
+		if !sees(ctx, r.ProjectID, p.UpdatedAt) {
+			continue
+		}
 		pi, ok := by[r.ProjectID]
 		if !ok {
 			pi = &ProjectInfo{ID: r.ProjectID, Project: m.name(r.ProjectID), Sources: map[string]int{}}
@@ -340,13 +344,13 @@ func page[T any](s []T, offset, limit int) []T {
 }
 
 // Sessions implements Store.
-func (m *Memory) Sessions(_ context.Context, q SessionQuery) ([]SessionRecord, error) {
+func (m *Memory) Sessions(ctx context.Context, q SessionQuery) ([]SessionRecord, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var out []SessionRecord
 	for _, r := range m.sessions {
 		p := r.Payload
-		if (q.Project != "" && r.ProjectID != q.Project) || (q.Source != "" && p.Source != q.Source) || (!q.Since.IsZero() && p.UpdatedAt.Before(q.Since)) || (!q.Until.IsZero() && !p.UpdatedAt.Before(q.Until)) {
+		if !sees(ctx, r.ProjectID, p.UpdatedAt) || (q.Project != "" && r.ProjectID != q.Project) || (q.Source != "" && p.Source != q.Source) || (!q.Since.IsZero() && p.UpdatedAt.Before(q.Since)) || (!q.Until.IsZero() && !p.UpdatedAt.Before(q.Until)) {
 			continue
 		}
 		out = append(out, m.record(r))
@@ -356,11 +360,11 @@ func (m *Memory) Sessions(_ context.Context, q SessionQuery) ([]SessionRecord, e
 }
 
 // GetSession implements Store.
-func (m *Memory) GetSession(_ context.Context, source, id string) (*SessionRecord, error) {
+func (m *Memory) GetSession(ctx context.Context, source, id string) (*SessionRecord, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for k, r := range m.sessions {
-		if k.ID == id && (source == "" || k.Source == source) {
+		if k.ID == id && (source == "" || k.Source == source) && sees(ctx, r.ProjectID, r.Payload.UpdatedAt) {
 			cp := m.record(r)
 			return &cp, nil
 		}
@@ -400,7 +404,7 @@ func SearchText(p *model.SessionPayload) string {
 }
 
 // Search implements Store: every query word must appear (prefix match on words).
-func (m *Memory) Search(_ context.Context, query, project string, limit int) ([]SessionRecord, error) {
+func (m *Memory) Search(ctx context.Context, query, project string, limit int) ([]SessionRecord, error) {
 	words := Tokenize(query)
 	if len(words) == 0 {
 		return nil, nil
@@ -409,7 +413,7 @@ func (m *Memory) Search(_ context.Context, query, project string, limit int) ([]
 	defer m.mu.Unlock()
 	var out []SessionRecord
 	for _, r := range m.sessions {
-		if project != "" && r.ProjectID != project {
+		if !sees(ctx, r.ProjectID, r.Payload.UpdatedAt) || (project != "" && r.ProjectID != project) {
 			continue
 		}
 		have := Tokenize(SearchText(&r.Payload))
@@ -436,13 +440,13 @@ func (m *Memory) Search(_ context.Context, query, project string, limit int) ([]
 }
 
 // WorkItems implements Store.
-func (m *Memory) WorkItems(_ context.Context, q WorkItemQuery) ([]WorkItemRecord, error) {
+func (m *Memory) WorkItems(ctx context.Context, q WorkItemQuery) ([]WorkItemRecord, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	var out []WorkItemRecord
 	for _, w := range m.work {
 		it := w.Item
-		if (q.Project != "" && w.ProjectID != q.Project) || (q.Kind != "" && it.Kind != q.Kind) ||
+		if !sees(ctx, w.ProjectID, it.ObservedAt) || (q.Project != "" && w.ProjectID != q.Project) || (q.Kind != "" && it.Kind != q.Kind) ||
 			(q.Provider != "" && it.Provider != q.Provider) || (q.Status != "" && it.Status != q.Status) ||
 			(!q.Since.IsZero() && it.ObservedAt.Before(q.Since)) || (!q.Until.IsZero() && !it.ObservedAt.Before(q.Until)) {
 			continue

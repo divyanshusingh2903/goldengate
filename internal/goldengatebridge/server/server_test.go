@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 	"testing"
@@ -31,7 +32,8 @@ type env struct {
 	st                  store.Store
 	au                  *auth.Authenticator
 	ingest, read, admin string
-	uniqueIP            int // when > 0, every request claims a fresh client address (needs BehindProxy)
+	noGrants            bool // ingestOK grants nothing: the test manages agents and grants itself
+	uniqueIP            int  // when > 0, every request claims a fresh client address (needs BehindProxy)
 }
 
 func newEnv(t *testing.T, mutate ...func(*server.Config)) *env {
@@ -127,10 +129,25 @@ func work(kind, provider, key, status string) model.WorkItem {
 		Evidence: []model.Evidence{{SessionID: "x", Via: model.ViaToolResult}}}
 }
 
+// ingestOK stores the payloads and, unless e.noGrants is set, grants every
+// project the server then holds to the Default agent, which owns e.read: most
+// tests are about what a reader that may see a project gets back.
 func (e *env) ingestOK(ps ...model.SessionPayload) {
 	e.t.Helper()
 	if c, b := e.post("/v1/ingest", e.ingest, map[string]any{"sessions": ps}); c != 200 {
 		e.t.Fatalf("ingest: %d %s", c, b)
+	}
+	if e.noGrants {
+		return
+	}
+	infos, err := e.st.ListProjects(context.Background())
+	if err != nil {
+		e.t.Fatal(err)
+	}
+	for _, p := range infos {
+		if err := e.st.Grant(context.Background(), store.DefaultAgentID, p.ID, now); err != nil {
+			e.t.Fatalf("grant %s: %v", p.ID, err)
+		}
 	}
 }
 
@@ -480,6 +497,10 @@ func (e *env) mcpSession(token string) *mcp.ClientSession {
 	client := mcp.NewClient(&mcp.Implementation{Name: "test", Version: "0"}, nil)
 	hc := &http.Client{Transport: roundTripper(func(r *http.Request) (*http.Response, error) {
 		r.Header.Set("Authorization", "Bearer "+token)
+		if e.uniqueIP > 0 {
+			e.uniqueIP++
+			r.Header.Set("X-Forwarded-For", fmt.Sprintf("10.9.%d.%d", e.uniqueIP/250, e.uniqueIP%250+1))
+		}
 		return http.DefaultTransport.RoundTrip(r)
 	})}
 	cs, err := client.Connect(context.Background(), &mcp.StreamableClientTransport{Endpoint: e.ts.URL + "/mcp", HTTPClient: hc, DisableStandaloneSSE: true, MaxRetries: -1}, nil)
@@ -1137,5 +1158,222 @@ func TestNamedProjectsOverHTTPAndMCP(t *testing.T) {
 		if !seen[want] {
 			t.Errorf("audit lacks %q: %v", want, seen)
 		}
+	}
+}
+
+// rawText is a tool result's text, whether or not the call was an error.
+func rawText(r *mcp.CallToolResult) string {
+	var b strings.Builder
+	for _, c := range r.Content {
+		if tc, ok := c.(*mcp.TextContent); ok {
+			b.WriteString(tc.Text)
+		}
+	}
+	return b.String()
+}
+
+// Every MCP tool, for a per-agent test: its name and arguments that reach
+// both projects when nothing filters.
+var everyTool = map[string]map[string]any{
+	"recent_activity":     {"days": 30},
+	"list_projects":       nil,
+	"search_work":         {"query": "sharedword"},
+	"list_commits":        {"days": 30},
+	"list_pull_requests":  {"days": 30},
+	"list_artifacts":      {"days": 30},
+	"list_issues":         {"days": 30},
+	"get_project_context": {"project": "PLACEHOLDER"},
+	"get_session":         {"id": "PLACEHOLDER"},
+}
+
+func TestAgentsSeeOnlyTheProjectsGrantedToThem(t *testing.T) {
+	e := newEnv(t, func(c *server.Config) { c.BehindProxy = true })
+	e.noGrants, e.uniqueIP = true, 1 // many calls: the per-address rate limit has its own test
+	ctx := context.Background()
+	mk := func(id, member, pid, name, secret string) model.SessionPayload {
+		items := []model.WorkItem{
+			work(model.KindPR, "github", "o/shared#1", model.StatusCreated), // the same PR key in both projects
+			work(model.KindCommit, "", "repo@"+id, model.StatusCreated),
+			work(model.KindIssue, "linear", "ENG-"+id, model.StatusUpdated),
+			work(model.KindFile, "", "docs/"+secret+".md", model.StatusCreated),
+		}
+		p := payload(id, member, "sharedword "+secret+" title", items...)
+		p.Version, p.ProjectID, p.ProjectName = model.PayloadV2, pid, name
+		p.Summary.FirstMessage = "sharedword " + secret + " message"
+		return p
+	}
+	e.ingestOK(mk("1", "~/code/alpha", "p_alpha", "Alpha", "ALPHASECRET"), mk("2", "~/code/beta", "p_beta", "Beta", "BETASECRET"))
+
+	for _, a := range []store.Agent{{ID: "agt_a", Name: "Agent A", CreatedAt: now}, {ID: "agt_b", Name: "Agent B", CreatedAt: now}, {ID: "agt_none", Name: "Agent None", CreatedAt: now}} {
+		if err := e.st.CreateAgent(ctx, a); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := e.st.Grant(ctx, "agt_a", "p_alpha", now); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.st.Grant(ctx, "agt_b", "p_beta", now); err != nil {
+		t.Fatal(err)
+	}
+	tokA, _, _ := e.au.MintRead(ctx, "agt_a", "a", 0)
+	tokB, _, _ := e.au.MintRead(ctx, "agt_b", "b", 0)
+	tokNone, _, _ := e.au.MintRead(ctx, "agt_none", "none", 0)
+	if _, _, err := e.au.MintRead(ctx, "", "x", 0); err == nil {
+		t.Error("a read token for no agent must be refused")
+	}
+
+	// callAll runs every tool as cs and returns all text and structured output.
+	callAll := func(cs *mcp.ClientSession, project, session string) string {
+		var all strings.Builder
+		for tool, args := range everyTool {
+			switch tool {
+			case "get_project_context":
+				args = map[string]any{"project": project}
+			case "get_session":
+				args = map[string]any{"id": session}
+			}
+			r, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: tool, Arguments: args})
+			if err != nil {
+				t.Fatalf("%s: %v", tool, err)
+			}
+			b, _ := json.Marshal(r.StructuredContent)
+			all.WriteString(tool + ": " + rawText(r) + "\n" + string(b) + "\n")
+		}
+		return all.String()
+	}
+	otherSide := map[string][]string{
+		"a": {"BETASECRET", "Beta", "p_beta", "~/code/beta", "repo@2", "ENG-2"},
+		"b": {"ALPHASECRET", "Alpha", "p_alpha", "~/code/alpha", "repo@1", "ENG-1"},
+	}
+	for who, tc := range map[string]struct {
+		tok, ownProject, ownSession, own string
+	}{"a": {tokA, "p_alpha", "1", "ALPHASECRET"}, "b": {tokB, "p_beta", "2", "BETASECRET"}} {
+		cs := e.mcpSession(tc.tok)
+		out := callAll(cs, tc.ownProject, tc.ownSession)
+		if strings.Count(out, tc.own) < 5 || !strings.Contains(out, "o/shared#1") {
+			t.Errorf("agent %s must see its own project in every tool:\n%s", who, out)
+		}
+		for _, leak := range otherSide[who] {
+			if strings.Contains(out, leak) {
+				t.Errorf("agent %s can see %q of the other agent's project:\n%s", who, leak, out)
+			}
+		}
+	}
+
+	// Asking for the other project by id, name, folder or session id answers
+	// exactly as for something that does not exist: no hint, no counts.
+	csA := e.mcpSession(tokA)
+	missing := func(tool string, args map[string]any) string {
+		r, err := csA.CallTool(ctx, &mcp.CallToolParams{Name: tool, Arguments: args})
+		if err != nil {
+			t.Fatal(err)
+		}
+		// the data-block marker is random per response
+		return fmt.Sprintf("%v|%s", r.IsError, regexp.MustCompile(`DATA-[0-9a-f]+`).ReplaceAllString(rawText(r), "DATA"))
+	}
+	same := func(tool string, hidden, absent map[string]any, absentWord, hiddenWord string) {
+		t.Helper()
+		got, want := missing(tool, hidden), strings.ReplaceAll(missing(tool, absent), absentWord, hiddenWord)
+		if got != want {
+			t.Errorf("%s: an ungranted project must look like a missing one:\n got  %s\n want %s", tool, got, want)
+		}
+	}
+	for _, ref := range []string{"p_beta", "Beta", "~/code/beta"} {
+		same("get_project_context", map[string]any{"project": ref}, map[string]any{"project": "zz-nothing"}, "zz-nothing", ref)
+		same("recent_activity", map[string]any{"project": ref, "days": 30}, map[string]any{"project": "zz-nothing", "days": 30}, "zz-nothing", ref)
+		same("list_pull_requests", map[string]any{"project": ref, "days": 30}, map[string]any{"project": "zz-nothing", "days": 30}, "zz-nothing", ref)
+		same("search_work", map[string]any{"query": "sharedword", "project": ref}, map[string]any{"query": "sharedword", "project": "zz-nothing"}, "zz-nothing", ref)
+	}
+	same("get_session", map[string]any{"id": "2"}, map[string]any{"id": "zz-nothing"}, "zz-nothing", "2")
+	same("search_work", map[string]any{"query": "BETASECRET"}, map[string]any{"query": "zzznomatch"}, "zzznomatch", "BETASECRET")
+
+	// An agent with no grants, and the Default agent on a server where nothing
+	// was granted, see nothing at all.
+	for name, tok := range map[string]string{"no grants": tokNone, "default": e.read} {
+		out := callAll(e.mcpSession(tok), "p_alpha", "1")
+		for _, leak := range []string{"ALPHASECRET", "BETASECRET", "Alpha", "Beta", "o/shared#1"} {
+			if strings.Contains(out, leak) {
+				t.Errorf("%s: sees %q:\n%s", name, leak, out)
+			}
+		}
+	}
+
+	// Grants apply to the next request, both ways, without a new token.
+	if err := e.st.Grant(ctx, "agt_a", "p_beta", now); err != nil {
+		t.Fatal(err)
+	}
+	if _, txt := call(t, csA, "list_projects", nil); !strings.Contains(txt, "Beta") {
+		t.Errorf("a new grant shows at once:\n%s", txt)
+	}
+	if err := e.st.RevokeGrant(ctx, "agt_a", "p_alpha"); err != nil {
+		t.Fatal(err)
+	}
+	if _, txt := call(t, csA, "recent_activity", map[string]any{"days": 30}); strings.Contains(txt, "ALPHASECRET") || !strings.Contains(txt, "BETASECRET") {
+		t.Errorf("a revoked grant hides at once:\n%s", txt)
+	}
+
+	// The audit log names the agent.
+	ev, _ := e.st.ListAudit(ctx, 500)
+	agents := map[string]bool{}
+	for _, a := range ev {
+		if strings.HasPrefix(a.Action, "mcp:") {
+			agents[a.AgentID] = true
+		}
+		if a.Action == "ingest" && a.AgentID != "" {
+			t.Errorf("an ingest token has no agent: %+v", a)
+		}
+	}
+	for _, id := range []string{"agt_a", "agt_b", "agt_none", store.DefaultAgentID} {
+		if !agents[id] {
+			t.Errorf("audit lacks agent %s: %v", id, agents)
+		}
+	}
+}
+
+func TestAgentHistoryWindowLimitsEveryTool(t *testing.T) {
+	e := newEnv(t)
+	ctx := context.Background()
+	day := 24 * time.Hour
+	aged := func(id, title string, age time.Duration) model.SessionPayload {
+		pr := work(model.KindPR, "github", "o/r#"+id, model.StatusCreated)
+		pr.ObservedAt = now.Add(-age)
+		p := payload(id, "~/code/app", title, pr)
+		p.StartedAt, p.UpdatedAt = now.Add(-age-time.Hour), now.Add(-age)
+		return p
+	}
+	e.ingestOK(aged("new", "Recent thing", 2*day), aged("old", "Ancient thing", 40*day))
+	if err := e.st.CreateAgent(ctx, store.Agent{ID: "agt_w", Name: "Windowed", CreatedAt: now, MaxDays: 7}); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.st.Grant(ctx, "agt_w", "~/code/app", now); err != nil {
+		t.Fatal(err)
+	}
+	tok, _, _ := e.au.MintRead(ctx, "agt_w", "w", 0)
+	cs, full := e.mcpSession(tok), e.mcpSession(e.read)
+
+	if _, txt := call(t, full, "recent_activity", map[string]any{"days": 90}); !strings.Contains(txt, "Ancient thing") {
+		t.Fatalf("an agent without a window sees the old session:\n%s", txt)
+	}
+	_, txt := call(t, cs, "recent_activity", map[string]any{"days": 90})
+	if strings.Contains(txt, "Ancient thing") || !strings.Contains(txt, "Recent thing") || !strings.Contains(txt, "limited to the last 7 days") {
+		t.Errorf("the window caps a wider request and says so:\n%s", txt)
+	}
+	for tool, args := range map[string]map[string]any{
+		"search_work":         {"query": "thing"},
+		"get_project_context": {"project": "~/code/app"},
+		"list_pull_requests":  {"days": 365},
+		"list_projects":       nil,
+	} {
+		r, txt := call(t, cs, tool, args)
+		b, _ := json.Marshal(r.StructuredContent)
+		if strings.Contains(txt+string(b), "Ancient") || strings.Contains(txt+string(b), "o/r#old") {
+			t.Errorf("%s reaches past the agent's window:\n%s\n%s", tool, txt, b)
+		}
+	}
+	if _, txt := call(t, cs, "list_projects", nil); !strings.Contains(txt, "1 sessions") {
+		t.Errorf("counts cover only the window:\n%s", txt)
+	}
+	if r, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "get_session", Arguments: map[string]any{"id": "old"}}); err != nil || !r.IsError {
+		t.Errorf("a session older than the window is not there: %v %v", r, err)
 	}
 }

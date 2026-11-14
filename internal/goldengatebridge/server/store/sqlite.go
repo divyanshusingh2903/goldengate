@@ -144,8 +144,16 @@ func migrate(ctx context.Context, db *sql.DB) error {
 // this never grants anything again: projects that arrive later are granted
 // to no one.
 func migrateAgents(ctx context.Context, db *sql.DB) error {
-	have, err := columns(ctx, db, "oauth_clients")
+	have, err := columns(ctx, db, "audit")
 	if err != nil {
+		return err
+	}
+	if !have["agent_id"] {
+		if _, err := db.ExecContext(ctx, `ALTER TABLE audit ADD COLUMN agent_id TEXT NOT NULL DEFAULT ''`); err != nil {
+			return fmt.Errorf("sqlite store: migrate: %w", err)
+		}
+	}
+	if have, err = columns(ctx, db, "oauth_clients"); err != nil {
 		return err
 	}
 	if !have["agent_id"] {
@@ -380,21 +388,25 @@ func (s *SQLite) ResolveProject(ctx context.Context, ref string) (Project, error
 	return resolveProject(ctx, s.db, ref)
 }
 
+// resolveProject honours the context's scope: a project outside it does not
+// resolve, by id, by name or through a folder.
+
 type queryer interface {
 	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
 func resolveProject(ctx context.Context, q queryer, ref string) (Project, error) {
+	sw, sargs := scopeSQL(ctx, "p.id", "")
 	for _, stmt := range []string{
-		`SELECT id, name, created_at, updated_at FROM projects WHERE id=?`,
-		`SELECT p.id, p.name, p.created_at, p.updated_at FROM projects p WHERE p.name=? COLLATE NOCASE
+		`SELECT p.id, p.name, p.created_at, p.updated_at FROM projects p WHERE p.id=?` + sw,
+		`SELECT p.id, p.name, p.created_at, p.updated_at FROM projects p WHERE p.name=? COLLATE NOCASE` + sw + `
 			ORDER BY (SELECT MAX(updated_at) FROM sessions s WHERE s.project=p.id) DESC, p.id LIMIT 1`,
-		`SELECT p.id, p.name, p.created_at, p.updated_at FROM sessions s JOIN projects p ON p.id=s.project WHERE s.member=?
+		`SELECT p.id, p.name, p.created_at, p.updated_at FROM sessions s JOIN projects p ON p.id=s.project WHERE s.member=?` + sw + `
 			ORDER BY s.updated_at DESC LIMIT 1`,
 	} {
 		var p Project
 		var c, u int64
-		err := q.QueryRowContext(ctx, stmt, ref).Scan(&p.ID, &p.Name, &c, &u)
+		err := q.QueryRowContext(ctx, stmt, append([]any{ref}, sargs...)...).Scan(&p.ID, &p.Name, &c, &u) //nolint:gosec // G202: scopeSQL adds fixed predicates with bound values
 		if err == nil {
 			p.CreatedAt, p.UpdatedAt = fromNano(c), fromNano(u)
 			return p, nil
@@ -499,8 +511,10 @@ func (s *SQLite) DeleteSession(ctx context.Context, source, id string) (int, err
 
 // ListProjects implements Store.
 func (s *SQLite) ListProjects(ctx context.Context) ([]ProjectInfo, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT s.project, COALESCE(p.name, s.project), s.source, COUNT(*), MAX(s.updated_at)
-		FROM sessions s LEFT JOIN projects p ON p.id=s.project GROUP BY s.project, s.source`)
+	sw, sargs := scopeSQL(ctx, "s.project", "s.updated_at")
+	const cols = `SELECT s.project, COALESCE(p.name, s.project), s.source, COUNT(*), MAX(s.updated_at)
+		FROM sessions s LEFT JOIN projects p ON p.id=s.project WHERE 1=1`
+	rows, err := s.db.QueryContext(ctx, cols+sw+` GROUP BY s.project, s.source`, sargs...) //nolint:gosec // G202: scopeSQL adds fixed predicates with bound values
 	if err != nil {
 		return nil, fmt.Errorf("sqlite store: list projects: %w", err)
 	}
@@ -595,8 +609,9 @@ func (s *SQLite) Sessions(ctx context.Context, q SessionQuery) ([]SessionRecord,
 	if !q.Until.IsZero() {
 		where, args = append(where, "s.updated_at<?"), append(args, nano(q.Until))
 	}
-	rows, err := s.db.QueryContext(ctx, sessionCols+` WHERE `+strings.Join(where, " AND ")+ //nolint:gosec // G202: only fixed predicates are concatenated; every value is a bound parameter
-		` ORDER BY s.updated_at DESC, s.source, s.session_id`+limitClause(q.Limit, q.Offset), args...)
+	sw, sargs := scopeSQL(ctx, "s.project", "s.updated_at")
+	rows, err := s.db.QueryContext(ctx, sessionCols+` WHERE `+strings.Join(where, " AND ")+sw+ //nolint:gosec // G202: only fixed predicates are concatenated; every value is a bound parameter
+		` ORDER BY s.updated_at DESC, s.source, s.session_id`+limitClause(q.Limit, q.Offset), append(args, sargs...)...)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite store: sessions: %w", err)
 	}
@@ -609,7 +624,8 @@ func (s *SQLite) GetSession(ctx context.Context, source, id string) (*SessionRec
 	if source != "" {
 		q, args = q+` AND s.source=?`, append(args, source)
 	}
-	rows, err := s.db.QueryContext(ctx, q+` ORDER BY s.updated_at DESC LIMIT 1`, args...)
+	sw, sargs := scopeSQL(ctx, "s.project", "s.updated_at")
+	rows, err := s.db.QueryContext(ctx, q+sw+` ORDER BY s.updated_at DESC LIMIT 1`, append(args, sargs...)...)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite store: get session: %w", err)
 	}
@@ -646,7 +662,8 @@ func (s *SQLite) Search(ctx context.Context, query, project string, limit int) (
 	if project != "" {
 		q, args = q+` AND s.project=?`, append(args, project)
 	}
-	rows, err := s.db.QueryContext(ctx, q+` ORDER BY s.updated_at DESC, s.source, s.session_id`+limitClause(limit, 0), args...)
+	sw, sargs := scopeSQL(ctx, "s.project", "s.updated_at")
+	rows, err := s.db.QueryContext(ctx, q+sw+` ORDER BY s.updated_at DESC, s.source, s.session_id`+limitClause(limit, 0), append(args, sargs...)...)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite store: search: %w", err)
 	}
@@ -673,8 +690,9 @@ func (s *SQLite) WorkItems(ctx context.Context, q WorkItemQuery) ([]WorkItemReco
 	}
 	const cols = `SELECT w.project, COALESCE(p.name, w.project), w.kind, w.provider, w.key, w.item, w.first_seen, w.last_seen
 		FROM work_items w LEFT JOIN projects p ON p.id=w.project WHERE `
-	rows, err := s.db.QueryContext(ctx, cols+strings.Join(where, " AND ")+ //nolint:gosec // G202: only fixed predicates are concatenated; every value is a bound parameter
-		` ORDER BY w.observed_at DESC, w.project, w.key`+limitClause(q.Limit, q.Offset), args...)
+	sw, sargs := scopeSQL(ctx, "w.project", "w.observed_at")
+	rows, err := s.db.QueryContext(ctx, cols+strings.Join(where, " AND ")+sw+ //nolint:gosec // G202: only fixed predicates are concatenated; every value is a bound parameter
+		` ORDER BY w.observed_at DESC, w.project, w.key`+limitClause(q.Limit, q.Offset), append(args, sargs...)...)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite store: work items: %w", err)
 	}
@@ -877,8 +895,8 @@ func (s *SQLite) PairingFailure(ctx context.Context, now time.Time, maxFailures 
 
 // AppendAudit implements AuthStore.
 func (s *SQLite) AppendAudit(ctx context.Context, e AuditEvent) error {
-	_, err := s.db.ExecContext(ctx, `INSERT INTO audit(at, token_id, scope, action, project, ip) VALUES(?,?,?,?,?,?)`,
-		nano(e.At), e.TokenID, e.Scope, e.Action, e.Project, e.IP)
+	_, err := s.db.ExecContext(ctx, `INSERT INTO audit(at, token_id, scope, action, project, ip, agent_id) VALUES(?,?,?,?,?,?,?)`,
+		nano(e.At), e.TokenID, e.Scope, e.Action, e.Project, e.IP, e.AgentID)
 	if err != nil {
 		return fmt.Errorf("sqlite store: audit: %w", err)
 	}
@@ -887,7 +905,7 @@ func (s *SQLite) AppendAudit(ctx context.Context, e AuditEvent) error {
 
 // ListAudit implements AuthStore (newest first).
 func (s *SQLite) ListAudit(ctx context.Context, limit int) ([]AuditEvent, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT at, token_id, scope, action, project, ip FROM audit ORDER BY id DESC`+limitClause(limit, 0)) //nolint:gosec // G202: limitClause formats integers only
+	rows, err := s.db.QueryContext(ctx, `SELECT at, token_id, scope, action, project, ip, agent_id FROM audit ORDER BY id DESC`+limitClause(limit, 0)) //nolint:gosec // G202: limitClause formats integers only
 	if err != nil {
 		return nil, fmt.Errorf("sqlite store: list audit: %w", err)
 	}
@@ -896,7 +914,7 @@ func (s *SQLite) ListAudit(ctx context.Context, limit int) ([]AuditEvent, error)
 	for rows.Next() {
 		var e AuditEvent
 		var at int64
-		if err := rows.Scan(&at, &e.TokenID, &e.Scope, &e.Action, &e.Project, &e.IP); err != nil {
+		if err := rows.Scan(&at, &e.TokenID, &e.Scope, &e.Action, &e.Project, &e.IP, &e.AgentID); err != nil {
 			return nil, fmt.Errorf("sqlite store: list audit: %w", err)
 		}
 		e.At = fromNano(at)

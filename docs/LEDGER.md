@@ -11,8 +11,8 @@ This file lets any Claude Code session (or person) pick up the Product v2 work w
 
 _Last updated 2026-11-14. Update this section whenever a row in the queue changes._
 
-**Progress:** 5 of 31 scheduled issues done (plus 2 stretch). Phase 1, Foundations, is under way.
-**In progress:** #24 Server: agents and grants model, size M, planned Nov 16. **Next after it:** #25 Enforce grants in every MCP tool.
+**Progress:** 6 of 31 scheduled issues done (plus 2 stretch). Phase 1, Foundations, is under way.
+**In progress:** #25 Enforce grants in every MCP tool, size M, planned Nov 17. **Next after it:** #26 API and CLI for agents and grants.
 
 ### Done
 
@@ -23,6 +23,7 @@ _Last updated 2026-11-14. Update this section whenever a row in the queue change
 | #18 | Named projects: `[[projects]]` with members in the config (membership shares, deny still wins, one folder per project), legacy allow rules read as projects, `goldengate projects` commands, TUI `n`/`N` | #59 | 2026-11-14 |
 | #49 | Summaries split into facts (local rules) and a narrative (model passages at short/standard/detailed, or the user's); separate narrative caps; MCP list tools return an abstract, `get_session` the full narrative | #60 | 2026-11-14 |
 | #19 | Server files everything under stable project ids with display names; payload v2; in-place SQLite upgrade; MCP tools take a name or id; client re-files renamed or merged projects without re-summarizing | #62 | 2026-11-14 |
+| #24 | Agents and grants data model: every read token and OAuth client belongs to one agent; upgrade creates `Default` with every existing project; new projects granted to no one | #63 | 2026-11-14 |
 
 Supporting changes (not queue issues):
 
@@ -40,7 +41,7 @@ Supporting changes (not queue issues):
 - **#49 follow-ups**: the user's own narrative is honoured through `summarize.Options.UserNarrative`, but nothing stores or edits one until #30. Model summaries pushed before #49 (bullets in `description`) are not counted as stale; they gain a narrative when their session changes or the length setting is changed and the user re-summarizes. `get_work_item` (#36) should return the full narrative like `get_session`.
 - **#19 notes**: the `project` column in the server tables now holds a project id (for data stored before ids, the old key). A server with #19 accepts old clients; an old server rejects payloads from a client with #19 (unknown fields), so upgrade the server first. Grants (#24) should point at `projects.id`; a project left without sessions is deleted, so grants on it must go with it.
 - **#24 notes for #25 to #28**: agents and grants exist in the store only; nothing enforces them yet (#25). Read tokens and OAuth clients created without an agent go to the `Default` agent (`agt_default`), which has no grants on a fresh install, so once #25 lands a new install shows an assistant nothing until projects are granted (#26 CLI, #27 consent, #28 TUI; the init wizard should grant what it shares). `Agent.MaxDays` is stored but not applied (#25, with the #37 follow-up).
-- **#37 follow-up**: the per-agent maximum window is enforced in `resolveWindow` once agents exist (#24).
+- **Fresh installs after #25**: the read token the setup mints belongs to `Default`, which has no grants, so a newly connected assistant sees nothing until projects are granted. There is no user-facing way to grant until #26 (CLI); #26 must also make `goldengate init` grant what it shares. The e2e tests grant through the store for now (`grantEverythingToDefault`).
 
 ## The loop
 
@@ -95,8 +96,8 @@ Status values: `todo`, `in progress`, `in review`, `blocked`, `done`. Size: S ab
 | 3 | #18 Named projects with members (client) | L | #17 | Nov 14 | done | #59 |
 | 4 | #49 Summaries: facts plus narrative | M | | Nov 15 | done | #60 |
 | 5 | #19 Server: stable project IDs, migration | M | #18 | Nov 16 | done | #62 |
-| 6 | #24 Server: agents and grants model | M | #19 | Nov 16 | in progress | |
-| 7 | #25 Enforce grants in every MCP tool | M | #24 | Nov 17 | todo | |
+| 6 | #24 Server: agents and grants model | M | #19 | Nov 16 | done | #63 |
+| 7 | #25 Enforce grants in every MCP tool | M | #24 | Nov 17 | in progress | |
 | 8 | #26 API and CLI for agents and grants | M | #24 | Nov 17 | todo | |
 | 9 | #27 OAuth consent picks agent and projects | M | #24, #25 | Nov 18 | todo | |
 | 10 | #28 TUI Agents screen, view as agent | M | #26 | Nov 18 | todo | |
@@ -146,3 +147,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-14: #49 done (#60). Roadmap page updated. Next: #19.
 - 2026-11-14: #19 implemented: `projects` table and project ids on the server, payload version 2 with `project_id`/`project_name`, in-place SQLite upgrade, delete by id, folder or name, MCP tools take a name or id and show the name. The client re-sends stored payloads when a project is renamed or merged, without reading or summarizing again.
 - 2026-11-14: #19 done (#62). #24 implemented: `agents` and `agent_grants` tables, every read token and OAuth client belongs to one agent, upgrade gives existing readers a `Default` agent granted every existing project, new projects are granted to no one, grants follow a project to a new id.
+- 2026-11-14: #24 done (#63). #25 implemented: the MCP middleware resolves the token's agent and its grants per request; the store applies the scope inside its read queries; an ungranted project looks like a missing one; `max_days` caps every tool (closes the #37 follow-up); the audit log records the agent id.
