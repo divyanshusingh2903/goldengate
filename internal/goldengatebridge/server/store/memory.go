@@ -16,7 +16,9 @@ import (
 type Memory struct {
 	mu       sync.Mutex
 	sessions map[SessionKey]*SessionRecord
-	projects map[string]*Project // by id
+	projects map[string]*Project        // by id
+	agents   map[string]*Agent          // by id
+	grants   map[string]map[string]bool // agent id -> project ids
 	work     map[workKey]*WorkItemRecord
 	tokens   map[string]*Token // by id
 	pairings map[string]*pairing
@@ -52,7 +54,7 @@ type pairing struct {
 // NewMemory returns an empty in-memory store.
 func NewMemory() *Memory {
 	return &Memory{
-		sessions: map[SessionKey]*SessionRecord{}, projects: map[string]*Project{}, work: map[workKey]*WorkItemRecord{},
+		sessions: map[SessionKey]*SessionRecord{}, projects: map[string]*Project{}, agents: map[string]*Agent{}, grants: map[string]map[string]bool{}, work: map[workKey]*WorkItemRecord{},
 		tokens: map[string]*Token{}, pairings: map[string]*pairing{},
 		oclients: map[string]*OAuthClient{}, otxns: map[string]*memTxn{}, ocodes: map[string]*memCode{}, orefresh: map[string]*memRefresh{},
 	}
@@ -87,6 +89,15 @@ func (m *Memory) PutSession(_ context.Context, p *model.SessionPayload, now time
 	}
 	if pr, ok := m.projects[pid]; !ok {
 		m.projects[pid] = &Project{ID: pid, Name: p.ProjectLabel(), CreatedAt: now.UTC(), UpdatedAt: now.UTC()}
+		// a session moving into a project this request creates takes the
+		// old project's grants along (see the SQLite store)
+		if exists && old.ProjectID != pid {
+			for agent, ps := range m.grants {
+				if ps[old.ProjectID] {
+					m.grant(agent, pid)
+				}
+			}
+		}
 	} else if pr.Name != p.ProjectLabel() {
 		pr.Name, pr.UpdatedAt = p.ProjectLabel(), now.UTC()
 	}
@@ -146,6 +157,13 @@ func (m *Memory) dropEmptyProjects() {
 	for id := range m.projects {
 		if !used[id] {
 			delete(m.projects, id)
+		}
+	}
+	for _, ps := range m.grants {
+		for id := range ps {
+			if !used[id] {
+				delete(ps, id)
+			}
 		}
 	}
 }
@@ -455,6 +473,16 @@ func (m *Memory) CreateToken(_ context.Context, t Token) error {
 			return errDuplicate
 		}
 	}
+	if t.Scope == "read" && t.AgentID == "" {
+		// a read token always has an agent: its OAuth client's, else the default
+		if c, ok := m.oclients[t.ClientID]; ok {
+			t.AgentID = c.AgentID
+		}
+		if t.AgentID == "" {
+			m.ensureDefault(t.CreatedAt)
+			t.AgentID = DefaultAgentID
+		}
+	}
 	m.tokens[t.ID] = &t
 	return nil
 }
@@ -622,6 +650,10 @@ func (m *Memory) CreateOAuthClient(_ context.Context, c OAuthClient) error {
 		return errDuplicate
 	}
 	c.RedirectURIs = append([]string(nil), c.RedirectURIs...)
+	if c.AgentID == "" { // a client always has an agent
+		m.ensureDefault(c.CreatedAt)
+		c.AgentID = DefaultAgentID
+	}
 	m.oclients[c.ID] = &c
 	return nil
 }

@@ -7,8 +7,11 @@ import (
 
 // OAuthClient is a registered OAuth client (dynamic or created by the operator).
 type OAuthClient struct {
-	ID           string
-	Name         string
+	ID   string
+	Name string
+	// AgentID is the agent the client reads as; one stored without it
+	// belongs to the default agent.
+	AgentID      string
 	SecretHash   string // empty for public clients
 	RedirectURIs []string
 	CreatedAt    time.Time

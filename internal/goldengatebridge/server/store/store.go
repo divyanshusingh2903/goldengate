@@ -91,11 +91,14 @@ type WorkItemQuery struct {
 
 // Token is a stored credential. Only the hash is kept.
 type Token struct {
-	ID         string
-	Hash       string
-	Scope      string
-	Label      string
-	CreatedAt  time.Time
+	ID        string
+	Hash      string
+	Scope     string
+	Label     string
+	CreatedAt time.Time
+	// AgentID is the agent a read token belongs to. A read token stored
+	// without one is given its OAuth client's agent, or the default agent.
+	AgentID    string
 	ClientID   string    // OAuth client that obtained this token, if any
 	Family     string    // OAuth grant family (all tokens from one authorization), if any
 	ExpiresAt  time.Time // zero = never
@@ -147,6 +150,7 @@ type Store interface {
 	Close() error
 	AuthStore
 	OAuthStore
+	AgentStore
 }
 
 // AuthStore holds tokens, pairing codes and the audit log.

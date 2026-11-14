@@ -58,6 +58,13 @@ CREATE TABLE IF NOT EXISTS oauth_codes(
 CREATE TABLE IF NOT EXISTS oauth_refresh(
   hash TEXT PRIMARY KEY, data TEXT NOT NULL, client_id TEXT NOT NULL, family TEXT NOT NULL, expires_at INTEGER NOT NULL, used INTEGER NOT NULL DEFAULT 0);
 CREATE INDEX IF NOT EXISTS oauth_refresh_family ON oauth_refresh(family);
+CREATE TABLE IF NOT EXISTS agents(
+  id TEXT PRIMARY KEY, name TEXT NOT NULL, created_at INTEGER NOT NULL, max_days INTEGER NOT NULL DEFAULT 0);
+CREATE UNIQUE INDEX IF NOT EXISTS agents_name ON agents(name COLLATE NOCASE);
+CREATE TABLE IF NOT EXISTS agent_grants(
+  agent_id TEXT NOT NULL, project_id TEXT NOT NULL, created_at INTEGER NOT NULL,
+  PRIMARY KEY(agent_id, project_id));
+CREATE INDEX IF NOT EXISTS agent_grants_project ON agent_grants(project_id);
 CREATE TABLE IF NOT EXISTS pairings(
   hash TEXT PRIMARY KEY, expires_at INTEGER NOT NULL, failures INTEGER NOT NULL DEFAULT 0, burned INTEGER NOT NULL DEFAULT 0);
 CREATE TABLE IF NOT EXISTS audit(
@@ -98,7 +105,7 @@ func migrate(ctx context.Context, db *sql.DB) error {
 	if err != nil {
 		return err
 	}
-	for _, col := range []string{"client_id", "family"} {
+	for _, col := range []string{"client_id", "family", "agent_id"} {
 		if !have[col] {
 			if _, err := db.ExecContext(ctx, `ALTER TABLE tokens ADD COLUMN `+col+` TEXT NOT NULL DEFAULT ''`); err != nil { //nolint:gosec // G202: column names are constants
 				return fmt.Errorf("sqlite store: migrate: %w", err)
@@ -126,6 +133,54 @@ func migrate(ctx context.Context, db *sql.DB) error {
 		if _, err := db.ExecContext(ctx, stmt); err != nil {
 			return fmt.Errorf("sqlite store: migrate: %w", err)
 		}
+	}
+	return migrateAgents(ctx, db)
+}
+
+// migrateAgents gives readers that predate agents an owner. Read tokens and
+// OAuth clients without an agent become the default agent's, and, because
+// they could see everything until now, that agent is granted every project
+// that exists at this moment. Afterwards no reader is without an agent, so
+// this never grants anything again: projects that arrive later are granted
+// to no one.
+func migrateAgents(ctx context.Context, db *sql.DB) error {
+	have, err := columns(ctx, db, "oauth_clients")
+	if err != nil {
+		return err
+	}
+	if !have["agent_id"] {
+		if _, err := db.ExecContext(ctx, `ALTER TABLE oauth_clients ADD COLUMN agent_id TEXT NOT NULL DEFAULT ''`); err != nil {
+			return fmt.Errorf("sqlite store: migrate: %w", err)
+		}
+	}
+	var orphans int
+	if err := db.QueryRowContext(ctx, `SELECT (SELECT COUNT(*) FROM tokens WHERE scope='read' AND agent_id='') + (SELECT COUNT(*) FROM oauth_clients WHERE agent_id='')`).Scan(&orphans); err != nil {
+		return fmt.Errorf("sqlite store: migrate: %w", err)
+	}
+	if orphans == 0 {
+		return nil
+	}
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("sqlite store: migrate: %w", err)
+	}
+	now := time.Now().UnixNano()
+	for _, q := range []struct {
+		stmt string
+		args []any
+	}{
+		{`INSERT OR IGNORE INTO agents(id, name, created_at, max_days) VALUES(?,?,?,0)`, []any{DefaultAgentID, DefaultAgentName, now}},
+		{`INSERT OR IGNORE INTO agent_grants(agent_id, project_id, created_at) SELECT ?, id, ? FROM projects`, []any{DefaultAgentID, now}},
+		{`UPDATE tokens SET agent_id=? WHERE scope='read' AND agent_id=''`, []any{DefaultAgentID}},
+		{`UPDATE oauth_clients SET agent_id=? WHERE agent_id=''`, []any{DefaultAgentID}},
+	} {
+		if _, err := tx.ExecContext(ctx, q.stmt, q.args...); err != nil {
+			_ = tx.Rollback()
+			return fmt.Errorf("sqlite store: migrate agents: %w", err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("sqlite store: migrate agents: %w", err)
 	}
 	return nil
 }
@@ -219,10 +274,22 @@ func (s *SQLite) PutSession(ctx context.Context, p *model.SessionPayload, now ti
 		}
 		// The project row: created at first sight, renamed when the payload
 		// carries another name.
+		var one int
+		isNew := errors.Is(tx.QueryRowContext(ctx, `SELECT 1 FROM projects WHERE id=?`, pid).Scan(&one), sql.ErrNoRows)
 		if _, err := tx.ExecContext(ctx, `INSERT INTO projects(id, name, created_at, updated_at) VALUES(?,?,?,?)
 			ON CONFLICT(id) DO UPDATE SET name=excluded.name, updated_at=excluded.updated_at WHERE projects.name<>excluded.name`,
 			pid, name, nano(now), nano(now)); err != nil {
 			return fmt.Errorf("sqlite store: upsert project: %w", err)
+		}
+		// A session that moves into a project this request creates takes
+		// the old project's grants along: what an agent could already see
+		// stays visible when a project gets an id or is split off. Moving
+		// into a project that already exists changes no grants.
+		if exists && oldProject != pid && isNew {
+			if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO agent_grants(agent_id, project_id, created_at)
+				SELECT agent_id, ?, ? FROM agent_grants WHERE project_id=?`, pid, nano(now), oldProject); err != nil {
+				return fmt.Errorf("sqlite store: inherit grants: %w", err)
+			}
 		}
 		if _, err := tx.ExecContext(ctx, `INSERT INTO sessions(source, session_id, project, member, updated_at, ingested_at, payload) VALUES(?,?,?,?,?,?,?)
 			ON CONFLICT(source, session_id) DO UPDATE SET project=excluded.project, member=excluded.member, updated_at=excluded.updated_at, ingested_at=excluded.ingested_at, payload=excluded.payload`,
@@ -252,6 +319,9 @@ func (s *SQLite) PutSession(ctx context.Context, p *model.SessionPayload, now ti
 func dropEmptyProjects(ctx context.Context, tx *sql.Tx) error {
 	if _, err := tx.ExecContext(ctx, `DELETE FROM projects WHERE NOT EXISTS (SELECT 1 FROM sessions s WHERE s.project=projects.id)`); err != nil {
 		return fmt.Errorf("sqlite store: project cleanup: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM agent_grants WHERE NOT EXISTS (SELECT 1 FROM projects p WHERE p.id=agent_grants.project_id)`); err != nil {
+		return fmt.Errorf("sqlite store: grant cleanup: %w", err)
 	}
 	return nil
 }
@@ -662,25 +732,41 @@ func isUnique(err error) bool {
 
 // CreateToken implements AuthStore.
 func (s *SQLite) CreateToken(ctx context.Context, t Token) error {
-	_, err := s.db.ExecContext(ctx, `INSERT INTO tokens(id, hash, scope, label, created_at, expires_at, revoked_at, last_used_at, client_id, family) VALUES(?,?,?,?,?,?,?,?,?,?)`,
-		t.ID, t.Hash, t.Scope, t.Label, nano(t.CreatedAt), nano(t.ExpiresAt), nano(t.RevokedAt), nano(t.LastUsedAt), t.ClientID, t.Family)
-	if isUnique(err) {
-		return ErrDuplicate
-	}
-	if err != nil {
-		return fmt.Errorf("sqlite store: create token: %w", err)
-	}
-	return nil
+	return s.tx(ctx, func(tx *sql.Tx) error {
+		if t.Scope == "read" && t.AgentID == "" {
+			// a read token always has an agent: its OAuth client's, else the default
+			if t.ClientID != "" {
+				if err := tx.QueryRowContext(ctx, `SELECT agent_id FROM oauth_clients WHERE id=?`, t.ClientID).Scan(&t.AgentID); err != nil && !errors.Is(err, sql.ErrNoRows) {
+					return fmt.Errorf("sqlite store: create token: %w", err)
+				}
+			}
+			if t.AgentID == "" {
+				if err := ensureDefaultAgent(ctx, tx, t.CreatedAt); err != nil {
+					return err
+				}
+				t.AgentID = DefaultAgentID
+			}
+		}
+		_, err := tx.ExecContext(ctx, `INSERT INTO tokens(id, hash, scope, label, created_at, expires_at, revoked_at, last_used_at, client_id, family, agent_id) VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
+			t.ID, t.Hash, t.Scope, t.Label, nano(t.CreatedAt), nano(t.ExpiresAt), nano(t.RevokedAt), nano(t.LastUsedAt), t.ClientID, t.Family, t.AgentID)
+		if isUnique(err) {
+			return ErrDuplicate
+		}
+		if err != nil {
+			return fmt.Errorf("sqlite store: create token: %w", err)
+		}
+		return nil
+	})
 }
 
-const tokenCols = `id, hash, scope, label, created_at, expires_at, revoked_at, last_used_at, client_id, family` //nolint:gosec // G101: column names, not a credential
+const tokenCols = `id, hash, scope, label, created_at, expires_at, revoked_at, last_used_at, client_id, family, agent_id` //nolint:gosec // G101: column names, not a credential
 
 type rowScanner interface{ Scan(...any) error }
 
 func scanToken(r rowScanner) (Token, error) {
 	var t Token
 	var c, e, rv, lu int64
-	if err := r.Scan(&t.ID, &t.Hash, &t.Scope, &t.Label, &c, &e, &rv, &lu, &t.ClientID, &t.Family); err != nil {
+	if err := r.Scan(&t.ID, &t.Hash, &t.Scope, &t.Label, &c, &e, &rv, &lu, &t.ClientID, &t.Family, &t.AgentID); err != nil {
 		return Token{}, err
 	}
 	t.CreatedAt, t.ExpiresAt, t.RevokedAt, t.LastUsedAt = fromNano(c), fromNano(e), fromNano(rv), fromNano(lu)

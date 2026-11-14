@@ -12,22 +12,30 @@ import (
 // CreateOAuthClient implements OAuthStore.
 func (s *SQLite) CreateOAuthClient(ctx context.Context, c OAuthClient) error {
 	uris, _ := json.Marshal(c.RedirectURIs)
-	_, err := s.db.ExecContext(ctx, `INSERT INTO oauth_clients(id, name, secret_hash, redirect_uris, created_at, last_used_at) VALUES(?,?,?,?,?,?)`,
-		c.ID, c.Name, c.SecretHash, string(uris), nano(c.CreatedAt), nano(c.LastUsedAt))
-	if isUnique(err) {
-		return ErrDuplicate
-	}
-	if err != nil {
-		return fmt.Errorf("sqlite store: create oauth client: %w", err)
-	}
-	return nil
+	return s.tx(ctx, func(tx *sql.Tx) error {
+		if c.AgentID == "" { // a client always has an agent
+			if err := ensureDefaultAgent(ctx, tx, c.CreatedAt); err != nil {
+				return err
+			}
+			c.AgentID = DefaultAgentID
+		}
+		_, err := tx.ExecContext(ctx, `INSERT INTO oauth_clients(id, name, secret_hash, redirect_uris, created_at, last_used_at, agent_id) VALUES(?,?,?,?,?,?,?)`,
+			c.ID, c.Name, c.SecretHash, string(uris), nano(c.CreatedAt), nano(c.LastUsedAt), c.AgentID)
+		if isUnique(err) {
+			return ErrDuplicate
+		}
+		if err != nil {
+			return fmt.Errorf("sqlite store: create oauth client: %w", err)
+		}
+		return nil
+	})
 }
 
 func scanClient(r rowScanner) (OAuthClient, error) {
 	var c OAuthClient
 	var uris string
 	var created, used int64
-	if err := r.Scan(&c.ID, &c.Name, &c.SecretHash, &uris, &created, &used); err != nil {
+	if err := r.Scan(&c.ID, &c.Name, &c.SecretHash, &uris, &created, &used, &c.AgentID); err != nil {
 		return OAuthClient{}, err
 	}
 	if err := json.Unmarshal([]byte(uris), &c.RedirectURIs); err != nil {
@@ -37,7 +45,7 @@ func scanClient(r rowScanner) (OAuthClient, error) {
 	return c, nil
 }
 
-const clientCols = `id, name, secret_hash, redirect_uris, created_at, last_used_at`
+const clientCols = `id, name, secret_hash, redirect_uris, created_at, last_used_at, agent_id`
 
 // OAuthClient implements OAuthStore.
 func (s *SQLite) OAuthClient(ctx context.Context, id string) (*OAuthClient, error) {
