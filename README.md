@@ -125,6 +125,22 @@ goldengate projects remove "Pharmfindr app" ~/code/pharmfindr-web   # stops shar
 goldengate projects delete "Pharmfindr app"                          # stops sharing every member
 ```
 
+**Which assistant sees what.** Each assistant you connect is an *agent* with its own read token and its own list of projects. The assistant you set up first sees every project you share; any other starts with nothing. These commands ask for the admin secret (or read `GOLDENGATE_ADMIN_TOKEN`) and never store it:
+
+```bash
+goldengate agents list                               # agents and what each sees
+goldengate agents add "ChatGPT"                      # a new agent; sees nothing yet
+goldengate agents grant ChatGPT "Pharmfindr"         # by project name, id, or folder (sync it first)
+goldengate agents token ChatGPT                      # its read token, shown once
+goldengate agents revoke ChatGPT "Pharmfindr"
+goldengate agents grant ChatGPT --all                # every project, including future ones
+goldengate agents revoke Default --all               # stop the first assistant seeing everything
+goldengate agents limit ChatGPT 30                   # at most the last 30 days
+goldengate agents remove ChatGPT                     # also revokes its tokens
+```
+
+Grants and revocations apply to the assistant's next request. A project an assistant may not see is, for that assistant, simply not there.
+
 `goldengate share add <folder>` still works and puts the folder in a project of its own, named after it. Configs that use `[share] allow` are read as projects and written back in the new shape on the next save.
 
 ## Sources

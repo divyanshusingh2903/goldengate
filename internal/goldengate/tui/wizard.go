@@ -393,6 +393,9 @@ func (m *Model) wizServerView(out *[]string) string {
 			add("")
 			add(m.th.Title.Render("Read token for your assistant (shown only now):"))
 			add("   " + w.res.ReadToken)
+			if w.res.SeesAll {
+				add(m.th.Dim.Render("This assistant sees every project you share. Change it with `goldengate agents`."))
+			}
 		}
 		add("Connector URL: " + w.res.MCPURL)
 		if w.res.OAuth {

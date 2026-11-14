@@ -847,7 +847,7 @@ func (b *tuiBackend) Init(ctx context.Context, p tui.InitParams) (tui.InitResult
 	if err != nil {
 		return tui.InitResult{}, err
 	}
-	return tui.InitResult{MCPURL: res.ServerURL + "/mcp", ReadToken: res.ReadSecret, OAuth: res.OAuth, TokenStore: res.StoreKind}, nil
+	return tui.InitResult{MCPURL: res.ServerURL + "/mcp", ReadToken: res.ReadSecret, OAuth: res.OAuth, TokenStore: res.StoreKind, SeesAll: res.SeesAll}, nil
 }
 
 // NewTUIBackend returns the backend the interactive UI uses, built on d. It is

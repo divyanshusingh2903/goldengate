@@ -144,8 +144,16 @@ func migrate(ctx context.Context, db *sql.DB) error {
 // this never grants anything again: projects that arrive later are granted
 // to no one.
 func migrateAgents(ctx context.Context, db *sql.DB) error {
-	have, err := columns(ctx, db, "audit")
+	have, err := columns(ctx, db, "agents")
 	if err != nil {
+		return err
+	}
+	if !have["all_projects"] {
+		if _, err := db.ExecContext(ctx, `ALTER TABLE agents ADD COLUMN all_projects INTEGER NOT NULL DEFAULT 0`); err != nil {
+			return fmt.Errorf("sqlite store: migrate: %w", err)
+		}
+	}
+	if have, err = columns(ctx, db, "audit"); err != nil {
 		return err
 	}
 	if !have["agent_id"] {
