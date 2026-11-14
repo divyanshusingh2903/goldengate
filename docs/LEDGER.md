@@ -12,7 +12,7 @@ This file lets any Claude Code session (or person) pick up the Product v2 work w
 _Last updated 2026-11-14. Update this section whenever a row in the queue changes._
 
 **Progress:** 4 of 31 scheduled issues done (plus 2 stretch). Phase 1, Foundations, is under way.
-**Next up:** #19 Server: stable project IDs, migration, size M, planned Nov 16. Its dependency, #18, is done.
+**In progress:** #19 Server: stable project IDs, migration, size M, planned Nov 16. **Next after it:** #24 Server: agents and grants model.
 
 ### Done
 
@@ -37,6 +37,7 @@ Supporting changes (not queue issues):
 - **User's stash** `list-tools wip (user)` (branch `fix/list-tools-empty-hint`): not touched by the loop. Popping it will conflict with #37 in `listWork` (`bridgemcp/tools.go`).
 - **Dependabot #53**: shows a `pr-template` failure from before #9 merged. It clears once the PR is rebased or updated (the user's call).
 - **#49 follow-ups**: the user's own narrative is honoured through `summarize.Options.UserNarrative`, but nothing stores or edits one until #30. Model summaries pushed before #49 (bullets in `description`) are not counted as stale; they gain a narrative when their session changes or the length setting is changed and the user re-summarizes. `get_work_item` (#36) should return the full narrative like `get_session`.
+- **#19 notes**: the `project` column in the server tables now holds a project id (for data stored before ids, the old key). A server with #19 accepts old clients; an old server rejects payloads from a client with #19 (unknown fields), so upgrade the server first. Grants (#24) should point at `projects.id`; a project left without sessions is deleted, so grants on it must go with it.
 - **#37 follow-up**: the per-agent maximum window is enforced in `resolveWindow` once agents exist (#24).
 
 ## The loop
@@ -91,7 +92,7 @@ Status values: `todo`, `in progress`, `in review`, `blocked`, `done`. Size: S ab
 | 2 | #37 Default 5-day window, custom time ranges | S | | Nov 13 | done | #55 |
 | 3 | #18 Named projects with members (client) | L | #17 | Nov 14 | done | #59 |
 | 4 | #49 Summaries: facts plus narrative | M | | Nov 15 | done | #60 |
-| 5 | #19 Server: stable project IDs, migration | M | #18 | Nov 16 | todo | |
+| 5 | #19 Server: stable project IDs, migration | M | #18 | Nov 16 | in progress | |
 | 6 | #24 Server: agents and grants model | M | #19 | Nov 16 | todo | |
 | 7 | #25 Enforce grants in every MCP tool | M | #24 | Nov 17 | todo | |
 | 8 | #26 API and CLI for agents and grants | M | #24 | Nov 17 | todo | |
@@ -141,3 +142,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-14: Merged #58 (roadmap page kept in step with the ledger). #18 implemented: `[[projects]]` in the config (members are what is shared, one folder per project, `exclude_sources` per member), legacy `allow`/`deny_source` read as projects, `goldengate projects` commands, TUI `n`/`N`. Server project ids stay as they are until #19.
 - 2026-11-14: #18 done (#59). #49 implemented: summaries split into facts (always the local rules) and a narrative (model passages with short/standard/detailed lengths, or the user's); separate narrative caps on client and server; list MCP tools return an abstract and only `get_session` the full narrative.
 - 2026-11-14: #49 done (#60). Roadmap page updated. Next: #19.
+- 2026-11-14: #19 implemented: `projects` table and project ids on the server, payload version 2 with `project_id`/`project_name`, in-place SQLite upgrade, delete by id, folder or name, MCP tools take a name or id and show the name. The client re-sends stored payloads when a project is renamed or merged, without reading or summarizing again.
