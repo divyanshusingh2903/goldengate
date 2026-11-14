@@ -5,6 +5,7 @@ This file lets any Claude Code session (or person) pick up the Product v2 work w
 - Plan and reasons: `DESIGN.md` section 1.1 (product principles) and the GitHub [Product v2 milestone](https://github.com/divyanshusingh2903/goldengate/milestone/1).
 - Each issue's body is its spec: scope, rules, and "Done when". Read it in full with `gh issue view <n>` before writing code.
 - Target: every issue in the queue merged by **2026-11-30**.
+- Roadmap page (Claude artifact, private to the owner): https://claude.ai/artifact/8LFj2xzfz1Vm6vKamiBS3p. It shows the same order day by day, with progress. Keep it in step with this file (loop step 11).
 
 ## Status
 
@@ -59,7 +60,15 @@ Work one issue at a time, in queue order. For each issue:
     gh pr merge <pr> --merge --delete-branch
     ```
     If `main` moved since the branch was cut, run `gh pr update-branch <pr>` and wait for CI again. If the ruleset blocks a merge while every check is green, find out which rule (`gh api repos/divyanshusingh2903/goldengate/rules/branches/main`) and fix the cause. Never merge with `--admin` without the user's explicit OK.
-11. **Sync main again** (step 1), confirm the issue closed, update the Status section (progress, done table, next up), add a log line below, and go back to step 2. Status changes ride on the next issue branch's first commit, with step 4.
+11. **Sync main again** (step 1), confirm the issue closed, update the Status section (progress, done table, next up), add a log line below, update the roadmap page, and go back to step 2. Status changes ride on the next issue branch's first commit, with step 4.
+
+### Updating the roadmap page
+
+The page reads all progress from one JSON block near its top, `<script id="status" type="application/json">`. Nothing else on the page needs editing when work moves.
+
+1. Read it with the Artifact tool: `action: "read"`, `url: https://claude.ai/artifact/8LFj2xzfz1Vm6vKamiBS3p`. The result names a saved local file holding the full page.
+2. In that file's status JSON, set `"updated"` to today, `"next"` to the next issue number, and add or change the issue's entry: `"<n>": {"state": "done", "pr": <pr>, "merged": "YYYY-MM-DD"}`. States: `done`, `in-progress`, `in-review`, `blocked`; issues not listed show as planned. Add PRs that are not queue issues to `"supporting"`.
+3. Publish that file with the Artifact tool and the same `url`, so the link stays the same. Keep the JSON valid.
 
 ### Rules that hold across sessions
 
@@ -125,3 +134,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-14: Merged #54 (this ledger). #37 implemented: 5-day default, since/until on every time-bounded tool. The per-agent maximum window waits for #24.
 - 2026-11-14: #37 done (#55). Replaced the pr-template check from #52 with the user's stricter version from #9 (merged): adds the Checklist section, requires every item ticked, skips Dependabot PRs.
 - 2026-11-14: Merged #56 (ledger checklist rule). Added the Status section.
+- 2026-11-14: Merged #57 (ledger status section). Roadmap page now reads progress from a status JSON block and shows #17 and #37 done; loop step 11 updates it.
