@@ -37,14 +37,15 @@ Supporting changes (not queue issues):
 | First `pr-template` check (unblocked the `main` ruleset); later replaced | #52 | 2026-11-14 |
 | The user's stricter `pr-template` check (Checklist with every item ticked; skips Dependabot) | #9 | 2026-11-14 |
 | This ledger, then its checklist rule, status section and roadmap sync | #54, #56, #57, #58 | 2026-11-14 |
+| Ledger status updates between issues (#49 done; phase 2 complete; this refresh) | #61, #68, #69 | 2026-11-14 |
 
 ### Open loose ends
 
 - **User's stash** `list-tools wip (user)` (branch `fix/list-tools-empty-hint`): not touched by the loop. Popping it will conflict with #37 in `listWork` (`bridgemcp/tools.go`).
 - **Dependabot #53**: shows a `pr-template` failure from before #9 merged. It clears once the PR is rebased or updated (the user's call).
 - **#49 follow-ups**: the user's own narrative is honoured through `summarize.Options.UserNarrative`, but nothing stores or edits one until #30. Model summaries pushed before #49 (bullets in `description`) are not counted as stale; they gain a narrative when their session changes or the length setting is changed and the user re-summarizes. `get_work_item` (#36) should return the full narrative like `get_session`.
-- **#19 notes**: the `project` column in the server tables now holds a project id (for data stored before ids, the old key). A server with #19 accepts old clients; an old server rejects payloads from a client with #19 (unknown fields), so upgrade the server first. Grants (#24) should point at `projects.id`; a project left without sessions is deleted, so grants on it must go with it.
-- **#24 notes for #25 to #28**: agents and grants exist in the store only; nothing enforces them yet (#25). Read tokens and OAuth clients created without an agent go to the `Default` agent (`agt_default`), which has no grants on a fresh install, so once #25 lands a new install shows an assistant nothing until projects are granted (#26 CLI, #27 consent, #28 TUI; the init wizard should grant what it shares). `Agent.MaxDays` is stored but not applied (#25, with the #37 follow-up).
+- **Upgrade order (#19)**: upgrade the server before the client. A server with #19 accepts old clients, but an older server rejects payloads from a newer client (unknown fields). In the server tables the `project` column holds a project id (for data stored before ids, the old key).
+- **Per-agent access, as it stands after phase 2**: grants are enforced in every MCP tool (#25). On an upgraded server `Default` keeps the projects it could see at upgrade time and is not granted later ones; on a fresh install `goldengate init` sets `Default` to see every shared project. Not built yet: creating, renaming or removing agents and minting tokens from the TUI (CLI only), deleting an OAuth application from the client side, and `get_work_item` (#36), which should return the full narrative like `get_session`. "View as agent" is computed on the laptop from what that computer synced, so it does not list sessions synced from another computer. The web UI (#48) should reuse the four agents methods on `tui.Backend`.
 - **Decisions made by the user for #26 (2026-11-14)**: (1) only the admin secret may manage agents, grants and agent tokens; the TUI (#28) should ask for it once per run and keep it in memory only. (2) On a server with no agents yet, `goldengate init` makes the first assistant (`Default`) see every shared project through the per-agent `all_projects` switch; agents added later start with nothing.
 
 ## The loop
@@ -156,3 +157,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-14: #26 done (#65). #27 implemented: OAuth consent is two steps (admin secret, then agent and projects with nothing ticked); the first page shows no agent or project names; the client is attached to the chosen agent.
 - 2026-11-14: #27 done (#66). #28 implemented: TUI Agents screen (`5`) with a projects by agents grid, review before apply, view as agent (computed locally), agent details with token revoke; four new `tui.Backend` methods. Not included: creating, renaming or removing agents and minting tokens from the TUI (CLI only for now), and deleting OAuth applications.
 - 2026-11-14: #28 done (#67). Phase 2 (per-agent access) is complete: #19, #24, #25, #26, #27, #28. Roadmap page updated. Next: #20.
+- 2026-11-14: Ledger refreshed after phase 2 (#69): supporting PRs #61 and #68 listed, loose ends rewritten for the state after #25 to #28. Roadmap page republished.
