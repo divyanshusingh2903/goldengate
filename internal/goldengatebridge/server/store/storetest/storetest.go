@@ -35,6 +35,7 @@ func Run(t *testing.T, newStore func(t *testing.T) store.Store) {
 	ctx := context.Background()
 	for name, fn := range map[string]func(*testing.T, store.Store){
 		"sessions":    sessions,
+		"projects":    projects,
 		"quota":       quota,
 		"search":      search,
 		"work items":  workItems,
@@ -533,5 +534,129 @@ func oauth(t *testing.T, s store.Store) {
 	}
 	if _, err := s.OAuthClient(ctx, "c3"); err != nil {
 		t.Errorf("fresh client was pruned: %v", err)
+	}
+}
+
+// v2 is payload in the shape that names its project by id.
+func v2(source, id, member, pid, name, title string, updated time.Time, items ...model.WorkItem) *model.SessionPayload {
+	p := payload(source, id, member, title, updated, items...)
+	p.Version, p.ProjectID, p.ProjectName = model.PayloadV2, pid, name
+	return p
+}
+
+func projectNames(t *testing.T, s store.Store) []string {
+	t.Helper()
+	ps, err := s.ListProjects(context.Background())
+	must(t, err)
+	var out []string
+	for _, p := range ps {
+		out = append(out, fmt.Sprintf("%s=%s:%d", p.ID, p.Project, p.Sessions))
+	}
+	return out
+}
+
+func projects(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	lim := store.Limits{}
+	// One named project with two members, and one stored in the older shape.
+	must(t, s.PutSession(ctx, v2("claude-code", "a", "~/code/app", "p_app1", "App", "Alpha", t0, pr("o/r#1", model.StatusCreated, t0)), t0, lim))
+	must(t, s.PutSession(ctx, v2("codex", "b", "~/code/app-web", "p_app1", "App", "Beta", t0.Add(time.Hour), pr("o/r#1", model.StatusMerged, t0.Add(time.Hour))), t0, lim))
+	must(t, s.PutSession(ctx, payload("claude-code", "c", "~/old", "Gamma", t0.Add(2*time.Hour), pr("o/r#1", model.StatusCreated, t0)), t0, lim))
+
+	if got := strings.Join(projectNames(t, s), " "); got != "~/old=~/old:1 p_app1=App:2" {
+		t.Fatalf("members group under their project id; the older shape is its own project: %s", got)
+	}
+	got, err := s.Sessions(ctx, store.SessionQuery{Project: "p_app1"})
+	must(t, err)
+	if len(got) != 2 || got[0].ProjectID != "p_app1" || got[0].ProjectName != "App" || got[0].Payload.Project != "~/code/app-web" {
+		t.Fatalf("sessions are filed by project id and keep their member key: %+v", got)
+	}
+	if got, _ := s.Sessions(ctx, store.SessionQuery{Project: "~/old"}); len(got) != 1 || got[0].ProjectID != "~/old" || got[0].ProjectName != "~/old" {
+		t.Fatalf("the older shape uses its key as id and name: %+v", got)
+	}
+
+	// Work items merge per project, not per member, and carry the name.
+	items, err := s.WorkItems(ctx, store.WorkItemQuery{Project: "p_app1"})
+	must(t, err)
+	if len(items) != 1 || items[0].Item.Status != model.StatusMerged || len(items[0].Sessions) != 2 || items[0].ProjectID != "p_app1" || items[0].Project != "App" {
+		t.Fatalf("one work item across the project's members: %+v", items)
+	}
+	if all, _ := s.WorkItems(ctx, store.WorkItemQuery{}); len(all) != 2 {
+		t.Fatalf("the same key in another project is another item: %d", len(all))
+	}
+
+	// Resolve: id, then name (any case), then a member key.
+	for ref, want := range map[string]string{"p_app1": "p_app1", "app": "p_app1", "APP": "p_app1", "~/code/app-web": "p_app1", "~/old": "~/old"} {
+		p, err := s.ResolveProject(ctx, ref)
+		if err != nil || p.ID != want {
+			t.Errorf("resolve %q = %q, %v; want %q", ref, p.ID, err, want)
+		}
+	}
+	if _, err := s.ResolveProject(ctx, "nope"); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("unknown project: %v", err)
+	}
+
+	// A rename arrives with the next payload and applies to the whole project.
+	must(t, s.PutSession(ctx, v2("codex", "b", "~/code/app-web", "p_app1", "App (renamed)", "Beta", t0.Add(time.Hour)), t0.Add(time.Minute), lim))
+	p, err := s.ResolveProject(ctx, "p_app1")
+	must(t, err)
+	if p.Name != "App (renamed)" || !p.CreatedAt.Equal(t0) || !p.UpdatedAt.Equal(t0.Add(time.Minute)) {
+		t.Fatalf("rename keeps the id and the creation time: %+v", p)
+	}
+	if got, _ := s.Sessions(ctx, store.SessionQuery{Project: "p_app1"}); len(got) != 2 || got[0].ProjectName != "App (renamed)" || got[1].ProjectName != "App (renamed)" {
+		t.Fatalf("every session shows the current name: %+v", got)
+	}
+	if got, _ := s.Search(ctx, "alpha", "p_app1", 10); len(got) != 1 || got[0].ProjectName != "App (renamed)" {
+		t.Fatalf("search filters by id and returns the name: %+v", got)
+	}
+	if r, err := s.GetSession(ctx, "claude-code", "a"); err != nil || r.ProjectID != "p_app1" || r.ProjectName != "App (renamed)" {
+		t.Fatalf("get session: %+v %v", r, err)
+	}
+
+	// Moving a session to another project re-files it; a project left empty goes.
+	must(t, s.PutSession(ctx, v2("claude-code", "c", "~/old", "p_new1", "New home", "Gamma", t0.Add(2*time.Hour), pr("o/r#1", model.StatusCreated, t0)), t0, lim))
+	if got := strings.Join(projectNames(t, s), " "); got != "p_new1=New home:1 p_app1=App (renamed):2" {
+		t.Fatalf("after the move: %s", got)
+	}
+	if _, err := s.ResolveProject(ctx, "~/old"); err != nil {
+		t.Errorf("the member key still resolves, now to the new project: %v", err)
+	}
+	if items, _ := s.WorkItems(ctx, store.WorkItemQuery{Project: "~/old"}); len(items) != 0 {
+		t.Errorf("the emptied project keeps no work items: %+v", items)
+	}
+
+	// Delete by member key removes only what came from that member.
+	n, err := s.DeleteProject(ctx, "~/code/app-web")
+	must(t, err)
+	if n != 1 || strings.Join(projectNames(t, s), " ") != "p_new1=New home:1 p_app1=App (renamed):1" {
+		t.Fatalf("delete by member: %d %v", n, projectNames(t, s))
+	}
+	if items, _ := s.WorkItems(ctx, store.WorkItemQuery{Project: "p_app1"}); len(items) != 1 || len(items[0].Sessions) != 1 || items[0].Sessions[0].ID != "a" {
+		t.Errorf("the work item stays, linked only to the remaining member's session: %+v", items)
+	}
+	// Delete by name removes the whole project; by id too.
+	if n, _ := s.DeleteProject(ctx, "new HOME"); n != 1 {
+		t.Fatalf("delete by name: %d", n)
+	}
+	must(t, s.PutSession(ctx, v2("codex", "d", "~/code/app-web", "p_app1", "App (renamed)", "Delta", t0), t0, lim))
+	if n, _ := s.DeleteProject(ctx, "p_app1"); n != 2 {
+		t.Fatalf("delete by id removes every member's sessions: %d", n)
+	}
+	if got := projectNames(t, s); len(got) != 0 {
+		t.Fatalf("nothing is left: %v", got)
+	}
+	if _, err := s.ResolveProject(ctx, "p_app1"); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("a deleted project does not resolve: %v", err)
+	}
+	if n, err := s.DeleteProject(ctx, "p_app1"); n != 0 || err != nil {
+		t.Errorf("deleting nothing is not an error: %d %v", n, err)
+	}
+
+	// The per-project quota counts by project id, across members.
+	q := store.Limits{MaxSessionsPerProject: 2}
+	must(t, s.PutSession(ctx, v2("codex", "q1", "~/m1", "p_quota", "Q", "one", t0), t0, q))
+	must(t, s.PutSession(ctx, v2("codex", "q2", "~/m2", "p_quota", "Q", "two", t0), t0, q))
+	if err := s.PutSession(ctx, v2("codex", "q3", "~/m3", "p_quota", "Q", "three", t0), t0, q); !errors.Is(err, store.ErrQuota) {
+		t.Errorf("quota across members: %v", err)
 	}
 }

@@ -50,6 +50,10 @@ type Options struct {
 	// ProjectKey, when set, replaces the session's folder as the project the
 	// payload is filed under (a repository root for a worktree session).
 	ProjectKey string
+	// ProjectID and ProjectName, when both set, file the session under a
+	// named project (payload version 2). Without them the payload has the
+	// older shape, where the project key alone names the project.
+	ProjectID, ProjectName string
 	// ExtraRedactions are user regexes added to the built-in rules.
 	ExtraRedactions []string
 	// Model, when set, writes the title, goals, open problems and a narrative
@@ -84,6 +88,9 @@ func Build(s *model.RawSession, o Options) (*model.SessionPayload, error) {
 		Project:   pathutil.Scrub(firstNonEmpty(o.ProjectKey, s.Ref.ProjectKey), o.Home),
 		Level:     level,
 		Origin:    s.Origin,
+	}
+	if o.ProjectID != "" && o.ProjectName != "" {
+		p.Version, p.ProjectID, p.ProjectName = model.PayloadV2, o.ProjectID, o.ProjectName
 	}
 	p.StartedAt, p.UpdatedAt = activityWindow(s)
 

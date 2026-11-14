@@ -22,6 +22,14 @@ func TestValidateAcceptsGood(t *testing.T) {
 	if err := good().Validate(now); err != nil {
 		t.Fatal(err)
 	}
+	v2 := good()
+	v2.Version, v2.ProjectID, v2.ProjectName = PayloadV2, "p_3f9a1c0b2d4e", "Pharmfindr app"
+	if err := v2.Validate(now); err != nil {
+		t.Fatal(err)
+	}
+	if v2.ProjectRef() != "p_3f9a1c0b2d4e" || v2.ProjectLabel() != "Pharmfindr app" || good().ProjectRef() != "~/code/app" || good().ProjectLabel() != "~/code/app" {
+		t.Error("ProjectRef and ProjectLabel fall back to the key for the older shape")
+	}
 	p := good()
 	p.Level, p.Summary, p.WorkItems, p.TitleOnly = LevelTitlesOnly, nil, nil, "just a title"
 	if err := p.Validate(now); err != nil {
@@ -31,7 +39,16 @@ func TestValidateAcceptsGood(t *testing.T) {
 
 func TestValidateRejects(t *testing.T) {
 	cases := map[string]func(*SessionPayload){
-		"unknown source":     func(p *SessionPayload) { p.Source = "evil" },
+		"unknown source":  func(p *SessionPayload) { p.Source = "evil" },
+		"future version":  func(p *SessionPayload) { p.Version = 3 },
+		"id without v2":   func(p *SessionPayload) { p.ProjectID, p.ProjectName = "p_abc123", "App" },
+		"v2 without id":   func(p *SessionPayload) { p.Version = PayloadV2 },
+		"v2 bad id":       func(p *SessionPayload) { p.Version, p.ProjectID, p.ProjectName = PayloadV2, "../etc", "App" },
+		"v2 without name": func(p *SessionPayload) { p.Version, p.ProjectID = PayloadV2, "p_abc123" },
+		"v2 name newline": func(p *SessionPayload) { p.Version, p.ProjectID, p.ProjectName = PayloadV2, "p_abc123", "a\nb" },
+		"v2 name too long": func(p *SessionPayload) {
+			p.Version, p.ProjectID, p.ProjectName = PayloadV2, "p_abc123", strings.Repeat("x", MaxProjectNameLen+1)
+		},
 		"bad session id":     func(p *SessionPayload) { p.SessionID = "../x" },
 		"empty project":      func(p *SessionPayload) { p.Project = "" },
 		"control char":       func(p *SessionPayload) { p.Summary.Title = "a\x1b[31mb" },

@@ -156,7 +156,7 @@ func TestMouseServer(t *testing.T) {
 		t.Fatal("Delete asks first")
 	}
 	h.click("[y Yes]")
-	if len(h.be.srvDels) != 1 || h.be.srvDels[0] != "~/code/forge" {
+	if len(h.be.srvDels) != 1 || h.be.srvDels[0] != "p_forge1" { // a project with an id is deleted by it
 		t.Fatalf("deleted %v", h.be.srvDels)
 	}
 }

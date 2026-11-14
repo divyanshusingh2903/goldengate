@@ -100,8 +100,8 @@ path = "~/code/app/"
 	for body, want := range map[string]string{
 		"[[projects]]\nid = \"p_a\"\nname = \"A\"\n[[projects]]\nid = \"p_a\"\nname = \"B\"\n": "share the id",
 		"[[projects]]\nid = \"p_a\"\nname = \"A\"\n[[projects]]\nid = \"p_b\"\nname = \"a\"\n": "two projects are named",
-		"[[projects]]\nid = \"p_a\"\nname = \"\"\n":                                           "needs a name",
-		"[[projects]]\nname = \"A\"\n":                                                        "has no id",
+		"[[projects]]\nid = \"p_a\"\nname = \"\"\n":                                            "needs a name",
+		"[[projects]]\nname = \"A\"\n":                                                         "has no id",
 	} {
 		if _, err := Load(write(t, body)); err == nil || !strings.Contains(err.Error(), want) {
 			t.Errorf("%q: want %q, got %v", body, want, err)

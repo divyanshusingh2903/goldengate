@@ -14,16 +14,17 @@ import (
 // fails Validate, and the server refuses to store one. They bound what a
 // leaked ingest token can stuff into the store.
 const (
-	MaxPayloadBytes = 64 << 10
-	MaxSummaryJSON  = 4 << 10
-	MaxProjectLen   = 300
-	MaxTitleLen     = 200
-	MaxGoalLen      = 400
-	MaxLastLen      = 500
-	MaxListItems    = 8 // goals, description and outcomes each
-	MaxListItemLen  = 300
-	MaxSummarizedBy = 80
-	MaxAbstractLen  = 300
+	MaxPayloadBytes   = 64 << 10
+	MaxSummaryJSON    = 4 << 10
+	MaxProjectLen     = 300
+	MaxProjectNameLen = 100
+	MaxTitleLen       = 200
+	MaxGoalLen        = 400
+	MaxLastLen        = 500
+	MaxListItems      = 8 // goals, description and outcomes each
+	MaxListItemLen    = 300
+	MaxSummarizedBy   = 80
+	MaxAbstractLen    = 300
 	// The narrative has its own caps, separate from MaxSummaryJSON, which
 	// bounds the facts and the short fields.
 	MaxNarrativeLen   = 4000
@@ -47,6 +48,7 @@ var (
 	validVia       = map[string]bool{ViaToolResult: true, ViaHarnessEvent: true, ViaText: true}
 	reSessionID    = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,128}$`)
 	reHash         = regexp.MustCompile(`^[0-9a-f]{64}$`)
+	reProjectID    = regexp.MustCompile(`^p_[0-9a-z]{4,40}$`)
 )
 
 // ValidSource reports whether s is a known source name.
@@ -88,6 +90,24 @@ func (p *SessionPayload) Validate(now time.Time) error {
 	}
 	if err := CheckText("project", p.Project, MaxProjectLen); err != nil {
 		return err
+	}
+	switch p.Version {
+	case 0, 1:
+		if p.ProjectID != "" || p.ProjectName != "" {
+			return fmt.Errorf("project_id: needs payload version %d", PayloadV2)
+		}
+	case PayloadV2:
+		if !reProjectID.MatchString(p.ProjectID) {
+			return fmt.Errorf("project_id: invalid")
+		}
+		if strings.TrimSpace(p.ProjectName) == "" || p.ProjectName != strings.TrimSpace(p.ProjectName) {
+			return fmt.Errorf("project_name: empty or padded")
+		}
+		if err := CheckText("project_name", p.ProjectName, MaxProjectNameLen); err != nil {
+			return err
+		}
+	default:
+		return fmt.Errorf("v: unsupported payload version %d", p.Version)
 	}
 	if p.Origin != "" && p.Origin != OriginCLI {
 		return fmt.Errorf("origin: unsupported %q", p.Origin)

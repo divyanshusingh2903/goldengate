@@ -213,6 +213,9 @@ func (a *app) syncCmd() *cobra.Command {
 					sort.Strings(kinds)
 					fmt.Fprintf(a.Stderr, "redactions: %s\n", strings.Join(kinds, " "))
 				}
+				if rep.Refiled > 0 {
+					fmt.Fprintf(a.Stderr, "%d synced sessions re-sent as they were, under their project's current name and id\n", rep.Refiled)
+				}
 				if rep.Resummarized > 0 {
 					fmt.Fprintf(a.Stderr, "%d synced sessions re-summarized by %s\n", rep.Resummarized, s.Summarizer.Name())
 				}

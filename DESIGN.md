@@ -223,7 +223,7 @@ Deduplication
 
 ## 5. Selection model (what is shared)
 
-> Named projects (below) landed in #18. Still to come under milestone M7: project ids on the server (#19), a per-session inbox (#20) and user-approved rules. Deny-by-default and deny-wins are unchanged.
+> Named projects (below) landed in #18 and reach the server by id since #19. Still to come under milestone M7: a per-session inbox (#20) and user-approved rules. Deny-by-default and deny-wins are unchanged.
 
 Default policy: **deny all**. Something is shared only if it is a member of a named project.
 
@@ -457,8 +457,8 @@ Summarization (`internal/goldengate/summarize`)
 
 ### Endpoints
 - `POST /v1/ingest` — batch upsert of summary records. Bearer token with `ingest` scope.
-- `DELETE /v1/projects/{key}` and `DELETE /v1/sessions/{id}` — remove data. `ingest` scope.
-- `GET /v1/projects` — what the server holds (for the TUI Server screen).
+- `DELETE /v1/projects/{key}` and `DELETE /v1/sessions/{id}` — remove data. `ingest` scope. `{key}` is a project id (the whole project), else the key of a folder or chat grouping (only the sessions that came from it), else a project name.
+- `GET /v1/projects` — what the server holds, with each project's `id` and name (for the TUI Server screen).
 - `POST|GET /mcp` — MCP streamable HTTP. Bearer token with `read` scope.
 - `POST /v1/admin/tokens`, `GET /v1/admin/tokens`, `DELETE /v1/admin/tokens/{id}` — mint, list, revoke tokens. `admin` scope only.
 - `POST /v1/pair` — exchange a single-use pairing code for an `ingest` token. Unauthenticated, so strictly rate limited and burn-after-5-failures.
@@ -496,6 +496,8 @@ Guidance
 
 ### Storage
 `Store` interface with implementations: `memory` (tests), `sqlite` (self-host, single volume), `postgres`, `firestore` (Cloud Run friendly). Keep queries simple (by project, by time range, text search) so the interface is easy to implement. SQLite uses FTS5 for `search_work`; Firestore can use simple token matching. Work items live in their own table/collection keyed by `(project, kind, key)`, so one commit or PR seen in several sessions is a single record; index on status and `last_seen`.
+
+**Projects.** The server files everything under a stable project id, with a display name in a `projects` table (id, name, created, updated). Payload version 2 carries `project_id` and `project_name` next to `project`, which stays the key of the folder or chat grouping the session came from. A rename arrives with the next payload and applies to the whole project; a session that arrives under another id moves there, and a project left without sessions is removed. The older payload shape (no id) is still accepted: its key serves as both id and name. Existing SQLite databases upgrade in place at start: one project per distinct old key, named after it, so every tool answers as before. When a project is renamed, merged or first given an id, the client re-sends the payloads it already sent with only the project fields changed (`Report.Refiled`): nothing is read or summarized again. `ResolveProject` accepts an id, a name (case-insensitive) or a folder key; every MCP `project` argument goes through it, results show the name, and structured results also carry `project_id` and the session's `folder`. The audit log records project ids.
 
 ### Auth
 - Three scopes: `admin` (token management only; its secret comes from `GOLDENGATE_ADMIN_TOKEN` and is never stored), `ingest` (write/delete work data), `read` (MCP only). No scope can do another's job, and `admin` cannot read or write work data. The token given to the assistant can neither write nor delete.

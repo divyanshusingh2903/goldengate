@@ -163,6 +163,7 @@ type Syncer struct {
 func (s *Syncer) summarizeOptions(ctx context.Context, ref model.SessionRef, wo workitems.Options, offline bool, onErr func(error)) summarize.Options {
 	o := summarize.Options{Level: s.Config.Share.Level, Home: s.Home, Work: wo, ExtraRedactions: s.Config.Redact.ExtraPatterns,
 		ProjectKey: s.serverKey(ref)}
+	o.ProjectID, o.ProjectName = s.projectOf(ref)
 	if s.Summarizer != nil {
 		now := s.Now
 		if now == nil {
@@ -212,6 +213,10 @@ type Report struct {
 	// they are rebuilt and counted in Resummarized instead.
 	Stale        int
 	Resummarized int
+	// Refiled counts unchanged, already-pushed sessions that are sent again
+	// only because their project was renamed, merged or given an id. They
+	// are included in Planned.
+	Refiled int
 }
 
 func (s *Syncer) log() *slog.Logger {
@@ -298,6 +303,14 @@ func (s *Syncer) Plan(ctx context.Context, o RunOpts) (Batch, Report, error) {
 					if stale {
 						rep.Stale++
 					}
+					if p, body, ok := s.refiled(prev, ref); ok {
+						entry := prev
+						entry.Payload = body
+						b.items = append(b.items, planned{payload: p, entry: entry})
+						rep.Planned++
+						rep.Refiled++
+						continue
+					}
 					rep.Unchanged++
 					continue
 				}
@@ -330,7 +343,9 @@ func (s *Syncer) Plan(ctx context.Context, o RunOpts) (Batch, Report, error) {
 			body, _ := json.Marshal(p)
 			// the fingerprint covers the conversation, not the summary: a
 			// re-summarized session is sent when its payload came out different
-			if seen && prev.ContentHash == p.ContentHash && (!j.resummarize || bytes.Equal(body, prev.Payload)) {
+			wasID, wasName, kept := projectFields(prev.Payload)
+			sameProj := !kept || (wasID == p.ProjectID && wasName == p.ProjectName)
+			if seen && prev.ContentHash == p.ContentHash && sameProj && (!j.resummarize || bytes.Equal(body, prev.Payload)) {
 				// same content, only the file's stat changed: remember the new stat, send nothing
 				prev.Size, prev.MTimeNS = ref.SizeBytes, mtime
 				b.refresh = append(b.refresh, prev)
@@ -470,6 +485,64 @@ func (p *buildPool) wait() ([]job, error) {
 	p.stop()
 	p.wg.Wait()
 	return p.jobs, p.err
+}
+
+// projectOf is the named project a session belongs to (its id and name), or
+// two empty strings when its folder is shared without being in a project.
+func (s *Syncer) projectOf(ref model.SessionRef) (id, name string) {
+	name = s.Matcher.Project(ref.ProjectKey)
+	if name == "" {
+		if k := s.serverKey(ref); k != ref.ProjectKey {
+			name = s.Matcher.Project(k)
+		}
+	}
+	if name == "" {
+		return "", ""
+	}
+	for _, p := range s.Config.Projects {
+		if p.Name == name {
+			return p.ID, p.Name
+		}
+	}
+	return "", ""
+}
+
+// projectFields reads which project a stored payload was sent under. ok is
+// false when the payload was not kept or cannot be read.
+func projectFields(payload []byte) (id, name string, ok bool) {
+	var p struct {
+		ID   string `json:"project_id"`
+		Name string `json:"project_name"`
+	}
+	if len(payload) == 0 || json.Unmarshal(payload, &p) != nil {
+		return "", "", false
+	}
+	return p.ID, p.Name, true
+}
+
+// refiled returns the payload already sent for an unchanged session with its
+// project fields brought up to date, when the session's project was renamed,
+// merged, or first given an id since. Nothing is read or summarized again:
+// only the project the server files it under changes.
+func (s *Syncer) refiled(prev Entry, ref model.SessionRef) (*model.SessionPayload, []byte, bool) {
+	wasID, wasName, ok := projectFields(prev.Payload)
+	id, name := s.projectOf(ref)
+	if !ok || (wasID == id && wasName == name) {
+		return nil, nil, false
+	}
+	var p model.SessionPayload
+	if json.Unmarshal(prev.Payload, &p) != nil {
+		return nil, nil, false
+	}
+	p.Version, p.ProjectID, p.ProjectName = 0, "", ""
+	if id != "" {
+		p.Version, p.ProjectID, p.ProjectName = model.PayloadV2, id, name
+	}
+	body, err := json.Marshal(&p)
+	if err != nil {
+		return nil, nil, false
+	}
+	return &p, body, true
 }
 
 // serverKey is the project a session is filed under on the server: the

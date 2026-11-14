@@ -142,7 +142,9 @@ func (c *Client) Send(ctx context.Context, ps []*model.SessionPayload) error {
 	return nil
 }
 
-// DeleteProject removes a project's data from the server.
+// DeleteProject removes data from the server. project is a project id (the
+// whole project), the key of a folder or chat grouping (only what came from
+// it), or a project name.
 func (c *Client) DeleteProject(ctx context.Context, project string) (int, error) {
 	var out struct {
 		Deleted int `json:"deleted"`
@@ -166,7 +168,8 @@ func (c *Client) DeleteSession(ctx context.Context, source, id string) (int, err
 
 // RemoteProject is what the server holds for a project.
 type RemoteProject struct {
-	Project      string         `json:"project"`
+	ID           string         `json:"id"`      // stable project id; empty from servers that predate ids
+	Project      string         `json:"project"` // display name
 	Sessions     int            `json:"sessions"`
 	Sources      map[string]int `json:"sources"`
 	LastActivity time.Time      `json:"last_activity"`

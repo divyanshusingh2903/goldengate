@@ -292,7 +292,7 @@ func TestFirstRunToAssistantAnswer(t *testing.T) {
 	}
 	l.must(noAdmin, "sync")
 	ps, _ := b.st.ListProjects(context.Background())
-	if len(ps) != 1 || ps[0].Project != "~/projects/demo" {
+	if len(ps) != 1 || ps[0].Project != "demo" || !strings.HasPrefix(ps[0].ID, "p_") {
 		t.Fatalf("server holds %+v", ps)
 	}
 
@@ -314,7 +314,7 @@ func TestFirstRunToAssistantAnswer(t *testing.T) {
 	// --- the assistant answers "what did I work on this week?" from only that project ---
 	cs := mcpSession(t, b, readToken)
 	txt := tool(t, cs, "recent_activity", map[string]any{"days": 7})
-	if !strings.Contains(txt, "~/projects/demo") || strings.Contains(txt, "client-secret") || !strings.Contains(txt, "untrusted") {
+	if !strings.Contains(txt, "## demo") || strings.Contains(txt, "client-secret") || !strings.Contains(txt, "untrusted") {
 		t.Fatalf("recent_activity:\n%s", txt)
 	}
 	if prs := tool(t, cs, "list_pull_requests", nil); !strings.Contains(prs, "example/demo#7 [merged]") || !strings.Contains(prs, "NOT confirmed") {
@@ -543,7 +543,7 @@ func TestWorktreeSessionsShareTheirRepositoryProject(t *testing.T) {
 	l.must(nil, "sync")
 
 	ps, _ := b.st.ListProjects(context.Background())
-	if len(ps) != 1 || ps[0].Project != "~/projects/demo" || ps[0].Sessions != 2 {
+	if len(ps) != 1 || ps[0].Project != "demo" || ps[0].Sessions != 2 {
 		t.Fatalf("the worktree must be filed under its repository: %+v", ps)
 	}
 	if held := everythingTheServerHolds(t, b); strings.Contains(held, ".claude/worktrees") {

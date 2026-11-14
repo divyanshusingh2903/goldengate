@@ -20,7 +20,13 @@ import (
 // SQLite is the self-host Store: one file on one volume. Search uses FTS5.
 type SQLite struct{ db *sql.DB }
 
+// In every table the project column holds a project id (projects.id). For
+// data stored before projects had ids, the id is the old project key.
+// sessions.member is the key of the folder or chat grouping a session came
+// from; it is added by migrate so databases created earlier upgrade in place.
 const sqliteSchema = `
+CREATE TABLE IF NOT EXISTS projects(
+  id TEXT PRIMARY KEY, name TEXT NOT NULL, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS sessions(
   source TEXT NOT NULL, session_id TEXT NOT NULL, project TEXT NOT NULL,
   updated_at INTEGER NOT NULL, ingested_at INTEGER NOT NULL, payload TEXT NOT NULL,
@@ -86,11 +92,49 @@ func OpenSQLite(ctx context.Context, path string) (*SQLite, error) {
 	return &SQLite{db: db}, nil
 }
 
-// migrate upgrades databases created before OAuth support existed.
+// migrate upgrades databases created by earlier versions in place.
 func migrate(ctx context.Context, db *sql.DB) error {
-	rows, err := db.QueryContext(ctx, `PRAGMA table_info(tokens)`)
+	have, err := columns(ctx, db, "tokens")
 	if err != nil {
-		return fmt.Errorf("sqlite store: migrate: %w", err)
+		return err
+	}
+	for _, col := range []string{"client_id", "family"} {
+		if !have[col] {
+			if _, err := db.ExecContext(ctx, `ALTER TABLE tokens ADD COLUMN `+col+` TEXT NOT NULL DEFAULT ''`); err != nil { //nolint:gosec // G202: column names are constants
+				return fmt.Errorf("sqlite store: migrate: %w", err)
+			}
+		}
+	}
+	// Named projects: every distinct project key that sessions were stored
+	// under becomes a project whose id and name are that key, and each
+	// session's member is the key it was stored under. Both statements only
+	// touch rows that still need it, so this is safe to run at every start.
+	if have, err = columns(ctx, db, "sessions"); err != nil {
+		return err
+	}
+	if !have["member"] {
+		if _, err := db.ExecContext(ctx, `ALTER TABLE sessions ADD COLUMN member TEXT NOT NULL DEFAULT ''`); err != nil {
+			return fmt.Errorf("sqlite store: migrate: %w", err)
+		}
+	}
+	for _, stmt := range []string{
+		`UPDATE sessions SET member=project WHERE member=''`,
+		`INSERT OR IGNORE INTO projects(id, name, created_at, updated_at)
+			SELECT project, project, MIN(ingested_at), MIN(ingested_at) FROM sessions GROUP BY project`,
+		`CREATE INDEX IF NOT EXISTS sessions_member ON sessions(member)`,
+	} {
+		if _, err := db.ExecContext(ctx, stmt); err != nil {
+			return fmt.Errorf("sqlite store: migrate: %w", err)
+		}
+	}
+	return nil
+}
+
+// columns lists a table's column names.
+func columns(ctx context.Context, db *sql.DB, table string) (map[string]bool, error) {
+	rows, err := db.QueryContext(ctx, `PRAGMA table_info(`+table+`)`) //nolint:gosec // G202: table names are constants
+	if err != nil {
+		return nil, fmt.Errorf("sqlite store: migrate: %w", err)
 	}
 	have := map[string]bool{}
 	for rows.Next() {
@@ -100,21 +144,14 @@ func migrate(ctx context.Context, db *sql.DB) error {
 		var dflt sql.NullString
 		if err := rows.Scan(&cid, &name, &typ, &notnull, &dflt, &pk); err != nil {
 			_ = rows.Close()
-			return fmt.Errorf("sqlite store: migrate: %w", err)
+			return nil, fmt.Errorf("sqlite store: migrate: %w", err)
 		}
 		have[name] = true
 	}
 	if err := rows.Close(); err != nil {
-		return fmt.Errorf("sqlite store: migrate: %w", err)
+		return nil, fmt.Errorf("sqlite store: migrate: %w", err)
 	}
-	for _, col := range []string{"client_id", "family"} {
-		if !have[col] {
-			if _, err := db.ExecContext(ctx, `ALTER TABLE tokens ADD COLUMN `+col+` TEXT NOT NULL DEFAULT ''`); err != nil { //nolint:gosec // G202: column names are constants
-				return fmt.Errorf("sqlite store: migrate: %w", err)
-			}
-		}
-	}
-	return nil
+	return have, nil
 }
 
 // Close implements Store.
@@ -155,6 +192,7 @@ func (s *SQLite) PutSession(ctx context.Context, p *model.SessionPayload, now ti
 	if err != nil {
 		return fmt.Errorf("sqlite store: encode: %w", err)
 	}
+	pid, name := p.ProjectRef(), p.ProjectLabel()
 	return s.tx(ctx, func(tx *sql.Tx) error {
 		var oldProject string
 		err := tx.QueryRowContext(ctx, `SELECT project FROM sessions WHERE source=? AND session_id=?`, p.Source, p.SessionID).Scan(&oldProject)
@@ -164,7 +202,7 @@ func (s *SQLite) PutSession(ctx context.Context, p *model.SessionPayload, now ti
 		}
 		if !exists {
 			var perProject, total int
-			if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions WHERE project=?`, p.Project).Scan(&perProject); err != nil {
+			if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions WHERE project=?`, pid).Scan(&perProject); err != nil {
 				return fmt.Errorf("sqlite store: quota: %w", err)
 			}
 			if err := tx.QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions`).Scan(&total); err != nil {
@@ -174,37 +212,55 @@ func (s *SQLite) PutSession(ctx context.Context, p *model.SessionPayload, now ti
 				return ErrQuota
 			}
 		}
-		if exists && oldProject != p.Project {
+		if exists && oldProject != pid {
 			if err := unlinkSession(ctx, tx, p.Source, p.SessionID); err != nil {
 				return err
 			}
 		}
-		if _, err := tx.ExecContext(ctx, `INSERT INTO sessions(source, session_id, project, updated_at, ingested_at, payload) VALUES(?,?,?,?,?,?)
-			ON CONFLICT(source, session_id) DO UPDATE SET project=excluded.project, updated_at=excluded.updated_at, ingested_at=excluded.ingested_at, payload=excluded.payload`,
-			p.Source, p.SessionID, p.Project, nano(p.UpdatedAt), nano(now), string(body)); err != nil {
+		// The project row: created at first sight, renamed when the payload
+		// carries another name.
+		if _, err := tx.ExecContext(ctx, `INSERT INTO projects(id, name, created_at, updated_at) VALUES(?,?,?,?)
+			ON CONFLICT(id) DO UPDATE SET name=excluded.name, updated_at=excluded.updated_at WHERE projects.name<>excluded.name`,
+			pid, name, nano(now), nano(now)); err != nil {
+			return fmt.Errorf("sqlite store: upsert project: %w", err)
+		}
+		if _, err := tx.ExecContext(ctx, `INSERT INTO sessions(source, session_id, project, member, updated_at, ingested_at, payload) VALUES(?,?,?,?,?,?,?)
+			ON CONFLICT(source, session_id) DO UPDATE SET project=excluded.project, member=excluded.member, updated_at=excluded.updated_at, ingested_at=excluded.ingested_at, payload=excluded.payload`,
+			p.Source, p.SessionID, pid, p.Project, nano(p.UpdatedAt), nano(now), string(body)); err != nil {
 			return fmt.Errorf("sqlite store: upsert session: %w", err)
 		}
 		if _, err := tx.ExecContext(ctx, `DELETE FROM sessions_fts WHERE source=? AND session_id=?`, p.Source, p.SessionID); err != nil {
 			return fmt.Errorf("sqlite store: fts delete: %w", err)
 		}
 		if _, err := tx.ExecContext(ctx, `INSERT INTO sessions_fts(text, source, session_id, project) VALUES(?,?,?,?)`,
-			SearchText(p), p.Source, p.SessionID, p.Project); err != nil {
+			SearchText(p), p.Source, p.SessionID, pid); err != nil {
 			return fmt.Errorf("sqlite store: fts insert: %w", err)
 		}
 		for _, it := range p.WorkItems {
-			if err := mergeWorkItem(ctx, tx, p, it, now); err != nil {
+			if err := mergeWorkItem(ctx, tx, p, pid, it, now); err != nil {
 				return err
 			}
+		}
+		if exists && oldProject != pid {
+			return dropEmptyProjects(ctx, tx)
 		}
 		return nil
 	})
 }
 
-func mergeWorkItem(ctx context.Context, tx *sql.Tx, p *model.SessionPayload, it model.WorkItem, now time.Time) error {
+// dropEmptyProjects removes projects that no session is filed under any more.
+func dropEmptyProjects(ctx context.Context, tx *sql.Tx) error {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM projects WHERE NOT EXISTS (SELECT 1 FROM sessions s WHERE s.project=projects.id)`); err != nil {
+		return fmt.Errorf("sqlite store: project cleanup: %w", err)
+	}
+	return nil
+}
+
+func mergeWorkItem(ctx context.Context, tx *sql.Tx, p *model.SessionPayload, pid string, it model.WorkItem, now time.Time) error {
 	var raw string
 	var first int64
 	err := tx.QueryRowContext(ctx, `SELECT item, first_seen FROM work_items WHERE project=? AND kind=? AND provider=? AND key=?`,
-		p.Project, it.Kind, it.Provider, it.Key).Scan(&raw, &first)
+		pid, it.Kind, it.Provider, it.Key).Scan(&raw, &first)
 	merged := it
 	switch {
 	case err == nil:
@@ -224,11 +280,11 @@ func mergeWorkItem(ctx context.Context, tx *sql.Tx, p *model.SessionPayload, it 
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT INTO work_items(project, kind, provider, key, item, status, observed_at, first_seen, last_seen) VALUES(?,?,?,?,?,?,?,?,?)
 		ON CONFLICT(project, kind, provider, key) DO UPDATE SET item=excluded.item, status=excluded.status, observed_at=excluded.observed_at, last_seen=excluded.last_seen`,
-		p.Project, merged.Kind, merged.Provider, merged.Key, string(b), merged.Status, nano(merged.ObservedAt), first, nano(now)); err != nil {
+		pid, merged.Kind, merged.Provider, merged.Key, string(b), merged.Status, nano(merged.ObservedAt), first, nano(now)); err != nil {
 		return fmt.Errorf("sqlite store: upsert work item: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, `INSERT OR IGNORE INTO work_item_sessions(project, kind, provider, key, source, session_id) VALUES(?,?,?,?,?,?)`,
-		p.Project, merged.Kind, merged.Provider, merged.Key, p.Source, p.SessionID); err != nil {
+		pid, merged.Kind, merged.Provider, merged.Key, p.Source, p.SessionID); err != nil {
 		return fmt.Errorf("sqlite store: link work item: %w", err)
 	}
 	return nil
@@ -249,23 +305,84 @@ func dropOrphans(ctx context.Context, tx *sql.Tx) error {
 	return nil
 }
 
+// ResolveProject implements Store.
+func (s *SQLite) ResolveProject(ctx context.Context, ref string) (Project, error) {
+	return resolveProject(ctx, s.db, ref)
+}
+
+type queryer interface {
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+func resolveProject(ctx context.Context, q queryer, ref string) (Project, error) {
+	for _, stmt := range []string{
+		`SELECT id, name, created_at, updated_at FROM projects WHERE id=?`,
+		`SELECT p.id, p.name, p.created_at, p.updated_at FROM projects p WHERE p.name=? COLLATE NOCASE
+			ORDER BY (SELECT MAX(updated_at) FROM sessions s WHERE s.project=p.id) DESC, p.id LIMIT 1`,
+		`SELECT p.id, p.name, p.created_at, p.updated_at FROM sessions s JOIN projects p ON p.id=s.project WHERE s.member=?
+			ORDER BY s.updated_at DESC LIMIT 1`,
+	} {
+		var p Project
+		var c, u int64
+		err := q.QueryRowContext(ctx, stmt, ref).Scan(&p.ID, &p.Name, &c, &u)
+		if err == nil {
+			p.CreatedAt, p.UpdatedAt = fromNano(c), fromNano(u)
+			return p, nil
+		}
+		if !errors.Is(err, sql.ErrNoRows) {
+			return Project{}, fmt.Errorf("sqlite store: resolve project: %w", err)
+		}
+	}
+	return Project{}, ErrNotFound
+}
+
 // DeleteProject implements Store.
-func (s *SQLite) DeleteProject(ctx context.Context, project string) (int, error) {
+func (s *SQLite) DeleteProject(ctx context.Context, ref string) (int, error) {
 	n := 0
 	err := s.tx(ctx, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx, `DELETE FROM sessions_fts WHERE project=?`, project); err != nil {
-			return fmt.Errorf("sqlite store: fts delete: %w", err)
+		// What to delete: the whole project when ref is its id; else the
+		// sessions that came from the member ref; else the project named ref.
+		col, val := "project", ref
+		var one int
+		switch err := tx.QueryRowContext(ctx, `SELECT 1 FROM projects WHERE id=?`, ref).Scan(&one); {
+		case err == nil:
+		case !errors.Is(err, sql.ErrNoRows):
+			return fmt.Errorf("sqlite store: delete project: %w", err)
+		default:
+			switch err := tx.QueryRowContext(ctx, `SELECT 1 FROM sessions WHERE member=? LIMIT 1`, ref).Scan(&one); {
+			case err == nil:
+				col = "member"
+			case !errors.Is(err, sql.ErrNoRows):
+				return fmt.Errorf("sqlite store: delete project: %w", err)
+			default:
+				p, err := resolveProject(ctx, tx, ref)
+				if errors.Is(err, ErrNotFound) {
+					return nil
+				}
+				if err != nil {
+					return err
+				}
+				val = p.ID
+			}
 		}
-		if _, err := tx.ExecContext(ctx, `DELETE FROM work_item_sessions WHERE project=?`, project); err != nil {
-			return fmt.Errorf("sqlite store: unlink: %w", err)
+		for _, stmt := range []string{
+			`DELETE FROM sessions_fts WHERE EXISTS (SELECT 1 FROM sessions s WHERE s.source=sessions_fts.source AND s.session_id=sessions_fts.session_id AND s.` + col + `=?)`,
+			`DELETE FROM work_item_sessions WHERE EXISTS (SELECT 1 FROM sessions s WHERE s.source=work_item_sessions.source AND s.session_id=work_item_sessions.session_id AND s.` + col + `=?)`,
+		} {
+			if _, err := tx.ExecContext(ctx, stmt, val); err != nil { //nolint:gosec // G202: col is one of two constants
+				return fmt.Errorf("sqlite store: delete project: %w", err)
+			}
 		}
-		res, err := tx.ExecContext(ctx, `DELETE FROM sessions WHERE project=?`, project)
+		res, err := tx.ExecContext(ctx, `DELETE FROM sessions WHERE `+col+`=?`, val) //nolint:gosec // G202: col is one of two constants
 		if err != nil {
 			return fmt.Errorf("sqlite store: delete project: %w", err)
 		}
 		c, _ := res.RowsAffected()
 		n = int(c)
-		return dropOrphans(ctx, tx)
+		if err := dropOrphans(ctx, tx); err != nil {
+			return err
+		}
+		return dropEmptyProjects(ctx, tx)
 	})
 	return n, err
 }
@@ -305,14 +422,15 @@ func (s *SQLite) DeleteSession(ctx context.Context, source, id string) (int, err
 			}
 			n++
 		}
-		return nil
+		return dropEmptyProjects(ctx, tx)
 	})
 	return n, err
 }
 
 // ListProjects implements Store.
 func (s *SQLite) ListProjects(ctx context.Context) ([]ProjectInfo, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT project, source, COUNT(*), MAX(updated_at) FROM sessions GROUP BY project, source`)
+	rows, err := s.db.QueryContext(ctx, `SELECT s.project, COALESCE(p.name, s.project), s.source, COUNT(*), MAX(s.updated_at)
+		FROM sessions s LEFT JOIN projects p ON p.id=s.project GROUP BY s.project, s.source`)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite store: list projects: %w", err)
 	}
@@ -320,15 +438,15 @@ func (s *SQLite) ListProjects(ctx context.Context) ([]ProjectInfo, error) {
 	by := map[string]*ProjectInfo{}
 	var order []string
 	for rows.Next() {
-		var project, source string
+		var project, name, source string
 		var n int
 		var last int64
-		if err := rows.Scan(&project, &source, &n, &last); err != nil {
+		if err := rows.Scan(&project, &name, &source, &n, &last); err != nil {
 			return nil, fmt.Errorf("sqlite store: list projects: %w", err)
 		}
 		pi, ok := by[project]
 		if !ok {
-			pi = &ProjectInfo{Project: project, Sources: map[string]int{}}
+			pi = &ProjectInfo{ID: project, Project: name, Sources: map[string]int{}}
 			by[project] = pi
 			order = append(order, project)
 		}
@@ -353,7 +471,7 @@ func sortProjects(out []ProjectInfo) {
 	for i := 1; i < len(out); i++ {
 		for j := i; j > 0; j-- {
 			a, b := out[j], out[j-1]
-			if a.LastActivity.After(b.LastActivity) || (a.LastActivity.Equal(b.LastActivity) && a.Project < b.Project) {
+			if a.LastActivity.After(b.LastActivity) || (a.LastActivity.Equal(b.LastActivity) && (a.Project < b.Project || (a.Project == b.Project && a.ID < b.ID))) {
 				out[j], out[j-1] = b, a
 			} else {
 				break
@@ -362,16 +480,20 @@ func sortProjects(out []ProjectInfo) {
 	}
 }
 
+// sessionCols selects what scanSessions reads: the payload, its arrival time,
+// and the project it is filed under with its current name.
+const sessionCols = `SELECT s.payload, s.ingested_at, s.project, COALESCE(p.name, s.project) FROM sessions s LEFT JOIN projects p ON p.id=s.project`
+
 func scanSessions(rows *sql.Rows) ([]SessionRecord, error) {
 	defer func() { _ = rows.Close() }()
 	var out []SessionRecord
 	for rows.Next() {
 		var body string
 		var ing int64
-		if err := rows.Scan(&body, &ing); err != nil {
+		var r SessionRecord
+		if err := rows.Scan(&body, &ing, &r.ProjectID, &r.ProjectName); err != nil {
 			return nil, fmt.Errorf("sqlite store: scan: %w", err)
 		}
-		var r SessionRecord
 		if err := json.Unmarshal([]byte(body), &r.Payload); err != nil {
 			return nil, fmt.Errorf("sqlite store: decode session: %w", err)
 		}
@@ -392,19 +514,19 @@ func limitClause(limit, offset int) string {
 func (s *SQLite) Sessions(ctx context.Context, q SessionQuery) ([]SessionRecord, error) {
 	where, args := []string{"1=1"}, []any{}
 	if q.Project != "" {
-		where, args = append(where, "project=?"), append(args, q.Project)
+		where, args = append(where, "s.project=?"), append(args, q.Project)
 	}
 	if q.Source != "" {
-		where, args = append(where, "source=?"), append(args, q.Source)
+		where, args = append(where, "s.source=?"), append(args, q.Source)
 	}
 	if !q.Since.IsZero() {
-		where, args = append(where, "updated_at>=?"), append(args, nano(q.Since))
+		where, args = append(where, "s.updated_at>=?"), append(args, nano(q.Since))
 	}
 	if !q.Until.IsZero() {
-		where, args = append(where, "updated_at<?"), append(args, nano(q.Until))
+		where, args = append(where, "s.updated_at<?"), append(args, nano(q.Until))
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT payload, ingested_at FROM sessions WHERE `+strings.Join(where, " AND ")+ //nolint:gosec // G202: only fixed predicates are concatenated; every value is a bound parameter
-		` ORDER BY updated_at DESC, source, session_id`+limitClause(q.Limit, q.Offset), args...)
+	rows, err := s.db.QueryContext(ctx, sessionCols+` WHERE `+strings.Join(where, " AND ")+ //nolint:gosec // G202: only fixed predicates are concatenated; every value is a bound parameter
+		` ORDER BY s.updated_at DESC, s.source, s.session_id`+limitClause(q.Limit, q.Offset), args...)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite store: sessions: %w", err)
 	}
@@ -413,11 +535,11 @@ func (s *SQLite) Sessions(ctx context.Context, q SessionQuery) ([]SessionRecord,
 
 // GetSession implements Store.
 func (s *SQLite) GetSession(ctx context.Context, source, id string) (*SessionRecord, error) {
-	q, args := `SELECT payload, ingested_at FROM sessions WHERE session_id=?`, []any{id}
+	q, args := sessionCols+` WHERE s.session_id=?`, []any{id}
 	if source != "" {
-		q, args = q+` AND source=?`, append(args, source)
+		q, args = q+` AND s.source=?`, append(args, source)
 	}
-	rows, err := s.db.QueryContext(ctx, q+` ORDER BY updated_at DESC LIMIT 1`, args...)
+	rows, err := s.db.QueryContext(ctx, q+` ORDER BY s.updated_at DESC LIMIT 1`, args...)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite store: get session: %w", err)
 	}
@@ -447,7 +569,8 @@ func (s *SQLite) Search(ctx context.Context, query, project string, limit int) (
 	if fq == "" {
 		return nil, nil
 	}
-	q := `SELECT s.payload, s.ingested_at FROM sessions_fts f JOIN sessions s ON s.source=f.source AND s.session_id=f.session_id
+	q := `SELECT s.payload, s.ingested_at, s.project, COALESCE(p.name, s.project) FROM sessions_fts f
+		JOIN sessions s ON s.source=f.source AND s.session_id=f.session_id LEFT JOIN projects p ON p.id=s.project
 		WHERE sessions_fts MATCH ?`
 	args := []any{fq}
 	if project != "" {
@@ -468,18 +591,20 @@ func (s *SQLite) WorkItems(ctx context.Context, q WorkItemQuery) ([]WorkItemReco
 			where, args = append(where, col+"=?"), append(args, v)
 		}
 	}
-	add("project", q.Project)
-	add("kind", q.Kind)
-	add("provider", q.Provider)
-	add("status", q.Status)
+	add("w.project", q.Project)
+	add("w.kind", q.Kind)
+	add("w.provider", q.Provider)
+	add("w.status", q.Status)
 	if !q.Since.IsZero() {
-		where, args = append(where, "observed_at>=?"), append(args, nano(q.Since))
+		where, args = append(where, "w.observed_at>=?"), append(args, nano(q.Since))
 	}
 	if !q.Until.IsZero() {
-		where, args = append(where, "observed_at<?"), append(args, nano(q.Until))
+		where, args = append(where, "w.observed_at<?"), append(args, nano(q.Until))
 	}
-	rows, err := s.db.QueryContext(ctx, `SELECT project, kind, provider, key, item, first_seen, last_seen FROM work_items WHERE `+strings.Join(where, " AND ")+ //nolint:gosec // G202: only fixed predicates are concatenated; every value is a bound parameter
-		` ORDER BY observed_at DESC, project, key`+limitClause(q.Limit, q.Offset), args...)
+	const cols = `SELECT w.project, COALESCE(p.name, w.project), w.kind, w.provider, w.key, w.item, w.first_seen, w.last_seen
+		FROM work_items w LEFT JOIN projects p ON p.id=w.project WHERE `
+	rows, err := s.db.QueryContext(ctx, cols+strings.Join(where, " AND ")+ //nolint:gosec // G202: only fixed predicates are concatenated; every value is a bound parameter
+		` ORDER BY w.observed_at DESC, w.project, w.key`+limitClause(q.Limit, q.Offset), args...)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite store: work items: %w", err)
 	}
@@ -492,7 +617,7 @@ func (s *SQLite) WorkItems(ctx context.Context, q WorkItemQuery) ([]WorkItemReco
 		var r row
 		var raw string
 		var first, last int64
-		if err := rows.Scan(&r.proj, &r.kind, &r.provider, &r.key, &raw, &first, &last); err != nil {
+		if err := rows.Scan(&r.proj, &r.rec.Project, &r.kind, &r.provider, &r.key, &raw, &first, &last); err != nil {
 			_ = rows.Close()
 			return nil, fmt.Errorf("sqlite store: work items: %w", err)
 		}
@@ -500,7 +625,7 @@ func (s *SQLite) WorkItems(ctx context.Context, q WorkItemQuery) ([]WorkItemReco
 			_ = rows.Close()
 			return nil, fmt.Errorf("sqlite store: decode work item: %w", err)
 		}
-		r.rec.Project, r.rec.FirstSeen, r.rec.LastSeen = r.proj, fromNano(first), fromNano(last)
+		r.rec.ProjectID, r.rec.FirstSeen, r.rec.LastSeen = r.proj, fromNano(first), fromNano(last)
 		out = append(out, r)
 	}
 	if err := rows.Close(); err != nil {

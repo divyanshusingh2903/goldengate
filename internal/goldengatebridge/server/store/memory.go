@@ -16,6 +16,7 @@ import (
 type Memory struct {
 	mu       sync.Mutex
 	sessions map[SessionKey]*SessionRecord
+	projects map[string]*Project // by id
 	work     map[workKey]*WorkItemRecord
 	tokens   map[string]*Token // by id
 	pairings map[string]*pairing
@@ -51,7 +52,7 @@ type pairing struct {
 // NewMemory returns an empty in-memory store.
 func NewMemory() *Memory {
 	return &Memory{
-		sessions: map[SessionKey]*SessionRecord{}, work: map[workKey]*WorkItemRecord{},
+		sessions: map[SessionKey]*SessionRecord{}, projects: map[string]*Project{}, work: map[workKey]*WorkItemRecord{},
 		tokens: map[string]*Token{}, pairings: map[string]*pairing{},
 		oclients: map[string]*OAuthClient{}, otxns: map[string]*memTxn{}, ocodes: map[string]*memCode{}, orefresh: map[string]*memRefresh{},
 	}
@@ -67,10 +68,12 @@ func (m *Memory) PutSession(_ context.Context, p *model.SessionPayload, now time
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	k := skey(p)
-	if _, exists := m.sessions[k]; !exists {
+	pid := p.ProjectRef()
+	old, exists := m.sessions[k]
+	if !exists {
 		perProject := 0
 		for _, r := range m.sessions {
-			if r.Payload.Project == p.Project {
+			if r.ProjectID == pid {
 				perProject++
 			}
 		}
@@ -79,13 +82,18 @@ func (m *Memory) PutSession(_ context.Context, p *model.SessionPayload, now time
 			return ErrQuota
 		}
 	}
-	if old, ok := m.sessions[k]; ok && old.Payload.Project != p.Project {
-		m.dropSessionWork(old.Payload.Project, k)
+	if exists && old.ProjectID != pid {
+		m.dropSessionWork(old.ProjectID, k)
+	}
+	if pr, ok := m.projects[pid]; !ok {
+		m.projects[pid] = &Project{ID: pid, Name: p.ProjectLabel(), CreatedAt: now.UTC(), UpdatedAt: now.UTC()}
+	} else if pr.Name != p.ProjectLabel() {
+		pr.Name, pr.UpdatedAt = p.ProjectLabel(), now.UTC()
 	}
 	cp := *p
-	m.sessions[k] = &SessionRecord{Payload: cp, IngestedAt: now.UTC()}
+	m.sessions[k] = &SessionRecord{Payload: cp, IngestedAt: now.UTC(), ProjectID: pid}
 	for _, it := range p.WorkItems {
-		wk := workKey{p.Project, it.Kind, it.Provider, it.Key}
+		wk := workKey{pid, it.Kind, it.Provider, it.Key}
 		if cur, ok := m.work[wk]; ok {
 			cur.Item = workitems.Merge(cur.Item, it)
 			cur.LastSeen = now.UTC()
@@ -94,8 +102,9 @@ func (m *Memory) PutSession(_ context.Context, p *model.SessionPayload, now time
 			}
 			continue
 		}
-		m.work[wk] = &WorkItemRecord{Project: p.Project, Item: it, FirstSeen: now.UTC(), LastSeen: now.UTC(), Sessions: []SessionKey{k}}
+		m.work[wk] = &WorkItemRecord{ProjectID: pid, Item: it, FirstSeen: now.UTC(), LastSeen: now.UTC(), Sessions: []SessionKey{k}}
 	}
+	m.dropEmptyProjects()
 	return nil
 }
 
@@ -128,22 +137,116 @@ func (m *Memory) dropSessionWork(project string, k SessionKey) {
 	}
 }
 
-// DeleteProject implements Store.
-func (m *Memory) DeleteProject(_ context.Context, project string) (int, error) {
+// dropEmptyProjects removes projects that no session is filed under any more.
+func (m *Memory) dropEmptyProjects() {
+	used := map[string]bool{}
+	for _, r := range m.sessions {
+		used[r.ProjectID] = true
+	}
+	for id := range m.projects {
+		if !used[id] {
+			delete(m.projects, id)
+		}
+	}
+}
+
+// name is a project's current display name.
+func (m *Memory) name(id string) string {
+	if p, ok := m.projects[id]; ok {
+		return p.Name
+	}
+	return id
+}
+
+// record is a copy of r with the project's current name filled in.
+func (m *Memory) record(r *SessionRecord) SessionRecord {
+	cp := *r
+	cp.ProjectName = m.name(r.ProjectID)
+	return cp
+}
+
+func (m *Memory) lastActivity(id string) time.Time {
+	var last time.Time
+	for _, r := range m.sessions {
+		if r.ProjectID == id && r.Payload.UpdatedAt.After(last) {
+			last = r.Payload.UpdatedAt
+		}
+	}
+	return last
+}
+
+// ResolveProject implements Store.
+func (m *Memory) ResolveProject(_ context.Context, ref string) (Project, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	return m.resolve(ref)
+}
+
+func (m *Memory) resolve(ref string) (Project, error) {
+	if p, ok := m.projects[ref]; ok {
+		return *p, nil
+	}
+	var best *Project
+	for _, p := range m.projects {
+		if !strings.EqualFold(p.Name, ref) {
+			continue
+		}
+		if best == nil {
+			best = p
+			continue
+		}
+		a, b := m.lastActivity(p.ID), m.lastActivity(best.ID)
+		if a.After(b) || (a.Equal(b) && p.ID < best.ID) {
+			best = p
+		}
+	}
+	if best != nil {
+		return *best, nil
+	}
+	var newest *SessionRecord
+	for _, r := range m.sessions {
+		if r.Payload.Project == ref && (newest == nil || r.Payload.UpdatedAt.After(newest.Payload.UpdatedAt)) {
+			newest = r
+		}
+	}
+	if newest != nil {
+		return *m.projects[newest.ProjectID], nil
+	}
+	return Project{}, ErrNotFound
+}
+
+// DeleteProject implements Store.
+func (m *Memory) DeleteProject(_ context.Context, ref string) (int, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	match := func(r *SessionRecord) bool { return r.ProjectID == ref }
+	if _, ok := m.projects[ref]; !ok {
+		member := false
+		for _, r := range m.sessions {
+			if r.Payload.Project == ref {
+				member = true
+				break
+			}
+		}
+		if member {
+			match = func(r *SessionRecord) bool { return r.Payload.Project == ref }
+		} else {
+			p, err := m.resolve(ref)
+			if err != nil {
+				return 0, nil
+			}
+			match = func(r *SessionRecord) bool { return r.ProjectID == p.ID }
+		}
+	}
 	n := 0
 	for k, r := range m.sessions {
-		if r.Payload.Project == project {
+		if match(r) {
 			delete(m.sessions, k)
+			m.dropSessionWork(r.ProjectID, k)
 			n++
 		}
 	}
-	for wk := range m.work {
-		if wk.project == project {
-			delete(m.work, wk)
-		}
-	}
+	m.dropEmptyProjects()
 	return n, nil
 }
 
@@ -155,10 +258,11 @@ func (m *Memory) DeleteSession(_ context.Context, source, id string) (int, error
 	for k, r := range m.sessions {
 		if k.ID == id && (source == "" || k.Source == source) {
 			delete(m.sessions, k)
-			m.dropSessionWork(r.Payload.Project, k)
+			m.dropSessionWork(r.ProjectID, k)
 			n++
 		}
 	}
+	m.dropEmptyProjects()
 	return n, nil
 }
 
@@ -169,10 +273,10 @@ func (m *Memory) ListProjects(context.Context) ([]ProjectInfo, error) {
 	by := map[string]*ProjectInfo{}
 	for _, r := range m.sessions {
 		p := r.Payload
-		pi, ok := by[p.Project]
+		pi, ok := by[r.ProjectID]
 		if !ok {
-			pi = &ProjectInfo{Project: p.Project, Sources: map[string]int{}}
-			by[p.Project] = pi
+			pi = &ProjectInfo{ID: r.ProjectID, Project: m.name(r.ProjectID), Sources: map[string]int{}}
+			by[r.ProjectID] = pi
 		}
 		pi.Sessions++
 		pi.Sources[p.Source]++
@@ -188,7 +292,10 @@ func (m *Memory) ListProjects(context.Context) ([]ProjectInfo, error) {
 		if !out[i].LastActivity.Equal(out[j].LastActivity) {
 			return out[i].LastActivity.After(out[j].LastActivity)
 		}
-		return out[i].Project < out[j].Project
+		if out[i].Project != out[j].Project {
+			return out[i].Project < out[j].Project
+		}
+		return out[i].ID < out[j].ID
 	})
 	return out, nil
 }
@@ -221,10 +328,10 @@ func (m *Memory) Sessions(_ context.Context, q SessionQuery) ([]SessionRecord, e
 	var out []SessionRecord
 	for _, r := range m.sessions {
 		p := r.Payload
-		if (q.Project != "" && p.Project != q.Project) || (q.Source != "" && p.Source != q.Source) || (!q.Since.IsZero() && p.UpdatedAt.Before(q.Since)) || (!q.Until.IsZero() && !p.UpdatedAt.Before(q.Until)) {
+		if (q.Project != "" && r.ProjectID != q.Project) || (q.Source != "" && p.Source != q.Source) || (!q.Since.IsZero() && p.UpdatedAt.Before(q.Since)) || (!q.Until.IsZero() && !p.UpdatedAt.Before(q.Until)) {
 			continue
 		}
-		out = append(out, *r)
+		out = append(out, m.record(r))
 	}
 	newestFirst(out)
 	return page(out, q.Offset, q.Limit), nil
@@ -236,7 +343,7 @@ func (m *Memory) GetSession(_ context.Context, source, id string) (*SessionRecor
 	defer m.mu.Unlock()
 	for k, r := range m.sessions {
 		if k.ID == id && (source == "" || k.Source == source) {
-			cp := *r
+			cp := m.record(r)
 			return &cp, nil
 		}
 	}
@@ -253,6 +360,7 @@ func SearchText(p *model.SessionPayload) string {
 	var b strings.Builder
 	add := func(s string) { b.WriteString(s); b.WriteByte(' ') }
 	add(p.Project)
+	add(p.ProjectName)
 	add(p.TitleOnly)
 	if s := p.Summary; s != nil {
 		add(s.Title)
@@ -283,7 +391,7 @@ func (m *Memory) Search(_ context.Context, query, project string, limit int) ([]
 	defer m.mu.Unlock()
 	var out []SessionRecord
 	for _, r := range m.sessions {
-		if project != "" && r.Payload.Project != project {
+		if project != "" && r.ProjectID != project {
 			continue
 		}
 		have := Tokenize(SearchText(&r.Payload))
@@ -302,7 +410,7 @@ func (m *Memory) Search(_ context.Context, query, project string, limit int) ([]
 			}
 		}
 		if ok {
-			out = append(out, *r)
+			out = append(out, m.record(r))
 		}
 	}
 	newestFirst(out)
@@ -316,12 +424,13 @@ func (m *Memory) WorkItems(_ context.Context, q WorkItemQuery) ([]WorkItemRecord
 	var out []WorkItemRecord
 	for _, w := range m.work {
 		it := w.Item
-		if (q.Project != "" && w.Project != q.Project) || (q.Kind != "" && it.Kind != q.Kind) ||
+		if (q.Project != "" && w.ProjectID != q.Project) || (q.Kind != "" && it.Kind != q.Kind) ||
 			(q.Provider != "" && it.Provider != q.Provider) || (q.Status != "" && it.Status != q.Status) ||
 			(!q.Since.IsZero() && it.ObservedAt.Before(q.Since)) || (!q.Until.IsZero() && !it.ObservedAt.Before(q.Until)) {
 			continue
 		}
 		cp := *w
+		cp.Project = m.name(w.ProjectID)
 		cp.Sessions = append([]SessionKey(nil), w.Sessions...)
 		out = append(out, cp)
 	}
@@ -330,7 +439,7 @@ func (m *Memory) WorkItems(_ context.Context, q WorkItemQuery) ([]WorkItemRecord
 		if !a.Item.ObservedAt.Equal(b.Item.ObservedAt) {
 			return a.Item.ObservedAt.After(b.Item.ObservedAt)
 		}
-		return a.Project+a.Item.Key < b.Project+b.Item.Key
+		return a.ProjectID+"\x00"+a.Item.Key < b.ProjectID+"\x00"+b.Item.Key
 	})
 	return page(out, q.Offset, q.Limit), nil
 }
