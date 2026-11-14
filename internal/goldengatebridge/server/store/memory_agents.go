@@ -82,7 +82,7 @@ func (m *Memory) UpdateAgent(_ context.Context, a Agent) error {
 	if m.nameTaken(a.Name, a.ID) {
 		return errDuplicate
 	}
-	cur.Name, cur.MaxDays = a.Name, a.MaxDays
+	cur.Name, cur.MaxDays, cur.AllProjects = a.Name, a.MaxDays, a.AllProjects
 	return nil
 }
 

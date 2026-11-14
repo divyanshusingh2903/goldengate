@@ -248,6 +248,9 @@ type InitResult struct {
 	ReadToken  string // shown once
 	OAuth      bool
 	TokenStore string
+	// SeesAll is set when this setup made the first assistant able to see
+	// every project the user shares.
+	SeesAll bool
 }
 
 // Backend is everything the UI does to the world.

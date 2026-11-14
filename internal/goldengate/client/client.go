@@ -207,6 +207,7 @@ type TokenInfo struct {
 	ID        string     `json:"id"`
 	Scope     string     `json:"scope"`
 	Label     string     `json:"label"`
+	AgentID   string     `json:"agent_id"` // read tokens: the agent it belongs to
 	CreatedAt time.Time  `json:"created_at"`
 	RevokedAt *time.Time `json:"revoked_at"`
 	Active    bool       `json:"active"`
@@ -249,4 +250,86 @@ func Pair(ctx context.Context, serverURL, code string, hc *http.Client, userAgen
 // (it then publishes authorization server metadata).
 func (c *Client) OAuthEnabled(ctx context.Context) bool {
 	return c.do(ctx, http.MethodGet, "/.well-known/oauth-authorization-server", nil, nil) == nil
+}
+
+// --- agents (admin token required) ---
+
+// ProjectRef names a project on the server.
+type ProjectRef struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+}
+
+// Agent is a named reader of the MCP endpoint and what it may see.
+type Agent struct {
+	ID          string       `json:"id"`
+	Name        string       `json:"name"`
+	CreatedAt   time.Time    `json:"created_at"`
+	MaxDays     int          `json:"max_days"`
+	AllProjects bool         `json:"all_projects"`
+	Grants      []ProjectRef `json:"grants"`
+	Tokens      int          `json:"active_tokens"`
+	Clients     []ProjectRef `json:"oauth_clients"` // OAuth applications connected as this agent (id, name)
+}
+
+// ListAgents lists agents with their grants.
+func (c *Client) ListAgents(ctx context.Context) ([]Agent, error) {
+	var out struct {
+		Agents []Agent `json:"agents"`
+	}
+	err := c.do(ctx, http.MethodGet, "/v1/admin/agents", nil, &out)
+	return out.Agents, err
+}
+
+// CreateAgent adds an agent. It starts with no grants.
+func (c *Client) CreateAgent(ctx context.Context, name string, maxDays int, allProjects bool) (Agent, error) {
+	var out Agent
+	err := c.do(ctx, http.MethodPost, "/v1/admin/agents", map[string]any{"name": name, "max_days": maxDays, "all_projects": allProjects}, &out)
+	return out, err
+}
+
+// AgentUpdate changes an agent; nil fields are left as they are.
+type AgentUpdate struct {
+	Name        *string `json:"name,omitempty"`
+	MaxDays     *int    `json:"max_days,omitempty"`
+	AllProjects *bool   `json:"all_projects,omitempty"`
+}
+
+// UpdateAgent renames an agent or changes its window or all-projects switch.
+func (c *Client) UpdateAgent(ctx context.Context, id string, u AgentUpdate) (Agent, error) {
+	var out Agent
+	err := c.do(ctx, http.MethodPatch, "/v1/admin/agents/"+url.PathEscape(id), u, &out)
+	return out, err
+}
+
+// DeleteAgent removes an agent, revoking its tokens; it returns how many.
+func (c *Client) DeleteAgent(ctx context.Context, id string) (int, error) {
+	var out struct {
+		Revoked int `json:"revoked_tokens"`
+	}
+	err := c.do(ctx, http.MethodDelete, "/v1/admin/agents/"+url.PathEscape(id), nil, &out)
+	return out.Revoked, err
+}
+
+// Grant lets an agent see a project (its id, name, or a folder in it).
+func (c *Client) Grant(ctx context.Context, agentID, project string) (ProjectRef, error) {
+	var out ProjectRef
+	err := c.do(ctx, http.MethodPost, "/v1/admin/agents/"+url.PathEscape(agentID)+"/grants", map[string]string{"project": project}, &out)
+	return out, err
+}
+
+// RevokeGrant takes a project away from an agent.
+func (c *Client) RevokeGrant(ctx context.Context, agentID, project string) error {
+	return c.do(ctx, http.MethodDelete, "/v1/admin/agents/"+url.PathEscape(agentID)+"/grants/"+url.PathEscape(project), nil, nil)
+}
+
+// MintAgentToken creates a read token that belongs to the agent.
+func (c *Client) MintAgentToken(ctx context.Context, agentID, label, expiresIn string) (Minted, error) {
+	var out struct {
+		Token string `json:"token"`
+		ID    string `json:"id"`
+		Scope string `json:"scope"`
+	}
+	err := c.do(ctx, http.MethodPost, "/v1/admin/agents/"+url.PathEscape(agentID)+"/tokens", map[string]string{"label": label, "expires_in": expiresIn}, &out)
+	return Minted{Secret: out.Token, ID: out.ID, Scope: out.Scope}, err
 }

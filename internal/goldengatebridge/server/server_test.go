@@ -1377,3 +1377,135 @@ func TestAgentHistoryWindowLimitsEveryTool(t *testing.T) {
 		t.Errorf("a session older than the window is not there: %v %v", r, err)
 	}
 }
+
+func TestAgentsAPIIsAdminOnlyAndManagesGrantsAndTokens(t *testing.T) {
+	e := newEnv(t, func(c *server.Config) { c.BehindProxy = true })
+	e.noGrants, e.uniqueIP = true, 1
+	ctx := context.Background()
+	p1 := payload("1", "~/code/app", "App work")
+	p1.Version, p1.ProjectID, p1.ProjectName = model.PayloadV2, "p_app1", "App"
+	e.ingestOK(p1, payload("2", "~/code/old", "Old work"))
+
+	// only the admin secret reaches the agents API
+	for _, tok := range []string{"", e.ingest, e.read} {
+		for _, rq := range [][2]string{{"GET", "/v1/admin/agents"}, {"POST", "/v1/admin/agents"}, {"PATCH", "/v1/admin/agents/agt_default"},
+			{"DELETE", "/v1/admin/agents/agt_default"}, {"POST", "/v1/admin/agents/agt_default/grants"}, {"DELETE", "/v1/admin/agents/agt_default/grants/p_app1"},
+			{"POST", "/v1/admin/agents/agt_default/tokens"}} {
+			if c, _, _ := e.do(rq[0], rq[1], tok, "application/json", map[string]any{}); c != http.StatusUnauthorized && c != http.StatusForbidden {
+				t.Errorf("%s %s with a non-admin token: %d", rq[0], rq[1], c)
+			}
+		}
+	}
+	if as, _ := e.st.ListAgents(ctx); len(as) != 1 || as[0].ID != store.DefaultAgentID || as[0].AllProjects {
+		t.Fatalf("nothing changed: %+v", as)
+	}
+
+	var made struct {
+		ID, Name string
+		Grants   []struct{ ID, Name string }
+	}
+	c, body, _ := e.do("POST", "/v1/admin/agents", e.admin, "application/json", map[string]any{"name": "  ChatGPT ", "max_days": 30})
+	if c != http.StatusCreated || json.Unmarshal(body, &made) != nil || made.Name != "ChatGPT" || !strings.HasPrefix(made.ID, "agt_") || len(made.Grants) != 0 {
+		t.Fatalf("create: %d %s", c, body)
+	}
+	for name, bad := range map[string]map[string]any{"duplicate": {"name": "chatgpt"}, "empty": {"name": " "}, "control": {"name": "a\nb"},
+		"long": {"name": strings.Repeat("x", 61)}, "window": {"name": "W", "max_days": -1}} {
+		want := http.StatusBadRequest
+		if name == "duplicate" {
+			want = http.StatusConflict
+		}
+		if c, _, _ := e.do("POST", "/v1/admin/agents", e.admin, "application/json", bad); c != want {
+			t.Errorf("create %s: %d", name, c)
+		}
+	}
+	agent := "/v1/admin/agents/" + made.ID
+
+	// grant by id, by name and by folder; unknown projects and agents are 404
+	for _, ref := range []string{"p_app1", "app", "~/code/old"} {
+		if c, body, _ := e.do("POST", agent+"/grants", e.admin, "application/json", map[string]any{"project": ref}); c != 200 {
+			t.Fatalf("grant %q: %d %s", ref, c, body)
+		}
+	}
+	if c, _, _ := e.do("POST", agent+"/grants", e.admin, "application/json", map[string]any{"project": "nope"}); c != http.StatusNotFound {
+		t.Errorf("granting an unknown project: %d", c)
+	}
+	if c, _, _ := e.do("POST", "/v1/admin/agents/agt_nope/grants", e.admin, "application/json", map[string]any{"project": "p_app1"}); c != http.StatusNotFound {
+		t.Errorf("granting to an unknown agent: %d", c)
+	}
+	if g, _ := e.st.Grants(ctx, made.ID); strings.Join(g, ",") != "p_app1,~/code/old" {
+		t.Fatalf("grants: %v", g)
+	}
+
+	// a token for the agent sees exactly its grants
+	var minted struct{ Token, ID, AgentID string }
+	c, body, _ = e.do("POST", agent+"/tokens", e.admin, "application/json", map[string]any{"label": "desktop", "expires_in": "24h"})
+	_ = json.Unmarshal(body, &struct {
+		Token   *string `json:"token"`
+		ID      *string `json:"id"`
+		AgentID *string `json:"agent_id"`
+	}{&minted.Token, &minted.ID, &minted.AgentID})
+	if c != http.StatusCreated || !strings.HasPrefix(minted.Token, "ggb_read_") || minted.AgentID != made.ID {
+		t.Fatalf("mint: %d %s", c, body)
+	}
+	cs := e.mcpSession(minted.Token)
+	if _, txt := call(t, cs, "list_projects", nil); !strings.Contains(txt, "- App:") || !strings.Contains(txt, "~/code/old") {
+		t.Fatalf("the agent sees its grants:\n%s", txt)
+	}
+	if c, _, _ := e.do("DELETE", agent+"/grants/"+url.PathEscape("~/code/old"), e.admin, "", nil); c != 200 {
+		t.Fatalf("revoke grant: %d", c)
+	}
+	if _, txt := call(t, cs, "list_projects", nil); !strings.Contains(txt, "- App:") || strings.Contains(txt, "~/code/old") {
+		t.Fatalf("after revoking a grant:\n%s", txt)
+	}
+
+	// the listing shows grants with names, tokens and the switch; PATCH changes one field at a time
+	_, body, _ = e.do("GET", "/v1/admin/agents", e.admin, "", nil)
+	for _, want := range []string{`"name":"ChatGPT"`, `"max_days":30`, `"grants":[{"id":"p_app1","name":"App"}]`, `"active_tokens":1`, `"all_projects":false`, `"id":"agt_default"`} {
+		if !strings.Contains(string(body), want) {
+			t.Errorf("listing lacks %s:\n%s", want, body)
+		}
+	}
+	if strings.Contains(string(body), "App work") || strings.Contains(string(body), minted.Token) {
+		t.Errorf("the admin listing holds no session content and no secrets:\n%s", body)
+	}
+	if c, body, _ := e.do("PATCH", agent, e.admin, "application/json", map[string]any{"all_projects": true}); c != 200 || !strings.Contains(string(body), `"all_projects":true`) || !strings.Contains(string(body), `"max_days":30`) || !strings.Contains(string(body), `"name":"ChatGPT"`) {
+		t.Fatalf("patch all_projects: %d %s", c, body)
+	}
+	if _, txt := call(t, cs, "list_projects", nil); !strings.Contains(txt, "~/code/old") {
+		t.Fatalf("all projects on:\n%s", txt)
+	}
+	if c, _, _ := e.do("PATCH", agent, e.admin, "application/json", map[string]any{"name": "Default"}); c != http.StatusConflict {
+		t.Errorf("renaming onto another agent: %d", c)
+	}
+	if c, _, _ := e.do("PATCH", agent, e.admin, "application/json", map[string]any{"name": "GPT", "max_days": 0}); c != 200 {
+		t.Errorf("rename: %d", c)
+	}
+	if c, _, _ := e.do("PATCH", agent, e.admin, "application/json", map[string]any{"bogus": 1}); c != http.StatusBadRequest {
+		t.Errorf("unknown fields are refused: %d", c)
+	}
+
+	// deleting the agent revokes its token
+	if c, body, _ := e.do("DELETE", agent, e.admin, "", nil); c != 200 || !strings.Contains(string(body), `"revoked_tokens":1`) {
+		t.Fatalf("delete: %d %s", c, body)
+	}
+	if code, _, _ := e.mcpRaw(minted.Token, modern("tools/list", "", "2026-07-28"), map[string]string{"Mcp-Protocol-Version": "2026-07-28", "Mcp-Method": "tools/list"}); code != http.StatusUnauthorized {
+		t.Errorf("a deleted agent's token: %d", code)
+	}
+	if c, _, _ := e.do("DELETE", agent, e.admin, "", nil); c != http.StatusNotFound {
+		t.Errorf("deleting twice: %d", c)
+	}
+
+	// every change is in the audit log, with the agent it concerned
+	ev, _ := e.st.ListAudit(ctx, 500)
+	seen := map[string]bool{}
+	for _, a := range ev {
+		if a.AgentID == made.ID {
+			seen[a.Action+" "+a.Project] = true
+		}
+	}
+	for _, want := range []string{"create_agent ", "grant p_app1", "grant ~/code/old", "revoke_grant ~/code/old", "mint_token:read ", "update_agent:all_projects=on ", "delete_agent "} {
+		if !seen[want] {
+			t.Errorf("audit lacks %q: %v", want, seen)
+		}
+	}
+}

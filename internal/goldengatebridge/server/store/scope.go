@@ -15,6 +15,8 @@ import (
 // and ResolveProject. Writes (PutSession, DeleteProject, DeleteSession) and
 // the auth, OAuth and agent methods ignore it.
 type Scope struct {
+	// AllProjects makes every project visible; Projects is then ignored.
+	AllProjects bool
 	// Projects are the ids of the projects that are visible. Empty means
 	// none are.
 	Projects []string
@@ -51,6 +53,9 @@ func sees(ctx context.Context, project string, at time.Time) bool {
 	if !at.IsZero() && !sc.NotBefore.IsZero() && at.Before(sc.NotBefore) {
 		return false
 	}
+	if sc.AllProjects {
+		return true
+	}
 	for _, p := range sc.Projects {
 		if p == project {
 			return true
@@ -67,14 +72,17 @@ func scopeSQL(ctx context.Context, projectCol, timeCol string) (string, []any) {
 	if !ok {
 		return "", nil
 	}
-	if len(sc.Projects) == 0 {
+	q, args := "", make([]any, 0, len(sc.Projects)+1)
+	switch {
+	case sc.AllProjects:
+	case len(sc.Projects) == 0:
 		return " AND 0", nil
+	default:
+		for _, p := range sc.Projects {
+			args = append(args, p)
+		}
+		q = " AND " + projectCol + " IN (?" + strings.Repeat(",?", len(sc.Projects)-1) + ")"
 	}
-	args := make([]any, 0, len(sc.Projects)+1)
-	for _, p := range sc.Projects {
-		args = append(args, p)
-	}
-	q := " AND " + projectCol + " IN (?" + strings.Repeat(",?", len(sc.Projects)-1) + ")"
 	if timeCol != "" && !sc.NotBefore.IsZero() {
 		q += " AND " + timeCol + ">=?"
 		args = append(args, nano(sc.NotBefore))

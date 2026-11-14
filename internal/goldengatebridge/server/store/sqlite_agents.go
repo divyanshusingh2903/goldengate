@@ -33,7 +33,7 @@ func (s *SQLite) EnsureDefaultAgent(ctx context.Context, now time.Time) (Agent, 
 
 // CreateAgent implements AgentStore.
 func (s *SQLite) CreateAgent(ctx context.Context, a Agent) error {
-	_, err := s.db.ExecContext(ctx, `INSERT INTO agents(id, name, created_at, max_days) VALUES(?,?,?,?)`, a.ID, a.Name, nano(a.CreatedAt), a.MaxDays)
+	_, err := s.db.ExecContext(ctx, `INSERT INTO agents(id, name, created_at, max_days, all_projects) VALUES(?,?,?,?,?)`, a.ID, a.Name, nano(a.CreatedAt), a.MaxDays, a.AllProjects)
 	if isUnique(err) {
 		return ErrDuplicate
 	}
@@ -46,7 +46,7 @@ func (s *SQLite) CreateAgent(ctx context.Context, a Agent) error {
 func scanAgent(r rowScanner) (Agent, error) {
 	var a Agent
 	var c int64
-	if err := r.Scan(&a.ID, &a.Name, &c, &a.MaxDays); err != nil {
+	if err := r.Scan(&a.ID, &a.Name, &c, &a.MaxDays, &a.AllProjects); err != nil {
 		return Agent{}, err
 	}
 	a.CreatedAt = fromNano(c)
@@ -55,7 +55,7 @@ func scanAgent(r rowScanner) (Agent, error) {
 
 // Agent implements AgentStore.
 func (s *SQLite) Agent(ctx context.Context, id string) (*Agent, error) {
-	a, err := scanAgent(s.db.QueryRowContext(ctx, `SELECT id, name, created_at, max_days FROM agents WHERE id=?`, id))
+	a, err := scanAgent(s.db.QueryRowContext(ctx, `SELECT id, name, created_at, max_days, all_projects FROM agents WHERE id=?`, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -67,7 +67,7 @@ func (s *SQLite) Agent(ctx context.Context, id string) (*Agent, error) {
 
 // ListAgents implements AgentStore.
 func (s *SQLite) ListAgents(ctx context.Context) ([]Agent, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, name, created_at, max_days FROM agents ORDER BY created_at, id`)
+	rows, err := s.db.QueryContext(ctx, `SELECT id, name, created_at, max_days, all_projects FROM agents ORDER BY created_at, id`)
 	if err != nil {
 		return nil, fmt.Errorf("sqlite store: list agents: %w", err)
 	}
@@ -85,7 +85,7 @@ func (s *SQLite) ListAgents(ctx context.Context) ([]Agent, error) {
 
 // UpdateAgent implements AgentStore.
 func (s *SQLite) UpdateAgent(ctx context.Context, a Agent) error {
-	res, err := s.db.ExecContext(ctx, `UPDATE agents SET name=?, max_days=? WHERE id=?`, a.Name, a.MaxDays, a.ID)
+	res, err := s.db.ExecContext(ctx, `UPDATE agents SET name=?, max_days=?, all_projects=? WHERE id=?`, a.Name, a.MaxDays, a.AllProjects, a.ID)
 	if isUnique(err) {
 		return ErrDuplicate
 	}

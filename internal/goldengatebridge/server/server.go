@@ -142,6 +142,14 @@ func (s *Server) routes() {
 	s.mux.Handle("GET /v1/admin/tokens", s.guard(auth.ScopeAdmin, s.handleListTokens))
 	s.mux.Handle("DELETE /v1/admin/tokens/{id}", s.guard(auth.ScopeAdmin, s.handleRevokeToken))
 
+	s.mux.Handle("GET /v1/admin/agents", s.guard(auth.ScopeAdmin, s.handleListAgents))
+	s.mux.Handle("POST /v1/admin/agents", s.guard(auth.ScopeAdmin, s.handleCreateAgent))
+	s.mux.Handle("PATCH /v1/admin/agents/{id}", s.guard(auth.ScopeAdmin, s.handleUpdateAgent))
+	s.mux.Handle("DELETE /v1/admin/agents/{id}", s.guard(auth.ScopeAdmin, s.handleDeleteAgent))
+	s.mux.Handle("POST /v1/admin/agents/{id}/grants", s.guard(auth.ScopeAdmin, s.handleGrant))
+	s.mux.Handle("DELETE /v1/admin/agents/{id}/grants/{project}", s.guard(auth.ScopeAdmin, s.handleRevokeGrant))
+	s.mux.Handle("POST /v1/admin/agents/{id}/tokens", s.guard(auth.ScopeAdmin, s.handleMintAgentToken))
+
 	s.mux.HandleFunc("POST /v1/pair", s.handlePair)
 	if s.oauth != nil {
 		s.oauth.Register(s.mux)
@@ -419,6 +427,7 @@ func (s *Server) handleListTokens(w http.ResponseWriter, r *http.Request, ri req
 		ID         string     `json:"id"`
 		Scope      string     `json:"scope"`
 		Label      string     `json:"label"`
+		AgentID    string     `json:"agent_id,omitempty"`
 		CreatedAt  time.Time  `json:"created_at"`
 		ExpiresAt  *time.Time `json:"expires_at"`
 		RevokedAt  *time.Time `json:"revoked_at"`
@@ -427,7 +436,7 @@ func (s *Server) handleListTokens(w http.ResponseWriter, r *http.Request, ri req
 	}
 	out := make([]tv, 0, len(toks))
 	for _, t := range toks {
-		out = append(out, tv{t.ID, t.Scope, t.Label, t.CreatedAt, nullTime(t.ExpiresAt), nullTime(t.RevokedAt), nullTime(t.LastUsedAt), t.Active(now)})
+		out = append(out, tv{t.ID, t.Scope, t.Label, t.AgentID, t.CreatedAt, nullTime(t.ExpiresAt), nullTime(t.RevokedAt), nullTime(t.LastUsedAt), t.Active(now)})
 	}
 	s.audit(r.Context(), ri.P, ri.IP, "list_tokens", "")
 	writeJSON(w, http.StatusOK, map[string]any{"tokens": out})
@@ -558,7 +567,7 @@ func (s *Server) agentScope(ctx context.Context, agentID string) (store.Scope, e
 	if err != nil {
 		return store.Scope{}, fmt.Errorf("agent lookup: %w", err)
 	}
-	sc := store.Scope{}
+	sc := store.Scope{AllProjects: a.AllProjects}
 	if sc.Projects, err = s.Store.Grants(ctx, agentID); err != nil {
 		return store.Scope{}, fmt.Errorf("grants lookup: %w", err)
 	}

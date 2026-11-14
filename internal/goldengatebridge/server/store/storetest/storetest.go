@@ -755,6 +755,58 @@ func agents(t *testing.T, s store.Store) {
 		t.Errorf("updating an unknown agent: %v", err)
 	}
 
+	// The all-projects switch is off unless set, survives a rename, and can be turned off.
+	if a, _ := s.Agent(ctx, "agt_1"); a.AllProjects {
+		t.Fatal("all projects is off by default")
+	}
+	must(t, s.UpdateAgent(ctx, store.Agent{ID: "agt_1", Name: "ChatGPT work", MaxDays: 7, AllProjects: true}))
+	if a, _ := s.Agent(ctx, "agt_1"); !a.AllProjects || a.MaxDays != 7 {
+		t.Fatalf("all projects on: %+v", a)
+	}
+	must(t, s.CreateAgent(ctx, store.Agent{ID: "agt_all", Name: "Sees all", CreatedAt: t0.Add(2 * time.Minute), AllProjects: true}))
+	if as, _ := s.ListAgents(ctx); len(as) != 3 || !as[2].AllProjects {
+		t.Fatalf("created with all projects: %+v", as)
+	}
+	// A scope applies in every read: listed projects only, or all with the switch, and never older than NotBefore.
+	scoped := func(sc store.Scope) string {
+		c := store.WithScope(ctx, sc)
+		ps, err := s.ListProjects(c)
+		must(t, err)
+		ss, err := s.Sessions(c, store.SessionQuery{})
+		must(t, err)
+		var out []string
+		for _, p := range ps {
+			out = append(out, p.ID)
+		}
+		return fmt.Sprintf("%s|%d", strings.Join(out, ","), len(ss))
+	}
+	if got := scoped(store.Scope{}); got != "|0" {
+		t.Fatalf("an empty scope shows nothing: %s", got)
+	}
+	if got := scoped(store.Scope{Projects: []string{"p_app1"}}); got != "p_app1|1" {
+		t.Fatalf("a scope shows its projects only: %s", got)
+	}
+	if got := scoped(store.Scope{AllProjects: true}); got != "p_app1,p_new1|2" && got != "p_new1,p_app1|2" {
+		t.Fatalf("all projects shows everything: %s", got)
+	}
+	if got := scoped(store.Scope{AllProjects: true, NotBefore: t0.Add(time.Hour)}); got != "|0" {
+		t.Fatalf("the time bound still applies with all projects: %s", got)
+	}
+	c := store.WithScope(ctx, store.Scope{Projects: []string{"p_new1"}})
+	if _, err := s.ResolveProject(c, "p_app1"); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("a project outside the scope does not resolve: %v", err)
+	}
+	if _, err := s.GetSession(c, "", "a"); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("a session outside the scope does not exist: %v", err)
+	}
+	if hits, _ := s.Search(c, "alpha", "", 10); len(hits) != 0 {
+		t.Errorf("search stays inside the scope: %+v", hits)
+	}
+	must(t, s.UpdateAgent(ctx, store.Agent{ID: "agt_1", Name: "ChatGPT work", MaxDays: 7}))
+	if _, err := s.DeleteAgent(ctx, "agt_all", t0); err != nil {
+		t.Fatal(err)
+	}
+
 	// Readers always belong to an agent.
 	must(t, s.CreateToken(ctx, store.Token{ID: "tok_r1", Hash: "hr1", Scope: "read", CreatedAt: t0, AgentID: "agt_1"}))
 	must(t, s.CreateToken(ctx, store.Token{ID: "tok_r2", Hash: "hr2", Scope: "read", CreatedAt: t0}))

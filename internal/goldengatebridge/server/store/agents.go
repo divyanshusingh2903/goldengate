@@ -15,6 +15,10 @@ type Agent struct {
 	// MaxDays bounds how far back the agent may look; 0 means no limit of
 	// its own.
 	MaxDays int
+	// AllProjects lets the agent see every project, including ones that
+	// arrive later, without a grant for each. It is off unless the user
+	// turns it on for that agent.
+	AllProjects bool
 }
 
 // The default agent owns read tokens and OAuth clients that were created
@@ -35,7 +39,7 @@ type AgentStore interface {
 	Agent(ctx context.Context, id string) (*Agent, error)
 	// ListAgents lists agents, oldest first.
 	ListAgents(ctx context.Context) ([]Agent, error)
-	// UpdateAgent sets an agent's name and MaxDays. ErrNotFound, or
+	// UpdateAgent sets an agent's name, MaxDays and AllProjects. ErrNotFound, or
 	// ErrDuplicate when another agent has the name.
 	UpdateAgent(ctx context.Context, a Agent) error
 	// DeleteAgent removes an agent with its grants, revokes its tokens at

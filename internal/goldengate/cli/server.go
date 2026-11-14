@@ -21,6 +21,9 @@ import (
 const (
 	envServer = "GOLDENGATE_SERVER_URL"
 	envAdmin  = "GOLDENGATE_ADMIN_TOKEN"
+	// defaultAgentID is the server's agent for read tokens minted without
+	// naming one (store.DefaultAgentID on the server).
+	defaultAgentID = "agt_default"
 )
 
 func (a *app) userAgent() string { return "goldengate/" + Version }
@@ -133,6 +136,9 @@ type connectResult struct {
 	ReadSecret string // shown once; empty when pairing was used
 	OAuth      bool
 	StoreKind  string
+	// SeesAll is set when this setup made the first assistant able to see
+	// every shared project (a server that had no agents before).
+	SeesAll bool
 }
 
 // connect checks the server, obtains an ingest token (and, with the admin
@@ -174,11 +180,23 @@ func (a *app) connect(ctx context.Context, serverURL, pairCode, adminToken strin
 		if err != nil {
 			return connectResult{}, fmt.Errorf("could not create the ingest token (is the admin token right?): %w", err)
 		}
+		// On a server that has no agents yet, the read token minted here is
+		// the first assistant's: it gets to see every project the user
+		// shares (the user's choice at setup, changeable with `goldengate
+		// agents`). On a server that already has agents nothing is changed.
+		before, listErr := ac.ListAgents(ctx)
 		rd, err := ac.MintToken(ctx, "read", "assistant", "")
 		if err != nil {
 			return connectResult{}, fmt.Errorf("could not create the read token: %w", err)
 		}
 		ingestSecret, res.ReadSecret = in.Secret, rd.Secret
+		if listErr == nil && len(before) == 0 {
+			on := true
+			if _, err := ac.UpdateAgent(ctx, defaultAgentID, client.AgentUpdate{AllProjects: &on}); err != nil {
+				return connectResult{}, fmt.Errorf("could not set what the assistant may see: %w", err)
+			}
+			res.SeesAll = true
+		}
 	}
 	if err := store.Set(secretName(serverURL), ingestSecret); err != nil {
 		return connectResult{}, fmt.Errorf("could not store the ingest token: %w", err)
@@ -226,6 +244,11 @@ Your assistant's read token (shown ONCE; it cannot be recovered, rotate it with 
 Connector URL: %s/mcp
 For assistants that let you set a header, paste the URL and send the token as "Authorization: Bearer <token>".
 `, readSecret, serverURL)
+		if res.SeesAll {
+			fmt.Fprintln(a.Stdout, "This assistant can see every project you share. To limit it, or to connect another assistant with its own projects, use `goldengate agents`.")
+		} else {
+			fmt.Fprintln(a.Stdout, "What this assistant can see is set with `goldengate agents` (a project is visible to an assistant only once it is granted).")
+		}
 	} else {
 		fmt.Fprintf(a.Stdout, "\nCreate the assistant's read token on the server with:\n    goldengatebridge token create --scope read\n")
 	}
@@ -315,6 +338,9 @@ func (a *app) rotate(ctx context.Context, scope string, grace time.Duration, std
 	for _, t := range old {
 		if t.Scope != scope || !t.Active || t.ID == fresh.ID {
 			continue
+		}
+		if t.AgentID != "" && t.AgentID != defaultAgentID {
+			continue // another agent's token: rotate those with `goldengate agents token`
 		}
 		if err := ac.RevokeToken(ctx, t.ID, grace); err != nil {
 			fmt.Fprintf(a.Stderr, "could not revoke %s: %v\n", t.ID, err)
