@@ -12,7 +12,7 @@ This file lets any Claude Code session (or person) pick up the Product v2 work w
 _Last updated 2026-11-14. Update this section whenever a row in the queue changes._
 
 **Progress:** 2 of 31 scheduled issues done (plus 2 stretch). Phase 1, Foundations, is under way.
-**Next up:** #18 Named projects with members (client), size L, planned Nov 14. Its only dependency, #17, is done.
+**In progress:** #18 Named projects with members (client), size L, planned Nov 14. **Next after it:** #49 Facts plus narrative summaries.
 
 ### Done
 
@@ -28,7 +28,7 @@ Supporting changes (not queue issues):
 | Go toolchain go1.26.11 (GO-2026-6859 broke `security` on every branch) | #51 | 2026-11-14 |
 | First `pr-template` check (unblocked the `main` ruleset); later replaced | #52 | 2026-11-14 |
 | The user's stricter `pr-template` check (Checklist with every item ticked; skips Dependabot) | #9 | 2026-11-14 |
-| This ledger, then its checklist rule | #54, #56 | 2026-11-14 |
+| This ledger, then its checklist rule, status section and roadmap sync | #54, #56, #57, #58 | 2026-11-14 |
 
 ### Open loose ends
 
@@ -86,7 +86,7 @@ Status values: `todo`, `in progress`, `in review`, `blocked`, `done`. Size: S ab
 |---|---|---|---|---|---|---|
 | 1 | #17 Write down the product principles | S | | Nov 13 | done | #50 |
 | 2 | #37 Default 5-day window, custom time ranges | S | | Nov 13 | done | #55 |
-| 3 | #18 Named projects with members (client) | L | #17 | Nov 14 | todo | |
+| 3 | #18 Named projects with members (client) | L | #17 | Nov 14 | in progress | |
 | 4 | #49 Summaries: facts plus narrative | M | | Nov 15 | todo | |
 | 5 | #19 Server: stable project IDs, migration | M | #18 | Nov 16 | todo | |
 | 6 | #24 Server: agents and grants model | M | #19 | Nov 16 | todo | |
@@ -135,3 +135,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-14: #37 done (#55). Replaced the pr-template check from #52 with the user's stricter version from #9 (merged): adds the Checklist section, requires every item ticked, skips Dependabot PRs.
 - 2026-11-14: Merged #56 (ledger checklist rule). Added the Status section.
 - 2026-11-14: Merged #57 (ledger status section). Roadmap page now reads progress from a status JSON block and shows #17 and #37 done; loop step 11 updates it.
+- 2026-11-14: Merged #58 (roadmap page kept in step with the ledger). #18 implemented: `[[projects]]` in the config (members are what is shared, one folder per project, `exclude_sources` per member), legacy `allow`/`deny_source` read as projects, `goldengate projects` commands, TUI `n`/`N`. Server project ids stay as they are until #19.
