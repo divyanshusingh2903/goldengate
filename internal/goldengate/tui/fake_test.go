@@ -68,20 +68,20 @@ func newFake() *fakeBackend {
 			{Name: "claude-ai", Installed: false, Enabled: true},
 		},
 		rows: []Row{
-			{Key: "/home/u/code/pharmfindr", Label: "~/code/pharmfindr", Sessions: 47, Last: ago(2 * time.Hour), Pending: 3, Synced: 44, LastSync: ago(2 * time.Hour), State: Shared, Reason: "allowed by ~/code/pharmfindr",
+			{Key: "/home/u/code/pharmfindr", Label: "~/code/pharmfindr", Sessions: 47, Last: ago(2 * time.Hour), Pending: 3, Synced: 44, LastSync: ago(2 * time.Hour), State: Shared, Reason: "shared in project Pharmfindr", Project: "Pharmfindr",
 				Sources: []SourceInfo{{"claude-code", 41, true}, {"codex", 6, true}}},
-			{Key: "/home/u/code/forge", Label: "~/code/forge", Sessions: 12, Last: ago(5 * time.Hour), Pending: 1, Synced: 11, LastSync: ago(6 * time.Hour), State: Shared, Reason: "allowed by ~/code/forge",
+			{Key: "/home/u/code/forge", Label: "~/code/forge", Sessions: 12, Last: ago(5 * time.Hour), Pending: 1, Synced: 11, LastSync: ago(6 * time.Hour), State: Shared, Reason: "shared in project forge", Project: "forge",
 				Sources: []SourceInfo{{"claude-code", 12, true}}},
 			{Key: "/home/u/code/vihayas", Label: "~/code/vihayas", Sessions: 8, Last: ago(30 * time.Hour), State: NotShared, Reason: "not selected",
 				Sources: []SourceInfo{{"claude-code", 8, false}}},
-			{Key: "/home/u/code/website", Label: "~/code/website", Sessions: 9, Last: ago(50 * time.Hour), Synced: 5, LastSync: ago(40 * time.Hour), State: Partial, Reason: "allowed by ~/code/website",
+			{Key: "/home/u/code/website", Label: "~/code/website", Sessions: 9, Last: ago(50 * time.Hour), Synced: 5, LastSync: ago(40 * time.Hour), State: Partial, Reason: "shared in project website", Project: "website",
 				Sources: []SourceInfo{{"claude-code", 5, true}, {"opencode", 4, false}}},
 			{Key: "/home/u/work/client-x", Label: "~/work/client-x", Sessions: 20, Last: ago(100 * time.Hour), State: Denied, Reason: "denied by ~/work/client-x",
 				Sources: []SourceInfo{{"claude-code", 20, false}}},
 			{Key: "/home/u/scratch/tmp", Label: "~/scratch/tmp", Sessions: 2, Last: ago(200 * time.Hour), State: NotShared, Reason: "not selected",
 				Sources: []SourceInfo{{"codex", 2, false}}},
 			{Key: "/home/u/code/pharmfindr/.claude/worktrees/fox", Label: "~/code/pharmfindr/.claude/worktrees/fox", Root: "~/code/pharmfindr", Sessions: 4, Last: ago(3 * time.Hour), Pending: 2, State: Shared,
-				Reason: "allowed by ~/code/pharmfindr", Sources: []SourceInfo{{"claude-code", 4, true}}},
+				Reason: "shared in project Pharmfindr", Project: "Pharmfindr", Sources: []SourceInfo{{"claude-code", 4, true}}},
 			{Key: "claude-ai:Chats", Label: "claude-ai:Chats", Virtual: true, Sessions: 3, Last: ago(400 * time.Hour), State: NotShared, Reason: "chat projects need an explicit allow rule",
 				Sources: []SourceInfo{{"claude-ai", 3, false}}},
 		},
@@ -160,6 +160,8 @@ func (f *fakeBackend) Apply(_ context.Context, a Action) (ActionResult, error) {
 		switch a.Kind {
 		case ActAllow:
 			f.rows[i].State = Shared
+		case ActSetProject:
+			f.rows[i].State, f.rows[i].Project, f.rows[i].Reason = Shared, a.Project, "shared in project "+a.Project
 		case ActRemove:
 			f.rows[i].State = NotShared
 		case ActDeny:
@@ -190,6 +192,13 @@ func (f *fakeBackend) Apply(_ context.Context, a Action) (ActionResult, error) {
 				r.State = Shared
 			default:
 				r.State = Partial
+			}
+		}
+	}
+	if a.Kind == ActRenameProject {
+		for i := range f.rows {
+			if f.rows[i].Project == a.Project {
+				f.rows[i].Project, f.rows[i].Reason = a.To, "shared in project "+a.To
 			}
 		}
 	}

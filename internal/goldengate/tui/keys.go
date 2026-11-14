@@ -32,7 +32,7 @@ func Run(be Backend, o Options) error {
 func (m *Model) typing() bool {
 	switch m.scr {
 	case scrProjects:
-		return m.pk.filtering
+		return m.pk.filtering || m.pk.naming != nameOff
 	case scrSettings:
 		return m.st.editing || m.st.dd != menuNone
 	case scrWizard:

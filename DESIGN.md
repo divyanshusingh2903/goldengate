@@ -223,9 +223,11 @@ Deduplication
 
 ## 5. Selection model (what is shared)
 
-> This section describes the current folder-based model. Under the principles in 1.1 it is being replaced by named projects with members, a per-session inbox, and user-approved rules (milestone M7). Deny-by-default and deny-wins carry over unchanged.
+> Named projects (below) landed in #18. Still to come under milestone M7: project ids on the server (#19), a per-session inbox (#20) and user-approved rules. Deny-by-default and deny-wins are unchanged.
 
-Default policy: **deny all**. A project is shared only if matched by an allow rule.
+Default policy: **deny all**. Something is shared only if it is a member of a named project.
+
+**Named projects.** A project has a stable id, a name the user picks, and members: folders, globs or chat groupings (`claude-ai:Chats`). One folder belongs to at most one project. Membership is what shares it, so adding a member shares it and removing one stops sharing it. A deny rule still wins over membership. When members nest, the most specific one decides which project a session belongs to. A member can leave out some tools with `exclude_sources`. Older configs with `[share] allow` and `deny_source` load unchanged: each allow entry becomes a project named after its folder. The next save writes projects only.
 
 Config (`~/.config/goldengate/config.toml`):
 
@@ -234,10 +236,20 @@ Config (`~/.config/goldengate/config.toml`):
 url = "https://mcp.example.com"
 # token is stored in the OS keyring, not in this file
 
+[[projects]]
+id = "p_3f9a1c"                  # stable; renaming keeps it
+name = "Pharmfindr"
+[[projects.members]]
+path = "~/code/pharmfindr"
+[[projects.members]]
+path = "~/code/pharmfindr-web"
+exclude_sources = ["codex"]      # this tool's sessions of this folder stay home
+[[projects.members]]
+path = "claude-ai:Pharmfindr"
+
 [share]
 default = "deny"                 # deny | allow
-allow = ["~/code/pharmfindr", "~/code/forge"]
-deny  = ["~/code/**/secrets", "~/work/client-x"]   # deny always wins over allow
+deny  = ["~/code/**/secrets", "~/work/client-x"]   # deny always wins over project membership
 include_sources = ["claude-code", "codex", "opencode"]
 since = "90d"                    # ignore older sessions (upload look-back; agents still default to the last 5 days, see section 9)
 level = "summary"                # summary | titles-only | full (full requires --i-understand)
@@ -269,13 +281,13 @@ base_url = ""                    # endpoint override; custom defaults to http://
 max_input_chars = 0              # conversation sent per session; 0 = 24000 (about 6k tokens)
 ```
 
-Per-source rules: `deny_source = ["codex@~/code/app"]` under `[share]` keeps one tool's sessions of a folder out while the rest of the folder stays shared.
+Per-source rules: `exclude_sources` on a member keeps one tool's sessions of that folder out while the rest stays shared. `deny_source = ["codex@~/code/app"]` under `[share]` still works for a folder that is in no project.
 
 Rules
 - Deny beats allow. Globs supported (doublestar).
 - Level `titles-only` sends just project, title, timestamps. `summary` (default) sends the redacted summary. `full` sends redacted transcripts and must require an explicit flag plus a TUI confirmation.
 - **Un-sharing a project** (removing it from allow, or adding deny) offers to delete that project's data from the server (`DELETE /v1/projects/{key}`) and records the tombstone locally so it is never re-pushed.
-- Selection state is also manageable headlessly: `goldengate share add <path>`, `share remove <path>`, `share list`.
+- Selection state is also manageable headlessly: `goldengate share add <path>` (puts the folder in a project of its own), `share remove <path>`, `share list`, and `goldengate projects list|create|rename|merge|add|remove|delete`.
 
 ## 6. TUI (the "rich" part)
 
@@ -347,6 +359,7 @@ goldengate                      # open TUI
 goldengate init [--server URL] [--pair-code CODE]   # first-run wizard; headless via flags/env (see 7.1)
 goldengate sync [--dry-run] [--project PATH] [--since 7d] [--source codex]
 goldengate share add|remove|list
+goldengate projects list|create|rename|merge|add|remove|delete   # named projects; members are what is shared
 goldengate import-claude-ai ./export.zip
 goldengate doctor               # detects tools, checks formats, server, token
 goldengate install-hook claude-code   # adds a SessionEnd hook that runs `goldengate sync --quiet`

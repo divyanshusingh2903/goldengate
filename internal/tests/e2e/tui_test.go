@@ -53,7 +53,7 @@ func TestBackendSnapshotApplyUndo(t *testing.T) {
 	if s.FirstRun {
 		t.Error("saving the config ends the first run")
 	}
-	if r := rowOf(t, s, "~/projects/demo"); r.State != tui.Shared || r.Pending != 1 || !strings.Contains(r.Reason, "allowed by ~/projects/demo") {
+	if r := rowOf(t, s, "~/projects/demo"); r.State != tui.Shared || r.Pending != 1 || !strings.Contains(r.Reason, "shared in project demo") {
 		t.Fatalf("shared, one new session: %+v", r)
 	}
 	if r := rowOf(t, s, "~/projects/client-secret"); r.State != tui.NotShared || r.Pending != 0 {
@@ -92,6 +92,60 @@ func TestBackendSnapshotApplyUndo(t *testing.T) {
 	s, _ = be.Snapshot(ctx)
 	if r := rowOf(t, s, "~/projects/demo"); r.State != tui.NotShared {
 		t.Fatalf("all undone: %+v", r)
+	}
+}
+
+func TestBackendProjectsSetRenameUndo(t *testing.T) {
+	l := newLaptop(t)
+	be := backend(l)
+	ctx := context.Background()
+	s, err := be.Snapshot(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	demo := rowOf(t, s, "~/projects/demo")
+
+	res, err := be.Apply(ctx, tui.Action{Kind: tui.ActSetProject, Keys: []string{demo.Key}, Project: "Widgets"})
+	if err != nil || !strings.Contains(res.Message, `"Widgets"`) {
+		t.Fatalf("%v %+v", err, res)
+	}
+	s, _ = be.Snapshot(ctx)
+	if r := rowOf(t, s, "~/projects/demo"); r.State != tui.Shared || r.Project != "Widgets" || !strings.Contains(r.Reason, "shared in project Widgets") {
+		t.Fatalf("putting a folder in a project shares it: %+v", r)
+	}
+	if r := rowOf(t, s, "~/projects/client-secret"); r.State != tui.NotShared || r.Project != "" {
+		t.Fatalf("others stay private: %+v", r)
+	}
+	if cfg := l.readConfig(t); !strings.Contains(cfg, "[[projects]]") || !strings.Contains(cfg, "Widgets") {
+		t.Fatalf("the project is in the config:\n%s", cfg)
+	}
+
+	if _, err := be.Apply(ctx, tui.Action{Kind: tui.ActRenameProject, Project: "Widgets", To: "Widget work"}); err != nil {
+		t.Fatal(err)
+	}
+	s, _ = be.Snapshot(ctx)
+	if r := rowOf(t, s, "~/projects/demo"); r.Project != "Widget work" {
+		t.Fatalf("rename: %+v", r)
+	}
+	// the CLI sees the same project
+	l.must(nil, "projects", "list")
+	if !strings.Contains(l.out.String(), "Widget work") {
+		t.Errorf("projects list:\n%s", l.out)
+	}
+
+	if _, err := be.Undo(ctx); err != nil {
+		t.Fatal(err)
+	}
+	s, _ = be.Snapshot(ctx)
+	if r := rowOf(t, s, "~/projects/demo"); r.Project != "Widgets" || r.State != tui.Shared {
+		t.Fatalf("undo restores the old name: %+v", r)
+	}
+	if _, err := be.Undo(ctx); err != nil {
+		t.Fatal(err)
+	}
+	s, _ = be.Snapshot(ctx)
+	if r := rowOf(t, s, "~/projects/demo"); r.Project != "" || r.State != tui.NotShared {
+		t.Fatalf("undo takes the folder out again: %+v", r)
 	}
 }
 
@@ -199,8 +253,8 @@ func TestBackendToggleSourceOnUnsharedProjectSharesOnlyIt(t *testing.T) {
 		t.Fatalf("the project is shared with that source: %+v", r)
 	}
 	b, _ := os.ReadFile(filepath.Join(l.root, "cfg", "goldengate", "config.toml"))
-	if !strings.Contains(string(b), "codex@") {
-		t.Errorf("the other sources are switched off for this folder:\n%s", b)
+	if !strings.Contains(string(b), "exclude_sources = ['codex']") {
+		t.Errorf("the other sources are switched off for this folder (on its project member):\n%s", b)
 	}
 }
 

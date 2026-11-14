@@ -109,7 +109,7 @@ func New(d Deps) *cobra.Command {
 	root.SetOut(d.Stdout)
 	root.SetErr(d.Stderr)
 	root.PersistentFlags().StringVar(&a.configPath, "config", "", "config file (default: XDG config dir)")
-	root.AddCommand(a.syncCmd(), a.shareCmd(), a.doctorCmd(), a.summarizerCmd(), a.initCmd(), a.tokenCmd(), a.purgeCmd(), a.importsCmd(), &cobra.Command{
+	root.AddCommand(a.syncCmd(), a.shareCmd(), a.projectsCmd(), a.doctorCmd(), a.summarizerCmd(), a.initCmd(), a.tokenCmd(), a.purgeCmd(), a.importsCmd(), &cobra.Command{
 		Use: "version", Short: "Print the version",
 		Run: func(*cobra.Command, []string) {
 			fmt.Fprintln(a.Stdout, "goldengate", Version, runtime.GOOS+"/"+runtime.GOARCH)
@@ -133,6 +133,7 @@ func (a *app) load() (config.Config, error) { return config.Load(a.cfgPath()) }
 func (a *app) matcher(c config.Config) (*selection.Matcher, error) {
 	return selection.New(selection.Policy{
 		Default: c.Share.Default, Allow: c.Share.Allow, Deny: c.Share.Deny, IncludeSources: c.Share.IncludeSources, SourceDeny: c.Share.SourceDeny,
+		Projects: projectNames(c),
 	}, selection.Options{Home: a.Home})
 }
 
@@ -397,6 +398,7 @@ func (a *app) change(ctx context.Context, before config.Config, edit func(*confi
 // targets are what the server may still hold for the un-shared projects.
 func (a *app) applyChange(ctx context.Context, before config.Config, edit func(*config.Config)) ([]remoteTarget, error) {
 	after := before
+	after.Projects = config.CloneProjects(before.Projects)
 	after.Share.Allow = append([]string(nil), before.Share.Allow...)
 	after.Share.Deny = append([]string(nil), before.Share.Deny...)
 	after.Share.SourceDeny = append([]string(nil), before.Share.SourceDeny...)
@@ -686,4 +688,15 @@ func (a *app) doctorCmd() *cobra.Command {
 			return nil
 		},
 	}
+}
+
+// projectNames maps every project member, as written, to its project's name.
+func projectNames(c config.Config) map[string]string {
+	out := map[string]string{}
+	for _, p := range c.Projects {
+		for _, m := range p.Members {
+			out[m.Path] = p.Name
+		}
+	}
+	return out
 }

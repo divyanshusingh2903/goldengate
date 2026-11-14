@@ -21,6 +21,10 @@ type Policy struct {
 	// SourceDeny excludes one source from a folder or chat project while the
 	// rest of it stays shared. Entries look like "codex@~/code/app".
 	SourceDeny []string
+	// Projects names the project each allow rule belongs to (rule as written
+	// -> project name). When several allow rules match a folder, the most
+	// specific one decides its project.
+	Projects map[string]string
 }
 
 // Decision is the outcome for one (project, source) pair.
@@ -46,6 +50,7 @@ type sourceRule struct {
 
 type rule struct {
 	raw     string
+	project string // the project this allow rule is a member of, if any
 	pattern string // folded, slash-separated, absolute (or the literal key for virtual rules)
 	isGlob  bool
 	virtual bool // matches chat-export keys like "claude-ai:Chats"; never folders
@@ -74,6 +79,19 @@ func New(p Policy, o Options) (*Matcher, error) {
 	var err error
 	if m.allow, err = m.compile(p.Allow); err != nil {
 		return nil, fmt.Errorf("selection: allow rules: %w", err)
+	}
+	seen := map[string]string{}
+	for i := range m.allow {
+		r := &m.allow[i]
+		r.project = p.Projects[r.raw]
+		if r.project == "" {
+			continue
+		}
+		key := fmt.Sprintf("%t:%s", r.virtual, r.pattern)
+		if other, ok := seen[key]; ok && other != r.project {
+			return nil, fmt.Errorf("selection: %s is in two projects (%q and %q); a folder belongs to one project only", r.raw, other, r.project)
+		}
+		seen[key] = r.project
 	}
 	if m.deny, err = m.compile(p.Deny); err != nil {
 		return nil, fmt.Errorf("selection: deny rules: %w", err)
@@ -175,10 +193,11 @@ func (m *Matcher) Decide(projectKey, source string) Decision {
 			return Decision{Reason: source + " excluded by " + r.raw}
 		}
 	}
-	for _, r := range m.allow {
-		if r.virtual == virtual && r.matches(path) {
-			return Decision{Shared: true, Reason: "allowed by " + r.raw}
+	if r, ok := m.bestAllow(path, virtual); ok {
+		if r.project != "" {
+			return Decision{Shared: true, Reason: "shared in project " + r.project}
 		}
+		return Decision{Shared: true, Reason: "allowed by " + r.raw}
 	}
 	if virtual {
 		// Chat history is personal: it is shared only by an explicit rule, even when default = "allow".
@@ -188,6 +207,34 @@ func (m *Matcher) Decide(projectKey, source string) Decision {
 		return Decision{Shared: true, Reason: "default allow"}
 	}
 	return Decision{Reason: "not selected"}
+}
+
+// bestAllow returns the most specific allow rule matching path: the one with
+// the longest pattern.
+func (m *Matcher) bestAllow(path string, virtual bool) (rule, bool) {
+	var best rule
+	found := false
+	for _, r := range m.allow {
+		if r.virtual == virtual && r.matches(path) && (!found || len(r.pattern) > len(best.pattern)) {
+			best, found = r, true
+		}
+	}
+	return best, found
+}
+
+// Project returns the name of the project a folder or chat key belongs to
+// (its most specific matching member), or "" when it is in none. It does not
+// consider deny rules: a denied folder can still be listed in a project.
+func (m *Matcher) Project(projectKey string) string {
+	virtual := pathutil.IsVirtualKey(projectKey)
+	path := projectKey
+	if !virtual {
+		path = pathutil.Fold(pathutil.Normalize(projectKey), m.caseInsensitive)
+	}
+	if r, ok := m.bestAllow(path, virtual); ok {
+		return r.project
+	}
+	return ""
 }
 
 // Denied reports whether an explicit deny rule matches, regardless of allow.
