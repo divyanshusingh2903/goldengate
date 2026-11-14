@@ -21,7 +21,8 @@ Work one issue at a time, in queue order. For each issue:
 6. **Verify locally:** `make check` (vet, race tests, staticcheck, golangci-lint) and `govulncheck ./...`. Update golden files only when the change is intended (`go test ./... -update` where a package supports it), and review the diff.
 7. **Commit** in Conventional Commit style (`feat(server): ...`) with `Closes #<n>` in the body. **No `Co-Authored-By` trailers.** Stage only the files this issue touched.
 8. **Push and open a PR** against `main` using `.github/pull_request_template.md`, in the `Product v2` milestone, with `Closes #<n>` in the summary. End the PR body with the line `🤖 Generated with [Claude Code](https://claude.com/claude-code)`.
-9. **Wait for CI** to finish (`gh pr checks <pr> --watch`). All checks must pass: `pr-template` (required by the `main` ruleset), `lint`, `security`, `test-goldengate`, `test-goldengatebridge`, `test-shared`, `test-e2e`.
+   The `pr-template` check fails unless the description has **Summary**, **Changes**, **Testing** and **Checklist** sections, Summary and Changes are filled in, and **every checklist item is ticked**. Tick an item only when it is true; for an item that does not apply, tick it and add "(n/a: reason)", never leave it unticked. Editing the description re-runs the check.
+9. **Wait for CI** to finish (`gh pr checks <pr> --watch`). All checks must pass: `pr-template` (required by the `main` ruleset; skipped for Dependabot), `lint`, `security`, `test-goldengate`, `test-goldengatebridge`, `test-shared`, `test-e2e`.
    - A failure caused by the change: fix it on the same branch and push again.
    - A failure that also fails on `main` (not caused by the change): fix it in its own small PR first (`chore/...`), merge that, rebase this branch on main, and continue. Record it in the log below.
 10. **Merge** with a merge commit and delete the branch:
@@ -46,7 +47,7 @@ Status values: `todo`, `in progress`, `in review`, `blocked`, `done`. Size: S ab
 | # | Issue | Size | After | Planned | Status | PR |
 |---|---|---|---|---|---|---|
 | 1 | #17 Write down the product principles | S | | Nov 13 | done | #50 |
-| 2 | #37 Default 5-day window, custom time ranges | S | | Nov 13 | in review | |
+| 2 | #37 Default 5-day window, custom time ranges | S | | Nov 13 | done | #55 |
 | 3 | #18 Named projects with members (client) | L | #17 | Nov 14 | todo | |
 | 4 | #49 Summaries: facts plus narrative | M | | Nov 15 | todo | |
 | 5 | #19 Server: stable project IDs, migration | M | #18 | Nov 16 | todo | |
@@ -93,3 +94,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-14: Every PR was blocked because the `main` ruleset requires a `pr-template` check that no workflow produced. Added `.github/workflows/pr-template.yml` in #52 (merged first; its only red check was the pre-existing `security` failure).
 - 2026-11-14: Merged #52 (pr-template check), #51 (go1.26.11), then #50: #17 done.
 - 2026-11-14: Merged #54 (this ledger). #37 implemented: 5-day default, since/until on every time-bounded tool. The per-agent maximum window waits for #24.
+- 2026-11-14: #37 done (#55). Replaced the pr-template check from #52 with the user's stricter version from #9 (merged): adds the Checklist section, requires every item ticked, skips Dependabot PRs.
