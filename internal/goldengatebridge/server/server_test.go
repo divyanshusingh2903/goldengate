@@ -950,3 +950,52 @@ func TestMCPRejectsHeadersThatDisagreeWithTheBody(t *testing.T) {
 		t.Errorf("matching headers: %d %s", code, raw)
 	}
 }
+
+func TestMCPTimeWindowDefaultsToFiveDaysAndWidensOnRequest(t *testing.T) {
+	e := newEnv(t)
+	day := 24 * time.Hour
+	aged := func(id, title, prKey string, age time.Duration) model.SessionPayload {
+		pr := work(model.KindPR, "github", prKey, model.StatusCreated)
+		pr.ObservedAt = now.Add(-age)
+		p := payload(id, "~/code/app", title, pr)
+		p.StartedAt, p.UpdatedAt = now.Add(-age-time.Hour), now.Add(-age)
+		return p
+	}
+	e.ingestOK(aged("fresh", "Fresh work", "o/r#1", 2*day), aged("old", "Old work", "o/r#2", 10*day))
+	cs := e.mcpSession(e.read)
+
+	_, txt := call(t, cs, "recent_activity", nil)
+	if !strings.Contains(txt, "Window: the last 5 days") || !strings.Contains(txt, "Fresh work") || strings.Contains(txt, "Old work") {
+		t.Errorf("default window must be the last 5 days:\n%s", txt)
+	}
+	_, txt = call(t, cs, "list_pull_requests", nil)
+	if !strings.Contains(txt, "o/r#1") || strings.Contains(txt, "o/r#2") {
+		t.Errorf("work tools must share the 5-day default:\n%s", txt)
+	}
+	_, txt = call(t, cs, "recent_activity", map[string]any{"days": 30})
+	if !strings.Contains(txt, "Fresh work") || !strings.Contains(txt, "Old work") {
+		t.Errorf("days must widen the window:\n%s", txt)
+	}
+	since := now.Add(-12 * day).Format(time.DateOnly)
+	until := now.Add(-7 * day).Format(time.DateOnly)
+	r, txt := call(t, cs, "list_pull_requests", map[string]any{"since": since, "until": until})
+	if strings.Contains(txt, "o/r#1") || !strings.Contains(txt, "o/r#2") || !strings.Contains(txt, "Window: "+since+" to "+until) {
+		t.Errorf("since/until must select the older range only:\n%s", txt)
+	}
+	var out struct {
+		Window struct{ Since, Until, Description string }
+	}
+	b, _ := json.Marshal(r.StructuredContent)
+	_ = json.Unmarshal(b, &out)
+	if out.Window.Description != since+" to "+until || out.Window.Since == "" {
+		t.Errorf("structured output must describe the window: %s", b)
+	}
+
+	_, txt = call(t, cs, "recent_activity", map[string]any{"project": "~/nothing-here"})
+	if !strings.Contains(txt, "no shared activity in the last 5 days") || !strings.Contains(txt, "since/until") {
+		t.Errorf("empty result must say how to look further back:\n%s", txt)
+	}
+	if r, err := cs.CallTool(context.Background(), &mcp.CallToolParams{Name: "recent_activity", Arguments: map[string]any{"since": "yesterday"}}); err == nil && !r.IsError {
+		t.Error("an unparseable since must be an error")
+	}
+}

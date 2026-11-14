@@ -85,6 +85,14 @@ func sessions(t *testing.T, s store.Store) {
 	if len(got) != 2 {
 		t.Fatalf("since filter: %v", ids(got))
 	}
+	got, _ = s.Sessions(ctx, store.SessionQuery{Until: t0.Add(time.Hour)})
+	if len(got) != 1 || got[0].Payload.SessionID != "a" {
+		t.Fatalf("until filter must be exclusive: %v", ids(got))
+	}
+	got, _ = s.Sessions(ctx, store.SessionQuery{Since: t0.Add(30 * time.Minute), Until: t0.Add(2 * time.Hour)})
+	if len(got) != 1 || got[0].Payload.SessionID != "b" {
+		t.Fatalf("since and until together: %v", ids(got))
+	}
 	got, _ = s.Sessions(ctx, store.SessionQuery{Limit: 1, Offset: 1})
 	if len(got) != 1 || got[0].Payload.SessionID != "b" {
 		t.Fatalf("paging: %v", ids(got))
@@ -203,6 +211,9 @@ func workItems(t *testing.T, s store.Store) {
 	}
 	if got, _ := s.WorkItems(ctx, store.WorkItemQuery{Since: t0.Add(90 * time.Minute)}); len(got) != 1 {
 		t.Errorf("since filter on observed_at: %d", len(got))
+	}
+	if got, _ := s.WorkItems(ctx, store.WorkItemQuery{Until: t0.Add(90 * time.Minute)}); len(got) != 1 {
+		t.Errorf("until filter on observed_at: %d", len(got))
 	}
 	if got, _ := s.WorkItems(ctx, store.WorkItemQuery{Provider: "github"}); len(got) != 1 {
 		t.Errorf("provider filter: %d", len(got))

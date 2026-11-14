@@ -43,7 +43,8 @@ type ProjectInfo struct {
 type SessionQuery struct {
 	Project string
 	Source  string
-	Since   time.Time
+	Since   time.Time // inclusive lower bound on UpdatedAt; zero means none
+	Until   time.Time // exclusive upper bound on UpdatedAt; zero means none
 	Limit   int
 	Offset  int
 }
@@ -66,7 +67,8 @@ type WorkItemQuery struct {
 	Kind     string
 	Provider string
 	Status   string
-	Since    time.Time // filters on ObservedAt
+	Since    time.Time // inclusive lower bound on ObservedAt; zero means none
+	Until    time.Time // exclusive upper bound on ObservedAt; zero means none
 	Limit    int
 	Offset   int
 }

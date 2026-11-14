@@ -46,7 +46,7 @@ Status values: `todo`, `in progress`, `in review`, `blocked`, `done`. Size: S ab
 | # | Issue | Size | After | Planned | Status | PR |
 |---|---|---|---|---|---|---|
 | 1 | #17 Write down the product principles | S | | Nov 13 | done | #50 |
-| 2 | #37 Default 5-day window, custom time ranges | S | | Nov 13 | todo | |
+| 2 | #37 Default 5-day window, custom time ranges | S | | Nov 13 | in review | |
 | 3 | #18 Named projects with members (client) | L | #17 | Nov 14 | todo | |
 | 4 | #49 Summaries: facts plus narrative | M | | Nov 15 | todo | |
 | 5 | #19 Server: stable project IDs, migration | M | #18 | Nov 16 | todo | |
@@ -92,3 +92,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-14: User's uncommitted list-tools work stashed as `list-tools wip (user)` so branches can switch cleanly. It edits `listWork` in `bridgemcp/tools.go`, which #37 also changes: expect a conflict there when the user pops it.
 - 2026-11-14: Every PR was blocked because the `main` ruleset requires a `pr-template` check that no workflow produced. Added `.github/workflows/pr-template.yml` in #52 (merged first; its only red check was the pre-existing `security` failure).
 - 2026-11-14: Merged #52 (pr-template check), #51 (go1.26.11), then #50: #17 done.
+- 2026-11-14: Merged #54 (this ledger). #37 implemented: 5-day default, since/until on every time-bounded tool. The per-agent maximum window waits for #24.
