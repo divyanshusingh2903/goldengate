@@ -2,7 +2,7 @@ module github.com/divyanshusingh2903/goldengate
 
 go 1.26.0
 
-toolchain go1.26.10
+toolchain go1.26.11
 
 require (
 	github.com/anthropics/anthropic-sdk-go v1.83.0

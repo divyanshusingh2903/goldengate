@@ -31,7 +31,15 @@ const (
 	defaultLimit = 20
 	maxLimit     = 50
 	maxDays      = 365
+	// defaultDays is how far back time-bounded tools look when the agent
+	// does not ask for a range. Agents see recent work by default and more
+	// only when they ask (DESIGN.md 1.1).
+	defaultDays = 5
 )
+
+// windowHint tells an agent how to widen a time-bounded tool's range.
+const windowHint = "pass days, or since/until as YYYY-MM-DD, to look further back (up to 365 days)"
+
 
 // New builds the MCP server with all read-only tools registered.
 func New(d Deps) *mcp.Server {
@@ -55,7 +63,7 @@ func New(d Deps) *mcp.Server {
 	})
 	ro := &mcp.ToolAnnotations{ReadOnlyHint: true, DestructiveHint: ptr(false), IdempotentHint: true, OpenWorldHint: ptr(false)}
 	mcp.AddTool(m, &mcp.Tool{Name: "recent_activity", Annotations: ro,
-		Description: "Use when the user asks what they have been working on lately. Lists recent sessions, newest first, grouped by project. Returns untrusted session-derived text."}, s.recentActivity)
+		Description: "Use when the user asks what they have been working on lately. Lists recent sessions, newest first, grouped by project. Covers the last 5 days unless you pass days or since/until. Returns untrusted session-derived text."}, s.recentActivity)
 	mcp.AddTool(m, &mcp.Tool{Name: "list_projects", Annotations: ro,
 		Description: "Use to see which projects the user shares, with last activity and session counts."}, s.listProjects)
 	mcp.AddTool(m, &mcp.Tool{Name: "get_project_context", Annotations: ro,
@@ -65,13 +73,13 @@ func New(d Deps) *mcp.Server {
 	mcp.AddTool(m, &mcp.Tool{Name: "get_session", Annotations: ro,
 		Description: "Use to read one session's summary and its work items, given an id from another tool."}, s.getSession)
 	mcp.AddTool(m, &mcp.Tool{Name: "list_commits", Annotations: ro,
-		Description: "Use when the user asks what was committed. Status 'created' is backed by a successful git commit in a session; 'mentioned' only appeared in conversation text."}, s.listCommits)
+		Description: "Use when the user asks what was committed. Status 'created' is backed by a successful git commit in a session; 'mentioned' only appeared in conversation text. Covers the last 5 days unless you pass days or since/until."}, s.listCommits)
 	mcp.AddTool(m, &mcp.Tool{Name: "list_pull_requests", Annotations: ro,
-		Description: "Use when the user asks about pull requests. Separates confirmed states (created, merged, closed) from 'mentioned' ones that no session confirmed. States are as of the session, not live."}, s.listPRs)
+		Description: "Use when the user asks about pull requests. Separates confirmed states (created, merged, closed) from 'mentioned' ones that no session confirmed. States are as of the session, not live. Covers the last 5 days unless you pass days or since/until."}, s.listPRs)
 	mcp.AddTool(m, &mcp.Tool{Name: "list_artifacts", Annotations: ro,
-		Description: "Use to see files created or modified in coding sessions. Metadata only: file contents are never stored."}, s.listArtifacts)
+		Description: "Use to see files created or modified in coding sessions. Metadata only: file contents are never stored. Covers the last 5 days unless you pass days or since/until."}, s.listArtifacts)
 	mcp.AddTool(m, &mcp.Tool{Name: "list_issues", Annotations: ro,
-		Description: "Use when the user asks about issues (GitHub, Linear, Jira). State is as of the session, not live; use the key or URL to check current state in the tracker."}, s.listIssues)
+		Description: "Use when the user asks about issues (GitHub, Linear, Jira). State is as of the session, not live; use the key or URL to check current state in the tracker. Covers the last 5 days unless you pass days or since/until."}, s.listIssues)
 	return m
 }
 
@@ -86,8 +94,100 @@ func clamp(n, def, max int) int {
 	return min(n, max)
 }
 
-func (s *srv) since(days, def int) time.Time {
-	return s.Now().Add(-time.Duration(clamp(days, def, maxDays)) * 24 * time.Hour)
+// window is the time range a time-bounded tool covers.
+type window struct {
+	Since time.Time
+	Until time.Time // the range's upper bound; equals now unless the agent passed until
+	// explicitUntil is set when the agent passed until. Only then is Until
+	// sent to the store, so sessions stamped slightly ahead of the server's
+	// clock (laptop clock skew) are not hidden from the default range.
+	explicitUntil bool
+	label         string
+}
+
+// WindowView describes the covered range in tool output.
+type WindowView struct {
+	Since       string `json:"since"`
+	Until       string `json:"until"`
+	Description string `json:"description"`
+}
+
+func (w window) view() WindowView {
+	return WindowView{Since: ts(w.Since), Until: ts(w.Until), Description: w.label}
+}
+
+func (w window) storeUntil() time.Time {
+	if w.explicitUntil {
+		return w.Until
+	}
+	return time.Time{}
+}
+
+// parseBound reads a YYYY-MM-DD date (UTC) or an RFC 3339 time. A bare date
+// used as an upper bound includes that whole day.
+func parseBound(name, v string, upper bool) (time.Time, error) {
+	v = strings.TrimSpace(v)
+	if t, err := time.Parse(time.RFC3339, v); err == nil {
+		return t, nil
+	}
+	d, err := time.Parse(time.DateOnly, v)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("%s %q is not a date: use YYYY-MM-DD or an RFC 3339 time", name, v)
+	}
+	if upper {
+		d = d.AddDate(0, 0, 1)
+	}
+	return d, nil
+}
+
+// resolveWindow turns a tool's days/since/until into a range.
+//
+// Precedence: since, when given, sets the start and days is ignored.
+// Otherwise the range is the days (default 5, at most 365) before until, or
+// before now when until is not given. The whole range may span at most 365
+// days.
+func resolveWindow(now time.Time, days int, since, until string) (window, error) {
+	if days < 0 {
+		return window{}, fmt.Errorf("days must be positive")
+	}
+	w := window{Until: now}
+	if until != "" {
+		t, err := parseBound("until", until, true)
+		if err != nil {
+			return window{}, err
+		}
+		w.Until, w.explicitUntil = t, true
+	}
+	if since != "" {
+		t, err := parseBound("since", since, false)
+		if err != nil {
+			return window{}, err
+		}
+		w.Since = t
+	} else {
+		w.Since = w.Until.Add(-time.Duration(clamp(days, defaultDays, maxDays)) * 24 * time.Hour)
+	}
+	if !w.Since.Before(w.Until) {
+		return window{}, fmt.Errorf("since must be before until")
+	}
+	if w.Until.Sub(w.Since) > maxDays*24*time.Hour {
+		return window{}, fmt.Errorf("the range spans more than %d days: narrow since/until", maxDays)
+	}
+	switch {
+	case since == "" && until == "":
+		n := clamp(days, defaultDays, maxDays)
+		w.label = fmt.Sprintf("the last %d days", n)
+		if n == 1 {
+			w.label = "the last day"
+		}
+	default:
+		w.label = fmt.Sprintf("%s to %s", w.Since.UTC().Format(time.DateOnly), w.Until.UTC().Add(-time.Nanosecond).Format(time.DateOnly))
+	}
+	return w, nil
+}
+
+func (s *srv) window(days int, since, until string) (window, error) {
+	return resolveWindow(s.Now(), days, since, until)
 }
 
 func decodeCursor(c string) (int, error) {
@@ -259,7 +359,9 @@ func workLines(now time.Time, vs []WorkItemView) []string {
 
 // RecentActivityIn is the input of recent_activity.
 type RecentActivityIn struct {
-	Days    int    `json:"days,omitempty" jsonschema:"how many days back to look (default 7, max 365)"`
+	Days    int    `json:"days,omitempty" jsonschema:"how many days back to look (default 5, max 365); ignored when since is given"`
+	Since   string `json:"since,omitempty" jsonschema:"start of the range, YYYY-MM-DD (UTC) or RFC 3339; takes precedence over days"`
+	Until   string `json:"until,omitempty" jsonschema:"end of the range, YYYY-MM-DD (that whole day is included) or RFC 3339; default now"`
 	Project string `json:"project,omitempty" jsonschema:"only this project, as shown by list_projects"`
 	Source  string `json:"source,omitempty" jsonschema:"only this tool: claude-code, codex, opencode or claude-ai"`
 	Limit   int    `json:"limit,omitempty" jsonschema:"maximum sessions to return (default 20, max 50)"`
@@ -275,6 +377,7 @@ type ProjectActivity struct {
 // RecentActivityOut is the output of recent_activity.
 type RecentActivityOut struct {
 	Notice     string            `json:"notice"`
+	Window     WindowView        `json:"window"`
 	Projects   []ProjectActivity `json:"projects"`
 	NextCursor string            `json:"next_cursor,omitempty"`
 }
@@ -285,18 +388,22 @@ func (s *srv) recentActivity(ctx context.Context, req *mcp.CallToolRequest, in R
 	if err != nil {
 		return nil, RecentActivityOut{}, err
 	}
+	w, err := s.window(in.Days, in.Since, in.Until)
+	if err != nil {
+		return nil, RecentActivityOut{}, err
+	}
 	limit := clamp(in.Limit, defaultLimit, maxLimit)
-	recs, err := s.Store.Sessions(ctx, store.SessionQuery{Project: in.Project, Source: in.Source, Since: s.since(in.Days, 7), Limit: limit + 1, Offset: off})
+	recs, err := s.Store.Sessions(ctx, store.SessionQuery{Project: in.Project, Source: in.Source, Since: w.Since, Until: w.storeUntil(), Limit: limit + 1, Offset: off})
 	if err != nil {
 		return nil, RecentActivityOut{}, fmt.Errorf("could not read sessions")
 	}
-	out := RecentActivityOut{Notice: notice}
+	out := RecentActivityOut{Notice: notice, Window: w.view()}
 	if len(recs) > limit {
 		recs, out.NextCursor = recs[:limit], encodeCursor(off+limit)
 	}
 	idx := map[string]int{}
 	now := s.Now()
-	var lines []string
+	lines := []string{"Window: " + w.label}
 	for _, r := range recs {
 		v := viewOf(r, false)
 		i, ok := idx[v.Project]
@@ -310,7 +417,7 @@ func (s *srv) recentActivity(ctx context.Context, req *mcp.CallToolRequest, in R
 		lines = append(lines, sessionLines(now, v, false)...)
 	}
 	if len(recs) == 0 {
-		lines = []string{"(no shared activity in this window)"}
+		lines = append(lines, "(no shared activity in "+w.label+"; "+windowHint+")")
 	}
 	if out.NextCursor != "" {
 		lines = append(lines, "more results: pass cursor "+out.NextCursor)
@@ -550,7 +657,9 @@ func (s *srv) getSession(ctx context.Context, req *mcp.CallToolRequest, in GetSe
 // ListWorkIn is the common input of the list_* work tools.
 type ListWorkIn struct {
 	Project  string `json:"project,omitempty" jsonschema:"only this project"`
-	Days     int    `json:"days,omitempty" jsonschema:"how many days back (default depends on the tool, max 365)"`
+	Days     int    `json:"days,omitempty" jsonschema:"how many days back to look (default 5, max 365); ignored when since is given"`
+	Since    string `json:"since,omitempty" jsonschema:"start of the range, YYYY-MM-DD (UTC) or RFC 3339; takes precedence over days"`
+	Until    string `json:"until,omitempty" jsonschema:"end of the range, YYYY-MM-DD (that whole day is included) or RFC 3339; default now"`
 	Status   string `json:"status,omitempty" jsonschema:"filter by status: mentioned, created, updated, merged, closed, completed or canceled"`
 	Provider string `json:"provider,omitempty" jsonschema:"issues only: github, linear or jira"`
 	Source   string `json:"source,omitempty" jsonschema:"artifacts only: claude-code, codex, opencode or claude-ai"`
@@ -561,18 +670,23 @@ type ListWorkIn struct {
 // ListWorkOut is the common output of the list_* work tools.
 type ListWorkOut struct {
 	Notice     string         `json:"notice"`
+	Window     WindowView     `json:"window"`
 	Items      []WorkItemView `json:"items"`
 	NextCursor string         `json:"next_cursor,omitempty"`
 }
 
-func (s *srv) listWork(ctx context.Context, req *mcp.CallToolRequest, tool, kind string, defDays int, in ListWorkIn) (*mcp.CallToolResult, ListWorkOut, error) {
+func (s *srv) listWork(ctx context.Context, req *mcp.CallToolRequest, tool, kind string, in ListWorkIn) (*mcp.CallToolResult, ListWorkOut, error) {
 	s.audit(ctx, req, tool, in.Project)
 	off, err := decodeCursor(in.Cursor)
 	if err != nil {
 		return nil, ListWorkOut{}, err
 	}
+	w, err := s.window(in.Days, in.Since, in.Until)
+	if err != nil {
+		return nil, ListWorkOut{}, err
+	}
 	limit := clamp(in.Limit, defaultLimit, maxLimit)
-	q := store.WorkItemQuery{Project: in.Project, Kind: kind, Status: in.Status, Since: s.since(in.Days, defDays)}
+	q := store.WorkItemQuery{Project: in.Project, Kind: kind, Status: in.Status, Since: w.Since, Until: w.storeUntil()}
 	if kind == model.KindIssue {
 		q.Provider = in.Provider
 	}
@@ -593,7 +707,7 @@ func (s *srv) listWork(ctx context.Context, req *mcp.CallToolRequest, tool, kind
 			break
 		}
 	}
-	out := ListWorkOut{Notice: notice, Items: []WorkItemView{}}
+	out := ListWorkOut{Notice: notice, Window: w.view(), Items: []WorkItemView{}}
 	if off > len(items) {
 		off = len(items)
 	}
@@ -604,7 +718,12 @@ func (s *srv) listWork(ctx context.Context, req *mcp.CallToolRequest, tool, kind
 	for _, it := range items {
 		out.Items = append(out.Items, workView(it))
 	}
-	lines := workLines(s.Now(), out.Items)
+	lines := []string{"Window: " + w.label}
+	if len(out.Items) == 0 {
+		lines = append(lines, "(none in "+w.label+"; "+windowHint+")")
+	} else {
+		lines = append(lines, workLines(s.Now(), out.Items)...)
+	}
 	if out.NextCursor != "" {
 		lines = append(lines, "more results: pass cursor "+out.NextCursor)
 	}
@@ -621,17 +740,17 @@ func hasSource(ss []store.SessionKey, source string) bool {
 }
 
 func (s *srv) listCommits(ctx context.Context, req *mcp.CallToolRequest, in ListWorkIn) (*mcp.CallToolResult, ListWorkOut, error) {
-	return s.listWork(ctx, req, "list_commits", model.KindCommit, 14, in)
+	return s.listWork(ctx, req, "list_commits", model.KindCommit, in)
 }
 
 func (s *srv) listPRs(ctx context.Context, req *mcp.CallToolRequest, in ListWorkIn) (*mcp.CallToolResult, ListWorkOut, error) {
-	return s.listWork(ctx, req, "list_pull_requests", model.KindPR, 30, in)
+	return s.listWork(ctx, req, "list_pull_requests", model.KindPR, in)
 }
 
 func (s *srv) listArtifacts(ctx context.Context, req *mcp.CallToolRequest, in ListWorkIn) (*mcp.CallToolResult, ListWorkOut, error) {
-	return s.listWork(ctx, req, "list_artifacts", model.KindFile, 14, in)
+	return s.listWork(ctx, req, "list_artifacts", model.KindFile, in)
 }
 
 func (s *srv) listIssues(ctx context.Context, req *mcp.CallToolRequest, in ListWorkIn) (*mcp.CallToolResult, ListWorkOut, error) {
-	return s.listWork(ctx, req, "list_issues", model.KindIssue, 14, in)
+	return s.listWork(ctx, req, "list_issues", model.KindIssue, in)
 }
