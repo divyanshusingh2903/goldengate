@@ -11,8 +11,8 @@ This file lets any Claude Code session (or person) pick up the Product v2 work w
 
 _Last updated 2026-11-14. Update this section whenever a row in the queue changes._
 
-**Progress:** 3 of 31 scheduled issues done (plus 2 stretch). Phase 1, Foundations, is under way.
-**In progress:** #49 Summaries: facts plus narrative, size M, planned Nov 15. **Next after it:** #19 Server: stable project IDs, migration.
+**Progress:** 4 of 31 scheduled issues done (plus 2 stretch). Phase 1, Foundations, is under way.
+**Next up:** #19 Server: stable project IDs, migration, size M, planned Nov 16. Its dependency, #18, is done.
 
 ### Done
 
@@ -21,6 +21,7 @@ _Last updated 2026-11-14. Update this section whenever a row in the queue change
 | #17 | DESIGN.md 1.1 product principles, 1.2 glossary, revised non-goals, M7 milestone | #50 | 2026-11-14 |
 | #37 | MCP time-bounded tools default to the last 5 days; `since`/`until` on every one; results state their window; store queries gain `Until` | #55 | 2026-11-14 |
 | #18 | Named projects: `[[projects]]` with members in the config (membership shares, deny still wins, one folder per project), legacy allow rules read as projects, `goldengate projects` commands, TUI `n`/`N` | #59 | 2026-11-14 |
+| #49 | Summaries split into facts (local rules) and a narrative (model passages at short/standard/detailed, or the user's); separate narrative caps; MCP list tools return an abstract, `get_session` the full narrative | #60 | 2026-11-14 |
 
 Supporting changes (not queue issues):
 
@@ -89,7 +90,7 @@ Status values: `todo`, `in progress`, `in review`, `blocked`, `done`. Size: S ab
 | 1 | #17 Write down the product principles | S | | Nov 13 | done | #50 |
 | 2 | #37 Default 5-day window, custom time ranges | S | | Nov 13 | done | #55 |
 | 3 | #18 Named projects with members (client) | L | #17 | Nov 14 | done | #59 |
-| 4 | #49 Summaries: facts plus narrative | M | | Nov 15 | in progress | |
+| 4 | #49 Summaries: facts plus narrative | M | | Nov 15 | done | #60 |
 | 5 | #19 Server: stable project IDs, migration | M | #18 | Nov 16 | todo | |
 | 6 | #24 Server: agents and grants model | M | #19 | Nov 16 | todo | |
 | 7 | #25 Enforce grants in every MCP tool | M | #24 | Nov 17 | todo | |
@@ -139,3 +140,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-14: Merged #57 (ledger status section). Roadmap page now reads progress from a status JSON block and shows #17 and #37 done; loop step 11 updates it.
 - 2026-11-14: Merged #58 (roadmap page kept in step with the ledger). #18 implemented: `[[projects]]` in the config (members are what is shared, one folder per project, `exclude_sources` per member), legacy `allow`/`deny_source` read as projects, `goldengate projects` commands, TUI `n`/`N`. Server project ids stay as they are until #19.
 - 2026-11-14: #18 done (#59). #49 implemented: summaries split into facts (always the local rules) and a narrative (model passages with short/standard/detailed lengths, or the user's); separate narrative caps on client and server; list MCP tools return an abstract and only `get_session` the full narrative.
+- 2026-11-14: #49 done (#60). Roadmap page updated. Next: #19.
