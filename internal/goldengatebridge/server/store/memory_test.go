@@ -202,3 +202,86 @@ func TestSQLiteUpgradesAPreProjectsDatabaseInPlace(t *testing.T) {
 		t.Fatalf("only the untouched project is left: %+v", ps)
 	}
 }
+
+func TestSQLiteGivesExistingReadersADefaultAgentWithEveryProject(t *testing.T) {
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "old.db")
+	db, err := sql.Open("sqlite", "file:"+path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// A database from before agents: sessions in two projects, a read token,
+	// an ingest token and an OAuth client, none with an agent.
+	body := func(id, project string) string {
+		return `{"source":"claude-code","session_id":"` + id + `","project":"` + project + `","level":"summary","started_at":"2026-01-05T08:00:00Z","updated_at":"2026-01-05T09:00:00Z","summary":{"title":"T","turn_count":1,"duration_sec":1},"content_hash":"` + strings.Repeat("b", 64) + `","redactions":{}}`
+	}
+	if _, err := db.ExecContext(ctx, preProjectsSchema+`
+		CREATE TABLE tokens(id TEXT PRIMARY KEY, hash TEXT NOT NULL UNIQUE, scope TEXT NOT NULL, label TEXT NOT NULL,
+		  created_at INTEGER NOT NULL, expires_at INTEGER NOT NULL, revoked_at INTEGER NOT NULL, last_used_at INTEGER NOT NULL,
+		  client_id TEXT NOT NULL DEFAULT '', family TEXT NOT NULL DEFAULT '');
+		CREATE TABLE oauth_clients(id TEXT PRIMARY KEY, name TEXT NOT NULL, secret_hash TEXT NOT NULL, redirect_uris TEXT NOT NULL,
+		  created_at INTEGER NOT NULL, last_used_at INTEGER NOT NULL);
+		INSERT INTO tokens VALUES('tok_r','hr','read','assistant',1,0,0,0,'','');
+		INSERT INTO tokens VALUES('tok_i','hi','ingest','laptop',1,0,0,0,'','');
+		INSERT INTO tokens VALUES('tok_o','ho','read','oauth',1,0,0,0,'cl_1','f');
+		INSERT INTO oauth_clients VALUES('cl_1','Assistant','','["https://a.example/cb"]',1,0);
+		INSERT INTO sessions VALUES('claude-code','a','~/code/app',1,1,?);
+		INSERT INTO sessions VALUES('claude-code','b','~/code/site',1,1,?)`, body("a", "~/code/app"), body("b", "~/code/site")); err != nil {
+		t.Fatal(err)
+	}
+	_ = db.Close()
+
+	s, err := store.OpenSQLite(ctx, path)
+	if err != nil {
+		t.Fatalf("opening a pre-agents database: %v", err)
+	}
+	as, err := s.ListAgents(ctx)
+	if err != nil || len(as) != 1 || as[0].ID != store.DefaultAgentID || as[0].Name != store.DefaultAgentName {
+		t.Fatalf("existing readers become the Default agent: %+v %v", as, err)
+	}
+	if g, _ := s.Grants(ctx, store.DefaultAgentID); strings.Join(g, ",") != "~/code/app,~/code/site" {
+		t.Fatalf("it is granted every project that existed: %v", g)
+	}
+	for hash, want := range map[string]string{"hr": store.DefaultAgentID, "ho": store.DefaultAgentID, "hi": ""} {
+		if tk, err := s.TokenByHash(ctx, hash); err != nil || tk.AgentID != want {
+			t.Fatalf("token %s: %+v %v", hash, tk, err)
+		}
+	}
+	if c, err := s.OAuthClient(ctx, "cl_1"); err != nil || c.AgentID != store.DefaultAgentID {
+		t.Fatalf("client: %+v %v", c, err)
+	}
+	// A project that arrives after the upgrade is granted to no one, also
+	// across a restart: the upgrade grants only once.
+	p := &model.SessionPayload{Version: model.PayloadV2, Source: "claude-code", SessionID: "n", Project: "~/code/new", ProjectID: "p_new1", ProjectName: "New",
+		Level: model.LevelSummary, StartedAt: time.Now().Add(-time.Hour), UpdatedAt: time.Now(), ContentHash: strings.Repeat("b", 64), Summary: &model.Summary{Title: "N"}}
+	if err := s.PutSession(ctx, p, time.Now(), store.Limits{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.RevokeGrant(ctx, store.DefaultAgentID, "~/code/site"); err != nil {
+		t.Fatal(err)
+	}
+	_ = s.Close()
+	s, err = store.OpenSQLite(ctx, path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = s.Close() }()
+	if g, _ := s.Grants(ctx, store.DefaultAgentID); strings.Join(g, ",") != "~/code/app" {
+		t.Fatalf("a restart grants nothing and restores nothing: %v", g)
+	}
+}
+
+func TestSQLiteWithoutReadersGetsNoDefaultAgent(t *testing.T) {
+	ctx := context.Background()
+	s, err := store.OpenSQLite(ctx, filepath.Join(t.TempDir(), "new.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = s.Close() }()
+	if err := s.CreateToken(ctx, store.Token{ID: "tok_i", Hash: "hi", Scope: "ingest", CreatedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+	if as, _ := s.ListAgents(ctx); len(as) != 0 {
+		t.Fatalf("no reader, no agent: %+v", as)
+	}
+}

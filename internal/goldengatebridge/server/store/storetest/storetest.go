@@ -36,6 +36,7 @@ func Run(t *testing.T, newStore func(t *testing.T) store.Store) {
 	for name, fn := range map[string]func(*testing.T, store.Store){
 		"sessions":    sessions,
 		"projects":    projects,
+		"agents":      agents,
 		"quota":       quota,
 		"search":      search,
 		"work items":  workItems,
@@ -658,5 +659,159 @@ func projects(t *testing.T, s store.Store) {
 	must(t, s.PutSession(ctx, v2("codex", "q2", "~/m2", "p_quota", "Q", "two", t0), t0, q))
 	if err := s.PutSession(ctx, v2("codex", "q3", "~/m3", "p_quota", "Q", "three", t0), t0, q); !errors.Is(err, store.ErrQuota) {
 		t.Errorf("quota across members: %v", err)
+	}
+}
+
+func agents(t *testing.T, s store.Store) {
+	ctx := context.Background()
+	lim := store.Limits{}
+	must(t, s.PutSession(ctx, v2("claude-code", "a", "~/code/app", "p_app1", "App", "Alpha", t0), t0, lim))
+	must(t, s.PutSession(ctx, v2("claude-code", "b", "~/code/site", "p_site1", "Site", "Beta", t0), t0, lim))
+	must(t, s.PutSession(ctx, payload("claude-code", "c", "~/old", "Gamma", t0), t0, lim))
+
+	if as, err := s.ListAgents(ctx); err != nil || len(as) != 0 {
+		t.Fatalf("a store with no readers has no agents: %+v %v", as, err)
+	}
+	must(t, s.CreateAgent(ctx, store.Agent{ID: "agt_1", Name: "ChatGPT", CreatedAt: t0}))
+	must(t, s.CreateAgent(ctx, store.Agent{ID: "agt_2", Name: "Claude", CreatedAt: t0.Add(time.Minute), MaxDays: 30}))
+	if err := s.CreateAgent(ctx, store.Agent{ID: "agt_3", Name: "chatgpt", CreatedAt: t0}); !errors.Is(err, store.ErrDuplicate) {
+		t.Errorf("agent names are unique ignoring case: %v", err)
+	}
+	if err := s.CreateAgent(ctx, store.Agent{ID: "agt_1", Name: "Other", CreatedAt: t0}); !errors.Is(err, store.ErrDuplicate) {
+		t.Errorf("agent ids are unique: %v", err)
+	}
+	as, err := s.ListAgents(ctx)
+	must(t, err)
+	if len(as) != 2 || as[0].Name != "ChatGPT" || as[1].Name != "Claude" || as[1].MaxDays != 30 || !as[0].CreatedAt.Equal(t0) {
+		t.Fatalf("agents oldest first: %+v", as)
+	}
+	if _, err := s.Agent(ctx, "agt_nope"); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("unknown agent: %v", err)
+	}
+
+	// Nothing is granted until someone grants it.
+	for _, id := range []string{"agt_1", "agt_2"} {
+		if g, err := s.Grants(ctx, id); err != nil || len(g) != 0 {
+			t.Fatalf("a new agent sees nothing: %v %v", g, err)
+		}
+	}
+	must(t, s.Grant(ctx, "agt_1", "p_app1", t0))
+	must(t, s.Grant(ctx, "agt_1", "p_app1", t0)) // twice is fine
+	must(t, s.Grant(ctx, "agt_1", "~/old", t0))
+	must(t, s.Grant(ctx, "agt_2", "p_site1", t0))
+	if err := s.Grant(ctx, "agt_1", "p_nope", t0); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("granting an unknown project: %v", err)
+	}
+	if err := s.Grant(ctx, "agt_nope", "p_app1", t0); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("granting to an unknown agent: %v", err)
+	}
+	grants := func(id string) string {
+		g, err := s.Grants(ctx, id)
+		must(t, err)
+		return strings.Join(g, ",")
+	}
+	if grants("agt_1") != "p_app1,~/old" || grants("agt_2") != "p_site1" {
+		t.Fatalf("grants: %q %q", grants("agt_1"), grants("agt_2"))
+	}
+	must(t, s.RevokeGrant(ctx, "agt_1", "p_app1"))
+	must(t, s.RevokeGrant(ctx, "agt_1", "p_app1")) // and so is revoking twice
+	if grants("agt_1") != "~/old" {
+		t.Fatalf("after revoke: %q", grants("agt_1"))
+	}
+
+	// A new project is granted to nobody.
+	must(t, s.PutSession(ctx, v2("claude-code", "d", "~/code/new", "p_new1", "New", "Delta", t0), t0, lim))
+	if strings.Contains(grants("agt_1")+grants("agt_2"), "p_new1") {
+		t.Fatal("a new project must not be granted automatically")
+	}
+	// A project that gets an id (its session moves into a project created by
+	// that request) keeps the grants its old id had; moving into an existing
+	// project changes nothing.
+	must(t, s.PutSession(ctx, v2("claude-code", "c", "~/old", "p_old1", "Old", "Gamma", t0), t0, lim))
+	if grants("agt_1") != "p_old1" {
+		t.Fatalf("grants follow a project to its new id: %q", grants("agt_1"))
+	}
+	must(t, s.PutSession(ctx, v2("claude-code", "c", "~/old", "p_site1", "Site", "Gamma", t0), t0, lim))
+	if grants("agt_1") != "" || grants("agt_2") != "p_site1" {
+		t.Fatalf("moving into an existing project grants nothing new, and the emptied project's grants go: %q %q", grants("agt_1"), grants("agt_2"))
+	}
+	// Deleting a project removes its grants.
+	if _, err := s.DeleteProject(ctx, "p_site1"); err != nil {
+		t.Fatal(err)
+	}
+	if grants("agt_2") != "" {
+		t.Fatalf("grants on a deleted project: %q", grants("agt_2"))
+	}
+
+	// Rename and window.
+	must(t, s.UpdateAgent(ctx, store.Agent{ID: "agt_1", Name: "ChatGPT work", MaxDays: 7}))
+	if a, err := s.Agent(ctx, "agt_1"); err != nil || a.Name != "ChatGPT work" || a.MaxDays != 7 || !a.CreatedAt.Equal(t0) {
+		t.Fatalf("update: %+v %v", a, err)
+	}
+	if err := s.UpdateAgent(ctx, store.Agent{ID: "agt_1", Name: "claude"}); !errors.Is(err, store.ErrDuplicate) {
+		t.Errorf("renaming onto another agent: %v", err)
+	}
+	if err := s.UpdateAgent(ctx, store.Agent{ID: "agt_nope", Name: "x"}); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("updating an unknown agent: %v", err)
+	}
+
+	// Readers always belong to an agent.
+	must(t, s.CreateToken(ctx, store.Token{ID: "tok_r1", Hash: "hr1", Scope: "read", CreatedAt: t0, AgentID: "agt_1"}))
+	must(t, s.CreateToken(ctx, store.Token{ID: "tok_r2", Hash: "hr2", Scope: "read", CreatedAt: t0}))
+	must(t, s.CreateToken(ctx, store.Token{ID: "tok_i", Hash: "hi", Scope: "ingest", CreatedAt: t0}))
+	must(t, s.CreateOAuthClient(ctx, store.OAuthClient{ID: "cl_1", Name: "Assistant", RedirectURIs: []string{"https://a.example/cb"}, CreatedAt: t0}))
+	must(t, s.CreateToken(ctx, store.Token{ID: "tok_o", Hash: "ho", Scope: "read", CreatedAt: t0, ClientID: "cl_1", Family: "f"}))
+	tok := func(hash string) store.Token {
+		tk, err := s.TokenByHash(ctx, hash)
+		must(t, err)
+		return *tk
+	}
+	if tok("hr1").AgentID != "agt_1" || tok("hr2").AgentID != store.DefaultAgentID || tok("hi").AgentID != "" || tok("ho").AgentID != store.DefaultAgentID {
+		t.Fatalf("token agents: %q %q %q %q", tok("hr1").AgentID, tok("hr2").AgentID, tok("hi").AgentID, tok("ho").AgentID)
+	}
+	def, err := s.Agent(ctx, store.DefaultAgentID)
+	if err != nil || def.Name != store.DefaultAgentName || grants(store.DefaultAgentID) != "" {
+		t.Fatalf("the default agent exists once a reader needs it, with no grants: %+v %v %q", def, err, grants(store.DefaultAgentID))
+	}
+	if a, err := s.EnsureDefaultAgent(ctx, t0.Add(time.Hour)); err != nil || !a.CreatedAt.Equal(def.CreatedAt) {
+		t.Fatalf("ensuring the default agent twice keeps the first: %+v %v", a, err)
+	}
+	if c, err := s.OAuthClient(ctx, "cl_1"); err != nil || c.AgentID != store.DefaultAgentID {
+		t.Fatalf("client agent: %+v %v", c, err)
+	}
+
+	// Moving an OAuth client to an agent takes its tokens along.
+	must(t, s.SetOAuthClientAgent(ctx, "cl_1", "agt_2"))
+	if c, _ := s.OAuthClient(ctx, "cl_1"); c.AgentID != "agt_2" || tok("ho").AgentID != "agt_2" {
+		t.Fatalf("client and its tokens move together: %+v %q", c, tok("ho").AgentID)
+	}
+	if err := s.SetOAuthClientAgent(ctx, "cl_1", "agt_nope"); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("moving to an unknown agent: %v", err)
+	}
+	if err := s.SetOAuthClientAgent(ctx, "cl_nope", "agt_2"); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("moving an unknown client: %v", err)
+	}
+	must(t, s.CreateToken(ctx, store.Token{ID: "tok_o2", Hash: "ho2", Scope: "read", CreatedAt: t0, ClientID: "cl_1", Family: "f"}))
+	if tok("ho2").AgentID != "agt_2" {
+		t.Fatalf("a client's new tokens belong to its agent: %q", tok("ho2").AgentID)
+	}
+
+	// Deleting an agent removes its grants and clients and revokes its tokens.
+	must(t, s.Grant(ctx, "agt_2", "p_app1", t0))
+	n, err := s.DeleteAgent(ctx, "agt_2", t0.Add(time.Hour))
+	if err != nil || n != 2 {
+		t.Fatalf("delete agent revokes its tokens: %d %v", n, err)
+	}
+	if tok("ho").Active(t0.Add(2*time.Hour)) || tok("ho2").Active(t0.Add(2*time.Hour)) || !tok("hr1").Active(t0.Add(2*time.Hour)) {
+		t.Fatal("only the deleted agent's tokens are revoked")
+	}
+	if _, err := s.OAuthClient(ctx, "cl_1"); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("the agent's OAuth clients go with it: %v", err)
+	}
+	if grants("agt_2") != "" {
+		t.Errorf("grants of a deleted agent: %q", grants("agt_2"))
+	}
+	if _, err := s.DeleteAgent(ctx, "agt_2", t0); !errors.Is(err, store.ErrNotFound) {
+		t.Errorf("deleting twice: %v", err)
 	}
 }
