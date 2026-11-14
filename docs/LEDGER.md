@@ -12,7 +12,7 @@ This file lets any Claude Code session (or person) pick up the Product v2 work w
 _Last updated 2026-11-14. Update this section whenever a row in the queue changes._
 
 **Progress:** 10 of 31 scheduled issues done (plus 2 stretch). Phases 1 (Foundations) and 2 (Per-agent access) are complete.
-**Next up:** #20 Local inbox: pending, approved, excluded, size L, planned Nov 19 (first issue of phase 3). Its dependency, #17, is done.
+**In progress:** #20 Local inbox: pending, approved, excluded, size L, planned Nov 19 (first issue of phase 3). **Next after it:** #29 Session include, exclude, retract.
 
 ### Done
 
@@ -46,6 +46,7 @@ Supporting changes (not queue issues):
 - **#49 follow-ups**: the user's own narrative is honoured through `summarize.Options.UserNarrative`, but nothing stores or edits one until #30. Model summaries pushed before #49 (bullets in `description`) are not counted as stale; they gain a narrative when their session changes or the length setting is changed and the user re-summarizes. `get_work_item` (#36) should return the full narrative like `get_session`.
 - **Upgrade order (#19)**: upgrade the server before the client. A server with #19 accepts old clients, but an older server rejects payloads from a newer client (unknown fields). In the server tables the `project` column holds a project id (for data stored before ids, the old key).
 - **Per-agent access, as it stands after phase 2**: grants are enforced in every MCP tool (#25). On an upgraded server `Default` keeps the projects it could see at upgrade time and is not granted later ones; on a fresh install `goldengate init` sets `Default` to see every shared project. Not built yet: creating, renaming or removing agents and minting tokens from the TUI (CLI only), deleting an OAuth application from the client side, and `get_work_item` (#36), which should return the full narrative like `get_session`. "View as agent" is computed on the laptop from what that computer synced, so it does not list sessions synced from another computer. The web UI (#48) should reuse the four agents methods on `tui.Backend`.
+- **Decision made by the user for #20 (2026-11-14)**: a project shared from now on waits in the inbox (manual first). Reviewing and pressing Send on the TUI Sync screen is the approval; `goldengate sync`, hooks and timers send only approved sessions. Auto-approve is a per-project switch. Still to build: a TUI inbox list with per-session approve and exclude (the backend methods `Inbox` and `InboxDecide` exist), and showing or toggling a project's auto-approve in the TUI (belongs with #31).
 - **Decisions made by the user for #26 (2026-11-14)**: (1) only the admin secret may manage agents, grants and agent tokens; the TUI (#28) should ask for it once per run and keep it in memory only. (2) On a server with no agents yet, `goldengate init` makes the first assistant (`Default`) see every shared project through the per-agent `all_projects` switch; agents added later start with nothing.
 
 ## The loop
@@ -106,7 +107,7 @@ Status values: `todo`, `in progress`, `in review`, `blocked`, `done`. Size: S ab
 | 8 | #26 API and CLI for agents and grants | M | #24 | Nov 17 | done | #65 |
 | 9 | #27 OAuth consent picks agent and projects | M | #24, #25 | Nov 18 | done | #66 |
 | 10 | #28 TUI Agents screen, view as agent | M | #26 | Nov 18 | done | #67 |
-| 11 | #20 Local inbox: pending, approved, excluded | L | #17 | Nov 19 | todo | |
+| 11 | #20 Local inbox: pending, approved, excluded | L | #17 | Nov 19 | in progress | |
 | 12 | #29 Session include, exclude, retract | S | #20 | Nov 20 | todo | |
 | 13 | #30 Editable summaries that stay edited | M | #20 | Nov 20 | todo | |
 | 14 | #21 Threads from work items and branch names | M | | Nov 21 | todo | |
@@ -158,3 +159,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-14: #27 done (#66). #28 implemented: TUI Agents screen (`5`) with a projects by agents grid, review before apply, view as agent (computed locally), agent details with token revoke; four new `tui.Backend` methods. Not included: creating, renaming or removing agents and minting tokens from the TUI (CLI only for now), and deleting OAuth applications.
 - 2026-11-14: #28 done (#67). Phase 2 (per-agent access) is complete: #19, #24, #25, #26, #27, #28. Roadmap page updated. Next: #20.
 - 2026-11-14: Ledger refreshed after phase 2 (#69): supporting PRs #61 and #68 listed, loose ends rewritten for the state after #25 to #28. Roadmap page republished.
+- 2026-11-14: #20 implemented: per-session decisions in the state DB, `auto_approve` per project, sync sends only approved sessions for projects under review, `goldengate inbox`, `sync --approve`, `projects auto`, `share add --auto-approve`; configurations from before the inbox keep auto-approve on. Existing tests that share and then sync now share with `--auto-approve`.
