@@ -1,0 +1,30 @@
+┌ goldengate  1 Projects  2 Sync  3 Server  4 Settings [5 Agents] ─ ● connected bridge.example.com ┐
+│ Sources ● CC Claude Code 142  ● CX Codex 37  ● OC OpenCode 58  ○ AI claude.ai                    │
+├──────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Which assistant sees which project                                                               │
+│                                                                                                  │
+│ Each assistant you connect is an agent with its own list of projects.                            │
+│ Changing that list needs your server's admin secret. It is kept in                               │
+│ memory until you quit and is never written anywhere.                                             │
+│                                                                                                  │
+│ Admin secret                                                                                     │
+│ >                                                                                                │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+├──────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ enter continue  esc back                                                                         │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘

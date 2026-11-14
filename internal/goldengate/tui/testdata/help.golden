@@ -1,4 +1,4 @@
-┌ goldengate [1 Projects] 2 Sync  3 Server  4 Settings  ─────────── ● connected bridge.example.com ┐
+┌ goldengate [1 Projects] 2 Sync  3 Server  4 Settings  5 Agents  ─ ● connected bridge.example.com ┐
 │ [All 8]  Shared ┌ Keys ────────────────────────────────────────────────────────┐                 │
 ├─────────────────│ Projects                                                     │─────────────────┤
 │ / search project│ ↑ ↓ j k   move   (pgup/pgdn, g/G jump)                       │                 │
@@ -17,7 +17,7 @@
 │                 │ p enter   preview exactly what would be sent                 │                 │
 │                 │ P         paranoid: raw payloads, every string               │ Preview]        │
 │                 │ Everywhere                                                   │                 │
-│                 │ 1-4 tab   projects / sync / server / settings                │                 │
+│                 │ 1-5 tab   projects / sync / server / settings / agents       │                 │
 │                 │ s         sync: review first, then send                      │                 │
 │                 │ r         refresh                                            │ · changed       │
 │                 │ ?         this help                                          │w                │

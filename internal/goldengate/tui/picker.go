@@ -608,9 +608,9 @@ func (m *Model) header(screenName string) string {
 		}
 		return brand
 	}
-	cur := map[screen]int{scrProjects: 1, scrPreview: 1, scrSync: 2, scrServer: 3, scrSettings: 4}[m.scr]
+	cur := map[screen]int{scrProjects: 1, scrPreview: 1, scrSync: 2, scrServer: 3, scrSettings: 4, scrAgents: 5}[m.scr]
 	parts := []string{brand, " "}
-	for i, name := range []string{"Projects", "Sync", "Server", "Settings"} {
+	for i, name := range []string{"Projects", "Sync", "Server", "Settings", "Agents"} {
 		n := i + 1
 		label := fmt.Sprintf("%d %s", n, name)
 		m.clickText(0, label, func(m *Model) tea.Cmd { return m.goTo(n) })
@@ -622,6 +622,11 @@ func (m *Model) header(screenName string) string {
 	}
 	if m.scr == scrPreview {
 		parts = append(parts, m.th.Dim.Render(" › preview"))
+	}
+	// When the tabs and the server badge do not both fit, the wordmark goes
+	// first: the tabs are how one moves around and the badge is state.
+	if lipgloss.Width(strings.Join(parts, ""))+lipgloss.Width(m.serverBadge())+6 > m.w {
+		parts = parts[2:]
 	}
 	return strings.Join(parts, "")
 }

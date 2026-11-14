@@ -69,6 +69,7 @@ Run `goldengate` in a terminal. The first run starts a short setup (find your to
 | Sync (`2`, or `s`) | Two steps. **Review** runs at once: every session is read and redacted exactly as it would be sent, and nothing leaves the machine. **Send** (`enter`) sends exactly what was reviewed. Progress follows each session; a failed project can be retried and skips what already arrived. |
 | Server (`3`) | Health, token check, what the server holds (code or chat), `D` delete a project from it |
 | Settings (`4`) | Theme, share level, look-back window, sources, redaction patterns, commit verification |
+| Agents (`5`) | A grid of projects by assistants: `space` (or a click) ticks which assistant sees which project, `enter` shows the changes for review before anything is applied. `v` shows exactly what the highlighted assistant can read right now; `d` its tokens, with `R` to revoke one. Asks for the admin secret once per run and keeps it in memory only. |
 
 The card beside the list says in words what happens to the highlighted project: "Not shared: nothing from this project leaves your machine", "Shared · never synced", "Shared · up to date". Every project and session carries the tag of the tool it came from: `CC` Claude Code, `CX` Codex, `OC` OpenCode (coding sessions), `AI` claude.ai, `GPT` ChatGPT (chat exports).
 

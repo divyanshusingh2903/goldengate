@@ -280,4 +280,83 @@ type Backend interface {
 	SummarizerModels(ctx context.Context, provider, baseURL string) ([]string, error)
 	Detect(ctx context.Context) ([]ToolStatus, error)
 	Init(ctx context.Context, p InitParams) (InitResult, error)
+
+	// The agents methods manage which assistant sees which project. Each
+	// takes the admin secret, which the UI holds in memory for the run and
+	// the backend uses for that call only; it is never stored.
+
+	// Agents lists the agents, their grants and tokens, and the projects the
+	// server holds.
+	Agents(ctx context.Context, admin string) (AgentsInfo, error)
+	// ApplyGrants applies reviewed changes in order and stops at the first failure.
+	ApplyGrants(ctx context.Context, admin string, changes []GrantChange) error
+	// AgentView is what an agent can read right now.
+	AgentView(ctx context.Context, admin, agentID string) (AgentView, error)
+	// RevokeAgentToken revokes one of an agent's read tokens.
+	RevokeAgentToken(ctx context.Context, admin, tokenID string) error
+}
+
+// AgentsInfo is the Agents screen's content.
+type AgentsInfo struct {
+	Agents   []AgentInfo
+	Projects []AgentProject
+}
+
+// AgentInfo is one assistant and what it may see.
+type AgentInfo struct {
+	ID, Name    string
+	AllProjects bool            // sees every project, including future ones
+	MaxDays     int             // 0: no history limit of its own
+	Grants      map[string]bool // by project id
+	Tokens      []AgentToken
+	Clients     []string  // OAuth applications connected as this agent
+	LastUsed    time.Time // newest use of any of its tokens; zero: never
+}
+
+// AgentToken is a read token of an agent (never the secret).
+type AgentToken struct {
+	ID, Label string
+	Created   time.Time
+	LastUsed  time.Time
+}
+
+// AgentProject is a project the server holds.
+type AgentProject struct {
+	ID, Name string
+	Sessions int
+}
+
+// GrantChange is one change to what an agent may see: a project granted or
+// revoked, or, with All set, the agent's "every project" switch.
+type GrantChange struct {
+	AgentID, AgentName     string
+	ProjectID, ProjectName string
+	All                    bool
+	Grant                  bool
+}
+
+// AgentView is what an agent can read right now: its projects, and the
+// sessions and work items of the last AgentViewDays days in them.
+type AgentView struct {
+	Agent    AgentInfo
+	Projects []AgentProject
+	Sessions []AgentViewSession
+	Work     []AgentViewWork
+	// Note says where the view comes from and what it may miss.
+	Note string
+}
+
+// AgentViewDays is the window "view as agent" shows, the same default the
+// assistant's tools use.
+const AgentViewDays = 5
+
+// AgentViewSession is one session summary the agent can read.
+type AgentViewSession struct {
+	Project, Source, Title, Abstract string
+	Updated                          time.Time
+}
+
+// AgentViewWork is one work item the agent can read.
+type AgentViewWork struct {
+	Project, Kind, Key, Status string
 }

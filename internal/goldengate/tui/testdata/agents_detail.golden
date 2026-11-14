@@ -1,0 +1,30 @@
+┌ goldengate  1 Projects  2 Sync  3 Server  4 Settings [5 Agents] ─ ● connected bridge.example.com ┐
+│ Sources ● CC Claude Code 142  ● CX Codex 37  ● OC OpenCode 58  ○ AI claude.ai                    │
+├──────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ ChatGPT  agt_gpt                                                                                 │
+│ Sees: Pharmfindr                                                                                 │
+│ History: the last 30 days at most                                                                │
+│ Last used: 26h ago                                                                               │
+│                                                                                                  │
+│ Read tokens (2)                                                                                  │
+│▌ chatgpt connector         tok_aaaa1111  created 3d ago  used 26h ago [R Revoke]                 │
+│  (no label)                tok_bbbb2222  created 24h ago  never used                             │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+│                                                                                                  │
+├──────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ ↑/↓ select  R revoke token  v view as agent  esc back                                            │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘

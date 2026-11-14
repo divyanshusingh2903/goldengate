@@ -37,6 +37,8 @@ func (m *Model) typing() bool {
 		return m.st.editing || m.st.dd != menuNone
 	case scrWizard:
 		return m.wz.step == wizServer && !m.wz.done && m.wz.mode != 2
+	case scrAgents:
+		return m.ag.phase == agAsk && m.snap.Server != ""
 	}
 	return false
 }
@@ -82,13 +84,13 @@ func (m *Model) onKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			if m.scr == scrProjects {
 				return m.quit()
 			}
-		case "1", "2", "3", "4":
+		case "1", "2", "3", "4", "5":
 			if m.scr != scrWizard {
 				return m, m.goTo(int(s[0] - '0'))
 			}
 		case "tab":
 			if m.scr != scrWizard && m.scr != scrPreview {
-				next := map[screen]int{scrProjects: 2, scrSync: 3, scrServer: 4, scrSettings: 1}[m.scr]
+				next := map[screen]int{scrProjects: 2, scrSync: 3, scrServer: 4, scrSettings: 5, scrAgents: 1}[m.scr]
 				return m, m.goTo(next)
 			}
 		case "s":
@@ -106,6 +108,8 @@ func (m *Model) onKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.onKeyServer(k)
 	case scrSettings:
 		return m.onKeySettings(k)
+	case scrAgents:
+		return m.onKeyAgents(k)
 	case scrWizard:
 		return m.onKeyWizard(k)
 	}
@@ -123,6 +127,8 @@ func (m *Model) goTo(n int) tea.Cmd {
 		return m.openServer()
 	case 4:
 		return m.openSettings()
+	case 5:
+		return m.openAgents()
 	}
 	return nil
 }

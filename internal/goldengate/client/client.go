@@ -204,13 +204,14 @@ func (c *Client) MintToken(ctx context.Context, scope, label, expiresIn string) 
 
 // TokenInfo describes a stored token (no secret).
 type TokenInfo struct {
-	ID        string     `json:"id"`
-	Scope     string     `json:"scope"`
-	Label     string     `json:"label"`
-	AgentID   string     `json:"agent_id"` // read tokens: the agent it belongs to
-	CreatedAt time.Time  `json:"created_at"`
-	RevokedAt *time.Time `json:"revoked_at"`
-	Active    bool       `json:"active"`
+	ID         string     `json:"id"`
+	Scope      string     `json:"scope"`
+	Label      string     `json:"label"`
+	AgentID    string     `json:"agent_id"` // read tokens: the agent it belongs to
+	CreatedAt  time.Time  `json:"created_at"`
+	RevokedAt  *time.Time `json:"revoked_at"`
+	LastUsedAt *time.Time `json:"last_used_at"`
+	Active     bool       `json:"active"`
 }
 
 // ListTokens lists tokens (admin token required).

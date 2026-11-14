@@ -307,6 +307,25 @@ func (s *State) SessionKeys(ctx context.Context, project string) ([][2]string, e
 	return out, rows.Err()
 }
 
+// Payloads returns the payload last pushed for every remembered session that
+// has one: the already-redacted JSON the server received.
+func (s *State) Payloads(ctx context.Context) ([][]byte, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT payload FROM sessions WHERE payload<>'' ORDER BY source, session_id`)
+	if err != nil {
+		return nil, fmt.Errorf("state: payloads: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out [][]byte
+	for rows.Next() {
+		var p string
+		if err := rows.Scan(&p); err != nil {
+			return nil, fmt.Errorf("state: payloads: %w", err)
+		}
+		out = append(out, []byte(p))
+	}
+	return out, rows.Err()
+}
+
 // ForgetUnder drops the remembered sessions of a project and of everything
 // filed beneath it (its worktrees), after the server project was deleted.
 func (s *State) ForgetUnder(ctx context.Context, project string) error {
