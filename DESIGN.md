@@ -4,25 +4,58 @@
 
 An open-source, self-hosted tool that lets any MCP-capable assistant (Gemini, ChatGPT, Claude, etc.) know what you have been working on in your AI coding tools, with **you choosing exactly which projects are shared**.
 
-- **Sources (read from your machine):** Claude Code, Codex CLI, OpenCode, plus an imported claude.ai data export.
+- **Sources (read from your machine):** Claude Code, Codex CLI, OpenCode, plus imported claude.ai and ChatGPT data exports. Cursor is planned.
 - **Ingester + TUI (runs locally):** discovers sessions, lets you pick which project folders to share, redacts, summarizes, pushes.
 - **Server (runs in the cloud, e.g. Cloud Run):** stores summaries, serves them over MCP (streamable HTTP) to a remote assistant.
 
 The MCP server never reaches into your machine. Data only flows laptop -> server, and only for projects you explicitly allowed.
 
-## 1. Goals and non-goals
+## 1. Goals, principles and non-goals
+
+Users
+- Developers, and other professionals, who use both AI coding tools (Claude Code, Codex, Cursor, OpenCode) and AI chat apps (claude.ai, ChatGPT), and want the assistants they talk to to know what they have been doing in the others.
+- The set of sources is deliberately small: a few data-producing tools, each supported well, rather than many supported loosely.
 
 Goals
-1. Give a remote assistant a useful, current picture of the user's daily work across several coding tools.
-2. Opt-in by default: **nothing is shared until the user selects it** in the TUI (or config).
+1. Keep every assistant the user connects up to date on the user's work across their coding tools and chat apps.
+2. Opt-in by default: **nothing is shared until the user selects it** in the TUI, the web UI or config.
 3. Raw transcripts never leave the machine by default; only redacted, compact summaries do.
 4. Single static Go binaries, easy self-hosting, permissive license (Apache-2.0).
 5. Parsers are isolated and fixture-tested, because session file formats are not stable public contracts.
 
+### 1.1 Product principles
+
+These decide every product question. When a feature conflicts with one of them, the principle wins and the feature changes.
+
+1. **Only humans decide what is shared.** Assistants (agents) are readers. They never write, update or add to what Golden Gate holds: there are no write tools on the MCP endpoint, and nothing an agent says changes what is shared.
+2. **Automation means the user's own rules, never a model's judgement.** Rules match deterministic facts (folder, repo remote, source, chat project, work-item key, branch) and the user writes or approves each one. A model may *suggest* (a project for a session, a rule to create), but a suggestion only ever lands in the inbox for a human to accept. Model output never feeds a rule and never publishes anything by itself.
+3. **Deny by default; nothing leaves that the user would not approve.** New sessions wait in the inbox until a person or an approved rule lets them out. A broad rule that starts matching a new kind of thing asks first. Deny always beats allow and beats rules. Every automatic send leaves a receipt, and anything sent can be retracted.
+4. **What an agent receives is a summary of history plus the work it touched.** Each session becomes deterministic *facts* (work items with evidence: Linear and Jira issues, GitHub and GitLab issues and pull requests, commits; files, commands, outcomes, time) and a *narrative*. The narrative is written by the local rules (short, the default), by a model the user opted into (passages with real detail), or by the user, whose edit always wins. Work items tie sessions from different tools into one piece of work.
+5. **Agents see recent work by default and more only when they ask.** The default window is the last 5 days; every time-bounded MCP tool accepts a custom range. This is separate from how far back the client uploads.
+6. **Each agent sees only what it was given.** Agents are first-class: each connected assistant (a read token or an OAuth client) is a named agent with an explicit list of projects. A new project is visible to no agent until the user grants it.
+7. **Projects are what the user names, not folders.** A project is a space such as "Golden Gate" or "Job search". Folders, repos, chat conversations and work-item keys are its members. Suggestions about membership follow principle 2.
+8. **Every screen says in words what leaves the machine, and when.** Previews show the exact payload. This holds in the TUI and the web UI alike.
+
+### 1.2 Glossary
+
+| Word | Meaning |
+|---|---|
+| **Source** | A tool that produces activity: Claude Code, Codex, Cursor, OpenCode, claude.ai, ChatGPT. |
+| **Session** | One coding session or one chat conversation. Its raw content stays on the machine. |
+| **Work item** | A commit, pull or merge request, or issue (GitHub, GitLab, Linear, Jira) a session created, changed or mentioned (section 4.1). |
+| **Thread** | The sessions, across tools, that share a work item: one piece of work. |
+| **Project** | A space the user names, made of members (folders, repos, chat groupings, work-item prefixes). |
+| **Agent** | A connected assistant that reads over MCP, with its own grants. |
+| **Inbox** | New and changed sessions waiting for a human (or an approved rule) to decide. |
+| **Rule** | A user-approved instruction that approves matching sessions into a project automatically. |
+| **Receipt** | The record of what an automatic send sent, to which projects and agents, and which rule sent it. |
+| **Facts / narrative** | The two parts of a session summary: deterministic facts, and prose written by the rules, a model or the user. |
+
 Non-goals
 - No multi-tenant hosted service. One deployment = one user (or one team that trusts each other).
 - No real-time streaming of in-progress sessions.
-- No attempt to scrape claude.ai; only the official data export is supported.
+- No agent write-back. Agents cannot add to, edit or delete shared memory, even on the user's request through the agent; the user does that in Golden Gate.
+- No scraping of claude.ai or ChatGPT. Chats arrive only through actions the user takes: the official data exports, and (if the share-link spike approves it) importing one conversation from a share URL the user created and pasted. Golden Gate never crawls, never uses the user's browser session or cookies, and never fetches anything the user did not hand it.
 
 ## 2. Components
 
@@ -189,6 +222,8 @@ Deduplication
 - The same commit or PR shows up in many sessions. The server keeps work items in their own table keyed by `(project, kind, key)` with `first_seen`, `last_seen`, status, and links to the sessions that mention them.
 
 ## 5. Selection model (what is shared)
+
+> This section describes the current folder-based model. Under the principles in 1.1 it is being replaced by named projects with members, a per-session inbox, and user-approved rules (milestone M7). Deny-by-default and deny-wins carry over unchanged.
 
 Default policy: **deny all**. A project is shared only if matched by an allow rule.
 
@@ -511,6 +546,7 @@ Residual risks to document honestly
 4. **M4 TUI:** wizard, project picker, preview, sync, server screens, settings, help.
 5. **M5 deploy:** Firestore/Postgres stores, Dockerfile, Cloud Run deploy script + domain docs, docker-compose with Caddy, hook/schedule installers.
 6. **M6 release:** goreleaser (linux/macOS/windows, amd64/arm64) with checksums, cosign signatures, SBOM and provenance, Homebrew tap, `go install`, README with screenshots/GIF and the 7.1 quickstart, SECURITY.md (with the hardening checklist complete), CONTRIBUTING.md, Apache-2.0 LICENSE, adapter-authoring guide.
+7. **M7 product v2:** the principles in 1.1 made real: named projects and stable project IDs, per-agent access, the inbox with session-level curation, editable summaries and user-approved rules with receipts, facts and narrative summaries built around work items (with GitLab and cross-tool threads), the 5-day default window, chat connectors (per-conversation sharing, incremental export import, share links), a Cursor adapter, and a local web UI (`goldengate ui`). Tracked in the GitHub "Product v2" milestone.
 
 ## 14. Acceptance criteria
 
