@@ -675,7 +675,7 @@ func (b *tuiBackend) Server(ctx context.Context) (tui.ServerInfo, error) {
 	}
 	info.TokenOK = true
 	for _, p := range ps {
-		info.Projects = append(info.Projects, tui.RemoteProject{Label: p.Project, Sessions: p.Sessions, Last: p.LastActivity})
+		info.Projects = append(info.Projects, tui.RemoteProject{ID: p.ID, Label: p.Project, Sessions: p.Sessions, Last: p.LastActivity})
 	}
 	sort.Slice(info.Projects, func(i, j int) bool { return info.Projects[i].Last.After(info.Projects[j].Last) })
 	return info, nil
@@ -699,7 +699,22 @@ func (b *tuiBackend) DeleteServerProject(ctx context.Context, label string) erro
 		return err
 	}
 	defer func() { _ = st.Close() }()
-	// still-shared sessions must upload again on the next sync
+	// still-shared sessions must upload again on the next sync: every member
+	// of a named project, or the one folder the reference names
+	for _, p := range cfg.Projects {
+		if p.ID != label && p.Name != label {
+			continue
+		}
+		for _, m := range p.Members {
+			if strings.ContainsAny(m.Path, "*?[{") {
+				continue
+			}
+			if err := st.ForgetUnder(ctx, b.a.localKey(m.Path)); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
 	return st.ForgetUnder(ctx, b.a.localKey(label))
 }
 

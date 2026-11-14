@@ -25,15 +25,30 @@ type Limits struct {
 	MaxSessionsTotal      int
 }
 
-// SessionRecord is a stored payload plus when it arrived.
+// Project is a named project: a stable id and the name shown to people and
+// assistants. A project that arrived in the older payload shape (no id) has
+// its key as both id and name.
+type Project struct {
+	ID        string
+	Name      string
+	CreatedAt time.Time
+	UpdatedAt time.Time // last rename or first sight
+}
+
+// SessionRecord is a stored payload plus when it arrived. ProjectID and
+// ProjectName are the project it is filed under, with its current name
+// (which can be newer than the name inside the payload).
 type SessionRecord struct {
-	Payload    model.SessionPayload
-	IngestedAt time.Time
+	Payload     model.SessionPayload
+	IngestedAt  time.Time
+	ProjectID   string
+	ProjectName string
 }
 
 // ProjectInfo describes what the server holds for one project.
 type ProjectInfo struct {
-	Project      string
+	ID           string
+	Project      string // display name
 	Sessions     int
 	Sources      map[string]int
 	LastActivity time.Time
@@ -41,7 +56,7 @@ type ProjectInfo struct {
 
 // SessionQuery selects sessions, newest first by UpdatedAt.
 type SessionQuery struct {
-	Project string
+	Project string // a project id (see ResolveProject)
 	Source  string
 	Since   time.Time // inclusive lower bound on UpdatedAt; zero means none
 	Until   time.Time // exclusive upper bound on UpdatedAt; zero means none
@@ -51,7 +66,8 @@ type SessionQuery struct {
 
 // WorkItemRecord is a de-duplicated work item for one project.
 type WorkItemRecord struct {
-	Project   string
+	ProjectID string
+	Project   string // display name
 	Item      model.WorkItem
 	FirstSeen time.Time
 	LastSeen  time.Time
@@ -63,7 +79,7 @@ type SessionKey struct{ Source, ID string }
 
 // WorkItemQuery selects work items, newest ObservedAt first.
 type WorkItemQuery struct {
-	Project  string
+	Project  string // a project id (see ResolveProject)
 	Kind     string
 	Provider string
 	Status   string
@@ -111,12 +127,21 @@ type AuditEvent struct {
 // Store is the work-data store plus the auth store.
 type Store interface {
 	PutSession(ctx context.Context, p *model.SessionPayload, now time.Time, lim Limits) error
-	DeleteProject(ctx context.Context, project string) (int, error)
+	// DeleteProject removes what ref names and returns the number of sessions
+	// deleted. ref is tried as a project id (the whole project), then as a
+	// member key (only the sessions that came from that folder or chat
+	// grouping, in whatever project), then as a project name.
+	DeleteProject(ctx context.Context, ref string) (int, error)
+	// ResolveProject finds a project by id, else by name (case-insensitive;
+	// the most recently active wins), else by a member key. ErrNotFound if
+	// nothing matches.
+	ResolveProject(ctx context.Context, ref string) (Project, error)
 	// DeleteSession removes sessions with this id; an empty source matches any source.
 	DeleteSession(ctx context.Context, source, id string) (int, error)
 	ListProjects(ctx context.Context) ([]ProjectInfo, error)
 	Sessions(ctx context.Context, q SessionQuery) ([]SessionRecord, error)
 	GetSession(ctx context.Context, source, id string) (*SessionRecord, error)
+	// Search matches query against the indexed text; project is a project id or empty.
 	Search(ctx context.Context, query, project string, limit int) ([]SessionRecord, error)
 	WorkItems(ctx context.Context, q WorkItemQuery) ([]WorkItemRecord, error)
 	Close() error

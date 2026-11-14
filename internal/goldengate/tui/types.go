@@ -43,7 +43,7 @@ type Row struct {
 	LastSync time.Time // latest push; zero when nothing was ever pushed
 	State    ShareState
 	Reason   string
-	Virtual  bool // a chat export bucket rather than a folder
+	Virtual  bool   // a chat export bucket rather than a folder
 	Project  string // the named project this folder or chat grouping belongs to; "" when none
 }
 
@@ -188,6 +188,7 @@ type SyncOpts struct {
 
 // RemoteProject is something the server holds.
 type RemoteProject struct {
+	ID       string // the server's project id; "" when the server has none
 	Label    string
 	Sessions int
 	Last     time.Time
@@ -223,7 +224,7 @@ type SummarizeSettings struct {
 	// Length is how long a narrative the model writes: "short", "standard"
 	// ("" means standard) or "detailed".
 	Length    string
-	KeySource                string // where the API key comes from: "keyring", "$ANTHROPIC_API_KEY", "none" (read-only)
+	KeySource string // where the API key comes from: "keyring", "$ANTHROPIC_API_KEY", "none" (read-only)
 }
 
 // ToolStatus is a detected coding tool, for the wizard.
@@ -259,7 +260,9 @@ type Backend interface {
 	Plan(ctx context.Context, o SyncOpts) (PlanInfo, error)
 	Sync(ctx context.Context, dry bool, o SyncOpts, emit func(SyncEvent)) error
 	Server(ctx context.Context) (ServerInfo, error)
-	DeleteServerProject(ctx context.Context, label string) error
+	// DeleteServerProject deletes a project from the server; ref is its id
+	// (RemoteProject.ID) or, without one, its label.
+	DeleteServerProject(ctx context.Context, ref string) error
 	Settings(ctx context.Context) (Settings, error)
 	SaveSettings(ctx context.Context, s Settings) error
 	// SetSummarizerKey stores a provider's API key in the OS keyring; an

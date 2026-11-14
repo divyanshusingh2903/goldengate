@@ -80,9 +80,19 @@ func (s *Summary) Closing() string {
 // SessionPayload is the unit that leaves the machine. It is built only by the
 // summarize package and sent only through sync.Push.
 type SessionPayload struct {
-	Source      string     `json:"source"`
-	SessionID   string     `json:"session_id"`
-	Project     string     `json:"project"` // scrubbed project key, e.g. ~/code/foo
+	// Version is the payload shape: PayloadV2 carries ProjectID and
+	// ProjectName. Zero is the older shape, where the project key alone
+	// names the project; servers keep accepting it.
+	Version   int    `json:"v,omitempty"`
+	Source    string `json:"source"`
+	SessionID string `json:"session_id"`
+	// Project is the scrubbed key of the folder or chat grouping the session
+	// came from, e.g. ~/code/foo: a member of the named project.
+	Project string `json:"project"`
+	// ProjectID is the stable id of the named project the session is filed
+	// under, and ProjectName its current display name. Both or neither.
+	ProjectID   string     `json:"project_id,omitempty"`
+	ProjectName string     `json:"project_name,omitempty"`
 	Level       string     `json:"level"`
 	Origin      string     `json:"origin,omitempty"` // OriginCLI, or empty for a chat
 	StartedAt   time.Time  `json:"started_at"`
@@ -92,6 +102,27 @@ type SessionPayload struct {
 	WorkItems   []WorkItem `json:"work_items,omitempty"`
 	ContentHash string     `json:"content_hash"`
 	Redactions  Redactions `json:"redactions"`
+}
+
+// PayloadV2 is the payload version that names a project by id.
+const PayloadV2 = 2
+
+// ProjectRef is the id the session is filed under: ProjectID, or for the
+// older shape the project key itself.
+func (p *SessionPayload) ProjectRef() string {
+	if p.ProjectID != "" {
+		return p.ProjectID
+	}
+	return p.Project
+}
+
+// ProjectLabel is the project's display name: ProjectName, or for the older
+// shape the project key.
+func (p *SessionPayload) ProjectLabel() string {
+	if p.ProjectName != "" {
+		return p.ProjectName
+	}
+	return p.Project
 }
 
 // Redactions counts redaction events by kind. Never contains the secrets.

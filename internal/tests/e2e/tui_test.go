@@ -439,10 +439,10 @@ func TestBackendServerScreenAndRemoteDelete(t *testing.T) {
 	l.must(nil, "share", "add", "~/projects/demo")
 	l.must(nil, "sync")
 	info, err := be.Server(ctx)
-	if err != nil || !info.Configured || !info.Healthy || !info.TokenOK || info.TokenStore != "memory" || len(info.Projects) != 1 || info.Projects[0].Label != "~/projects/demo" {
+	if err != nil || !info.Configured || !info.Healthy || !info.TokenOK || info.TokenStore != "memory" || len(info.Projects) != 1 || info.Projects[0].Label != "demo" || !strings.HasPrefix(info.Projects[0].ID, "p_") {
 		t.Fatalf("%+v %v", info, err)
 	}
-	if err := be.DeleteServerProject(ctx, "~/projects/demo"); err != nil {
+	if err := be.DeleteServerProject(ctx, info.Projects[0].ID); err != nil {
 		t.Fatal(err)
 	}
 	if ps, _ := b.st.ListProjects(ctx); len(ps) != 0 {
@@ -693,7 +693,7 @@ func TestFirstRunInTheTUI(t *testing.T) {
 	d.mustSee("✓  ~/projects/demo", "✓ Sent 1 session to")
 
 	ps, _ := b.st.ListProjects(context.Background())
-	if len(ps) != 1 || ps[0].Project != "~/projects/demo" {
+	if len(ps) != 1 || ps[0].Project != "demo" {
 		t.Fatalf("the server holds exactly the chosen project: %+v", ps)
 	}
 	if held := everythingTheServerHolds(t, b); strings.Contains(held, "client-secret") || strings.Contains(held, "TOPSECRET") {
@@ -701,7 +701,7 @@ func TestFirstRunInTheTUI(t *testing.T) {
 	}
 	// the assistant, using the token the wizard showed, sees the project
 	cs := mcpSession(t, b, readToken)
-	if txt := tool(t, cs, "list_projects", nil); !strings.Contains(txt, "~/projects/demo") || strings.Contains(txt, "client-secret") {
+	if txt := tool(t, cs, "list_projects", nil); !strings.Contains(txt, "- demo: 1 sessions") || !strings.Contains(txt, "(id p_") || strings.Contains(txt, "client-secret") {
 		t.Fatalf("list_projects:\n%s", txt)
 	}
 	d.key("enter")

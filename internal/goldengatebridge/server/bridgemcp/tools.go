@@ -40,7 +40,6 @@ const (
 // windowHint tells an agent how to widen a time-bounded tool's range.
 const windowHint = "pass days, or since/until as YYYY-MM-DD, to look further back (up to 365 days)"
 
-
 // New builds the MCP server with all read-only tools registered.
 func New(d Deps) *mcp.Server {
 	if d.Now == nil {
@@ -207,6 +206,20 @@ func decodeCursor(c string) (int, error) {
 
 func encodeCursor(n int) string { return base64.RawURLEncoding.EncodeToString([]byte(strconv.Itoa(n))) }
 
+// projectID turns what an assistant passed as project (an id, a name, or the
+// key of a folder in it) into the project id the store filters by. Empty
+// stays empty (no filter); an unknown reference is returned as is and so
+// matches nothing.
+func (s *srv) projectID(ctx context.Context, ref string) string {
+	if ref == "" {
+		return ""
+	}
+	if p, err := s.Store.ResolveProject(ctx, ref); err == nil {
+		return p.ID
+	}
+	return ref
+}
+
 func (s *srv) audit(ctx context.Context, req *mcp.CallToolRequest, tool, project string) {
 	e := store.AuditEvent{At: s.Now(), Action: "mcp:" + tool, Project: project}
 	if req != nil && req.Extra != nil && req.Extra.TokenInfo != nil {
@@ -232,7 +245,9 @@ func result(lines []string) *mcp.CallToolResult {
 type SessionView struct {
 	ID           string   `json:"id"`
 	Source       string   `json:"source"`
-	Project      string   `json:"project"`
+	Project      string   `json:"project"`          // the project's name
+	ProjectID    string   `json:"project_id"`       // stable across renames
+	Folder       string   `json:"folder,omitempty"` // the folder or chat grouping it came from, when that is not the project's name
 	Title        string   `json:"title"`
 	UpdatedAt    string   `json:"updated_at"`
 	Level        string   `json:"level"`
@@ -258,7 +273,10 @@ type SessionView struct {
 // added only by withNarrative, so list tools stay small.
 func viewOf(r store.SessionRecord, full bool) SessionView {
 	p := r.Payload
-	v := SessionView{ID: p.SessionID, Source: p.Source, Project: p.Project, UpdatedAt: ts(p.UpdatedAt), Level: p.Level, Origin: p.Origin, Title: p.TitleOnly}
+	v := SessionView{ID: p.SessionID, Source: p.Source, Project: projectName(r), ProjectID: r.ProjectID, UpdatedAt: ts(p.UpdatedAt), Level: p.Level, Origin: p.Origin, Title: p.TitleOnly}
+	if p.Project != v.Project {
+		v.Folder = p.Project
+	}
 	if sm := p.Summary; sm != nil {
 		// older records carry goal/outcome/last_assistant; the accessors read either
 		v.Title, v.Outcomes, v.GitBranch = sm.Title, sm.OutcomeList(), sm.GitBranch
@@ -273,6 +291,15 @@ func viewOf(r store.SessionRecord, full bool) SessionView {
 		}
 	}
 	return v
+}
+
+// projectName is the record's project name; records built without a store
+// (tests) fall back to what the payload says.
+func projectName(r store.SessionRecord) string {
+	if r.ProjectName != "" {
+		return r.ProjectName
+	}
+	return r.Payload.ProjectLabel()
 }
 
 // withNarrative is the full view plus the whole narrative (get_session).
@@ -332,7 +359,8 @@ func sessionLines(now time.Time, v SessionView, detail bool) []string {
 
 // WorkItemView is the tool-facing form of a work item.
 type WorkItemView struct {
-	Project    string   `json:"project"`
+	Project    string   `json:"project"` // the project's name
+	ProjectID  string   `json:"project_id"`
 	Kind       string   `json:"kind"`
 	Provider   string   `json:"provider,omitempty"`
 	Key        string   `json:"key"`
@@ -349,7 +377,7 @@ type WorkItemView struct {
 
 func workView(r store.WorkItemRecord) WorkItemView {
 	it := r.Item
-	v := WorkItemView{Project: r.Project, Kind: it.Kind, Provider: it.Provider, Key: it.Key, Title: it.Title, URL: it.URL, Status: it.Status,
+	v := WorkItemView{Project: r.Project, ProjectID: r.ProjectID, Kind: it.Kind, Provider: it.Provider, Key: it.Key, Title: it.Title, URL: it.URL, Status: it.Status,
 		Confirmed: model.IsEvidenceBacked(it.Status), RawState: it.RawState, ObservedAt: ts(it.ObservedAt),
 		AsOf: "state as of the session that last touched it, not live"}
 	seen := map[string]bool{}
@@ -395,7 +423,7 @@ type RecentActivityIn struct {
 	Days    int    `json:"days,omitempty" jsonschema:"how many days back to look (default 5, max 365); ignored when since is given"`
 	Since   string `json:"since,omitempty" jsonschema:"start of the range, YYYY-MM-DD (UTC) or RFC 3339; takes precedence over days"`
 	Until   string `json:"until,omitempty" jsonschema:"end of the range, YYYY-MM-DD (that whole day is included) or RFC 3339; default now"`
-	Project string `json:"project,omitempty" jsonschema:"only this project, as shown by list_projects"`
+	Project string `json:"project,omitempty" jsonschema:"only this project: its name or id, as shown by list_projects"`
 	Source  string `json:"source,omitempty" jsonschema:"only this tool: claude-code, codex, opencode or claude-ai"`
 	Limit   int    `json:"limit,omitempty" jsonschema:"maximum sessions to return (default 20, max 50)"`
 	Cursor  string `json:"cursor,omitempty" jsonschema:"opaque cursor from a previous result's next_cursor"`
@@ -403,8 +431,9 @@ type RecentActivityIn struct {
 
 // ProjectActivity groups sessions of one project.
 type ProjectActivity struct {
-	Project  string        `json:"project"`
-	Sessions []SessionView `json:"sessions"`
+	Project   string        `json:"project"`
+	ProjectID string        `json:"project_id"`
+	Sessions  []SessionView `json:"sessions"`
 }
 
 // RecentActivityOut is the output of recent_activity.
@@ -416,7 +445,8 @@ type RecentActivityOut struct {
 }
 
 func (s *srv) recentActivity(ctx context.Context, req *mcp.CallToolRequest, in RecentActivityIn) (*mcp.CallToolResult, RecentActivityOut, error) {
-	s.audit(ctx, req, "recent_activity", in.Project)
+	pid := s.projectID(ctx, in.Project)
+	s.audit(ctx, req, "recent_activity", pid)
 	off, err := decodeCursor(in.Cursor)
 	if err != nil {
 		return nil, RecentActivityOut{}, err
@@ -426,7 +456,7 @@ func (s *srv) recentActivity(ctx context.Context, req *mcp.CallToolRequest, in R
 		return nil, RecentActivityOut{}, err
 	}
 	limit := clamp(in.Limit, defaultLimit, maxLimit)
-	recs, err := s.Store.Sessions(ctx, store.SessionQuery{Project: in.Project, Source: in.Source, Since: w.Since, Until: w.storeUntil(), Limit: limit + 1, Offset: off})
+	recs, err := s.Store.Sessions(ctx, store.SessionQuery{Project: pid, Source: in.Source, Since: w.Since, Until: w.storeUntil(), Limit: limit + 1, Offset: off})
 	if err != nil {
 		return nil, RecentActivityOut{}, fmt.Errorf("could not read sessions")
 	}
@@ -439,11 +469,11 @@ func (s *srv) recentActivity(ctx context.Context, req *mcp.CallToolRequest, in R
 	lines := []string{"Window: " + w.label}
 	for _, r := range recs {
 		v := viewOf(r, false)
-		i, ok := idx[v.Project]
+		i, ok := idx[v.ProjectID]
 		if !ok {
 			i = len(out.Projects)
-			idx[v.Project] = i
-			out.Projects = append(out.Projects, ProjectActivity{Project: v.Project})
+			idx[v.ProjectID] = i
+			out.Projects = append(out.Projects, ProjectActivity{Project: v.Project, ProjectID: v.ProjectID})
 			lines = append(lines, "## "+clean(v.Project))
 		}
 		out.Projects[i].Sessions = append(out.Projects[i].Sessions, v)
@@ -467,7 +497,8 @@ type ListProjectsIn struct {
 
 // ProjectView describes a shared project.
 type ProjectView struct {
-	Project      string         `json:"project"`
+	Project      string         `json:"project"` // the project's name
+	ID           string         `json:"id"`      // stable across renames; every tool's project argument accepts it
 	Sessions     int            `json:"sessions"`
 	Sources      map[string]int `json:"sources"`
 	LastActivity string         `json:"last_activity"`
@@ -492,8 +523,8 @@ func (s *srv) listProjects(ctx context.Context, req *mcp.CallToolRequest, in Lis
 		if in.Source != "" && p.Sources[in.Source] == 0 {
 			continue
 		}
-		out.Projects = append(out.Projects, ProjectView{Project: p.Project, Sessions: p.Sessions, Sources: p.Sources, LastActivity: ts(p.LastActivity)})
-		lines = append(lines, fmt.Sprintf("- %s: %d sessions, last activity %s", clean(p.Project), p.Sessions, ago(now, p.LastActivity)))
+		out.Projects = append(out.Projects, ProjectView{Project: p.Project, ID: p.ID, Sessions: p.Sessions, Sources: p.Sources, LastActivity: ts(p.LastActivity)})
+		lines = append(lines, projectLine(now, p))
 	}
 	if len(lines) == 0 {
 		lines = []string{"(no shared projects)"}
@@ -505,13 +536,14 @@ func (s *srv) listProjects(ctx context.Context, req *mcp.CallToolRequest, in Lis
 
 // ProjectContextIn is the input of get_project_context.
 type ProjectContextIn struct {
-	Project string `json:"project" jsonschema:"project as shown by list_projects"`
+	Project string `json:"project" jsonschema:"project name or id, as shown by list_projects"`
 }
 
 // ProjectContextOut is the output of get_project_context.
 type ProjectContextOut struct {
 	Notice          string         `json:"notice"`
 	Project         string         `json:"project"`
+	ProjectID       string         `json:"project_id"`
 	Sessions        int            `json:"sessions"`
 	LastActivity    string         `json:"last_activity,omitempty"`
 	RecentSessions  []SessionView  `json:"recent_sessions"`
@@ -521,18 +553,20 @@ type ProjectContextOut struct {
 }
 
 func (s *srv) projectContext(ctx context.Context, req *mcp.CallToolRequest, in ProjectContextIn) (*mcp.CallToolResult, ProjectContextOut, error) {
-	s.audit(ctx, req, "get_project_context", in.Project)
+	pid := s.projectID(ctx, in.Project)
+	s.audit(ctx, req, "get_project_context", pid)
 	if in.Project == "" {
 		return nil, ProjectContextOut{}, fmt.Errorf("project is required")
 	}
-	all, err := s.Store.Sessions(ctx, store.SessionQuery{Project: in.Project, Limit: 200})
+	all, err := s.Store.Sessions(ctx, store.SessionQuery{Project: pid, Limit: 200})
 	if err != nil {
 		return nil, ProjectContextOut{}, fmt.Errorf("could not read sessions")
 	}
 	if len(all) == 0 {
 		return nil, ProjectContextOut{}, fmt.Errorf("no shared project named %q", clean(in.Project))
 	}
-	out := ProjectContextOut{Notice: notice, Project: in.Project, Sessions: len(all), LastActivity: ts(all[0].Payload.UpdatedAt),
+	name := projectName(all[0])
+	out := ProjectContextOut{Notice: notice, Project: name, ProjectID: pid, Sessions: len(all), LastActivity: ts(all[0].Payload.UpdatedAt),
 		RecentSessions: []SessionView{}, FrequentFiles: []string{}, CommonCommands: []string{}, UnfinishedItems: []WorkItemView{}}
 	files, cmds := map[string]int{}, map[string]int{}
 	for i, r := range all {
@@ -550,7 +584,7 @@ func (s *srv) projectContext(ctx context.Context, req *mcp.CallToolRequest, in P
 	}
 	out.FrequentFiles, out.CommonCommands = topKeys(files, 10), topKeys(cmds, 8)
 
-	items, err := s.Store.WorkItems(ctx, store.WorkItemQuery{Project: in.Project, Limit: 200})
+	items, err := s.Store.WorkItems(ctx, store.WorkItemQuery{Project: pid, Limit: 200})
 	if err != nil {
 		return nil, out, fmt.Errorf("could not read work items")
 	}
@@ -560,7 +594,7 @@ func (s *srv) projectContext(ctx context.Context, req *mcp.CallToolRequest, in P
 		}
 	}
 	now := s.Now()
-	lines := []string{fmt.Sprintf("Project %s: %d shared sessions, last activity %s", clean(in.Project), out.Sessions, ago(now, all[0].Payload.UpdatedAt)), "", "Recent sessions:"}
+	lines := []string{fmt.Sprintf("Project %s: %d shared sessions, last activity %s", clean(name), out.Sessions, ago(now, all[0].Payload.UpdatedAt)), "", "Recent sessions:"}
 	for _, v := range out.RecentSessions {
 		lines = append(lines, sessionLines(now, v, true)...)
 	}
@@ -608,7 +642,7 @@ func topKeys(m map[string]int, n int) []string {
 // SearchWorkIn is the input of search_work.
 type SearchWorkIn struct {
 	Query   string `json:"query" jsonschema:"keywords; every word must match (prefix match)"`
-	Project string `json:"project,omitempty" jsonschema:"only this project"`
+	Project string `json:"project,omitempty" jsonschema:"only this project: its name or id, as shown by list_projects"`
 	Limit   int    `json:"limit,omitempty" jsonschema:"maximum results (default 10, max 50)"`
 }
 
@@ -619,11 +653,12 @@ type SearchWorkOut struct {
 }
 
 func (s *srv) searchWork(ctx context.Context, req *mcp.CallToolRequest, in SearchWorkIn) (*mcp.CallToolResult, SearchWorkOut, error) {
-	s.audit(ctx, req, "search_work", in.Project)
+	pid := s.projectID(ctx, in.Project)
+	s.audit(ctx, req, "search_work", pid)
 	if strings.TrimSpace(in.Query) == "" {
 		return nil, SearchWorkOut{}, fmt.Errorf("query is required")
 	}
-	recs, err := s.Store.Search(ctx, in.Query, in.Project, clamp(in.Limit, 10, maxLimit))
+	recs, err := s.Store.Search(ctx, in.Query, pid, clamp(in.Limit, 10, maxLimit))
 	if err != nil {
 		return nil, SearchWorkOut{}, fmt.Errorf("search failed")
 	}
@@ -665,9 +700,9 @@ func (s *srv) getSession(ctx context.Context, req *mcp.CallToolRequest, in GetSe
 		s.audit(ctx, req, "get_session", "")
 		return nil, GetSessionOut{}, fmt.Errorf("no such session")
 	}
-	s.audit(ctx, req, "get_session", rec.Payload.Project)
+	s.audit(ctx, req, "get_session", rec.ProjectID)
 	out := GetSessionOut{Notice: notice, Session: withNarrative(*rec), WorkItems: []WorkItemView{}}
-	items, err := s.Store.WorkItems(ctx, store.WorkItemQuery{Project: rec.Payload.Project, Limit: 500})
+	items, err := s.Store.WorkItems(ctx, store.WorkItemQuery{Project: rec.ProjectID, Limit: 500})
 	if err != nil {
 		return nil, out, fmt.Errorf("could not read work items")
 	}
@@ -689,7 +724,7 @@ func (s *srv) getSession(ctx context.Context, req *mcp.CallToolRequest, in GetSe
 
 // ListWorkIn is the common input of the list_* work tools.
 type ListWorkIn struct {
-	Project  string `json:"project,omitempty" jsonschema:"only this project"`
+	Project  string `json:"project,omitempty" jsonschema:"only this project: its name or id, as shown by list_projects"`
 	Days     int    `json:"days,omitempty" jsonschema:"how many days back to look (default 5, max 365); ignored when since is given"`
 	Since    string `json:"since,omitempty" jsonschema:"start of the range, YYYY-MM-DD (UTC) or RFC 3339; takes precedence over days"`
 	Until    string `json:"until,omitempty" jsonschema:"end of the range, YYYY-MM-DD (that whole day is included) or RFC 3339; default now"`
@@ -709,7 +744,8 @@ type ListWorkOut struct {
 }
 
 func (s *srv) listWork(ctx context.Context, req *mcp.CallToolRequest, tool, kind string, in ListWorkIn) (*mcp.CallToolResult, ListWorkOut, error) {
-	s.audit(ctx, req, tool, in.Project)
+	pid := s.projectID(ctx, in.Project)
+	s.audit(ctx, req, tool, pid)
 	off, err := decodeCursor(in.Cursor)
 	if err != nil {
 		return nil, ListWorkOut{}, err
@@ -719,7 +755,7 @@ func (s *srv) listWork(ctx context.Context, req *mcp.CallToolRequest, tool, kind
 		return nil, ListWorkOut{}, err
 	}
 	limit := clamp(in.Limit, defaultLimit, maxLimit)
-	q := store.WorkItemQuery{Project: in.Project, Kind: kind, Status: in.Status, Since: w.Since, Until: w.storeUntil()}
+	q := store.WorkItemQuery{Project: pid, Kind: kind, Status: in.Status, Since: w.Since, Until: w.storeUntil()}
 	if kind == model.KindIssue {
 		q.Provider = in.Provider
 	}
@@ -786,4 +822,14 @@ func (s *srv) listArtifacts(ctx context.Context, req *mcp.CallToolRequest, in Li
 
 func (s *srv) listIssues(ctx context.Context, req *mcp.CallToolRequest, in ListWorkIn) (*mcp.CallToolResult, ListWorkOut, error) {
 	return s.listWork(ctx, req, "list_issues", model.KindIssue, in)
+}
+
+// projectLine is one list_projects line. The id is shown when it says more
+// than the name (projects stored before ids existed have their key as both).
+func projectLine(now time.Time, p store.ProjectInfo) string {
+	l := fmt.Sprintf("- %s: %d sessions, last activity %s", clean(p.Project), p.Sessions, ago(now, p.LastActivity))
+	if p.ID != p.Project {
+		l += " (id " + clean(p.ID) + ")"
+	}
+	return l
 }

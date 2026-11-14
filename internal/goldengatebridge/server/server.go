@@ -301,7 +301,7 @@ func (s *Server) handleIngest(w http.ResponseWriter, r *http.Request, ri reqInfo
 			writeErr(w, http.StatusInternalServerError, "internal error")
 			return
 		}
-		projects[p.Project] = true
+		projects[p.ProjectRef()] = true
 	}
 	for p := range projects {
 		s.audit(r.Context(), ri.P, ri.IP, "ingest", p)
@@ -317,14 +317,15 @@ func (s *Server) handleListProjects(w http.ResponseWriter, r *http.Request, ri r
 		return
 	}
 	type pj struct {
-		Project      string         `json:"project"`
+		ID           string         `json:"id"`
+		Project      string         `json:"project"` // display name
 		Sessions     int            `json:"sessions"`
 		Sources      map[string]int `json:"sources"`
 		LastActivity time.Time      `json:"last_activity"`
 	}
 	out := make([]pj, 0, len(ps))
 	for _, p := range ps {
-		out = append(out, pj{p.Project, p.Sessions, p.Sources, p.LastActivity})
+		out = append(out, pj{p.ID, p.Project, p.Sessions, p.Sources, p.LastActivity})
 	}
 	s.audit(r.Context(), ri.P, ri.IP, "list_projects", "")
 	writeJSON(w, http.StatusOK, map[string]any{"projects": out})
@@ -336,13 +337,20 @@ func (s *Server) handleDeleteProject(w http.ResponseWriter, r *http.Request, ri 
 		writeErr(w, http.StatusBadRequest, "invalid project key")
 		return
 	}
+	// key is a project id (the whole project), the key of a folder or chat
+	// grouping (only what came from it), or a project name. The audit line
+	// names the project id when the reference resolves to one.
+	ref := key
+	if p, err := s.Store.ResolveProject(r.Context(), key); err == nil {
+		ref = p.ID
+	}
 	n, err := s.Store.DeleteProject(r.Context(), key)
 	if err != nil {
 		s.Log.Error("store failed", "err", err)
 		writeErr(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	s.audit(r.Context(), ri.P, ri.IP, "delete_project", key)
+	s.audit(r.Context(), ri.P, ri.IP, "delete_project", ref)
 	writeJSON(w, http.StatusOK, map[string]int{"deleted": n})
 }
 

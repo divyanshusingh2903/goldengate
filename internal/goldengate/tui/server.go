@@ -55,11 +55,14 @@ func (m *Model) onKeyServer(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		m.sv.cursor = min(m.sv.cursor+1, max(len(m.sv.info.Projects)-1, 0))
 	case "D", "x":
 		if m.sv.cursor < len(m.sv.info.Projects) {
-			label := m.sv.info.Projects[m.sv.cursor].Label
+			label, ref := m.sv.info.Projects[m.sv.cursor].Label, m.sv.info.Projects[m.sv.cursor].ID
+			if ref == "" {
+				ref = label
+			}
 			m.modal = &modal{title: "Delete from the server", lines: []string{"Delete " + label + " and all its sessions", "from the server? Local data is not touched."},
 				yes: func(m *Model) tea.Cmd {
 					be, ctx := m.be, m.ctx
-					return func() tea.Msg { return serverDelMsg{label, be.DeleteServerProject(ctx, label)} }
+					return func() tea.Msg { return serverDelMsg{label, be.DeleteServerProject(ctx, ref)} }
 				}}
 		}
 	case "i":

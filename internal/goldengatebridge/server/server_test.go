@@ -1064,3 +1064,78 @@ func TestIngestBoundsTheNarrativeSeparately(t *testing.T) {
 		t.Error("a narrative over its cap must be refused")
 	}
 }
+
+func TestNamedProjectsOverHTTPAndMCP(t *testing.T) {
+	e := newEnv(t)
+	v2 := func(id, member, pid, name, title string) model.SessionPayload {
+		p := payload(id, member, title, work(model.KindPR, "github", "o/r#"+id, model.StatusCreated))
+		p.Version, p.ProjectID, p.ProjectName = model.PayloadV2, pid, name
+		return p
+	}
+	e.ingestOK(v2("1", "~/code/app", "p_app1", "App", "Backend work"), v2("2", "~/code/app-web", "p_app1", "App", "Frontend work"),
+		payload("3", "~/code/old", "Older client work"))
+	cs := e.mcpSession(e.read)
+
+	_, txt := call(t, cs, "list_projects", nil)
+	if !strings.Contains(txt, "- App: 2 sessions") || !strings.Contains(txt, "(id p_app1)") || !strings.Contains(txt, "- ~/code/old: 1 sessions") || strings.Contains(txt, "(id ~/code/old)") {
+		t.Fatalf("list_projects shows names, and ids where they differ:\n%s", txt)
+	}
+	// every tool takes the name, the id, or a folder in the project
+	for _, ref := range []string{"App", "app", "p_app1", "~/code/app-web"} {
+		_, txt := call(t, cs, "recent_activity", map[string]any{"project": ref})
+		if !strings.Contains(txt, "## App") || !strings.Contains(txt, "Backend work") || !strings.Contains(txt, "Frontend work") || strings.Contains(txt, "Older client work") {
+			t.Errorf("recent_activity project=%q:\n%s", ref, txt)
+		}
+		_, txt = call(t, cs, "list_pull_requests", map[string]any{"project": ref})
+		if !strings.Contains(txt, "o/r#1") || !strings.Contains(txt, "o/r#2") || strings.Contains(txt, "o/r#3") || !strings.Contains(txt, "project App") {
+			t.Errorf("list_pull_requests project=%q:\n%s", ref, txt)
+		}
+		_, txt = call(t, cs, "search_work", map[string]any{"query": "work", "project": ref})
+		if !strings.Contains(txt, "Backend work") || strings.Contains(txt, "Older client work") {
+			t.Errorf("search_work project=%q:\n%s", ref, txt)
+		}
+	}
+	r, txt := call(t, cs, "get_project_context", map[string]any{"project": "app"})
+	b, _ := json.Marshal(r.StructuredContent)
+	if !strings.Contains(txt, "Project App: 2 shared sessions") || !strings.Contains(string(b), `"project":"App"`) || !strings.Contains(string(b), `"project_id":"p_app1"`) || !strings.Contains(string(b), `"folder":"~/code/app-web"`) {
+		t.Errorf("get_project_context names the project and keeps the folder:\n%s\n%s", txt, b)
+	}
+	if _, txt := call(t, cs, "recent_activity", map[string]any{"project": "nope"}); !strings.Contains(txt, "no shared activity") {
+		t.Errorf("an unknown project matches nothing:\n%s", txt)
+	}
+
+	// a rename reaches every session with the next payload
+	e.ingestOK(v2("2", "~/code/app-web", "p_app1", "App 2", "Frontend work"))
+	if _, txt := call(t, cs, "recent_activity", map[string]any{"project": "p_app1"}); !strings.Contains(txt, "## App 2") || strings.Contains(txt, "## App\n") || !strings.Contains(txt, "Backend work") {
+		t.Errorf("after a rename:\n%s", txt)
+	}
+
+	// the listing carries ids; deleting by a folder removes only that folder, by id the project
+	_, body, _ := e.do("GET", "/v1/projects", e.ingest, "", nil)
+	if !strings.Contains(string(body), `"id":"p_app1"`) || !strings.Contains(string(body), `"project":"App 2"`) {
+		t.Fatalf("GET /v1/projects: %s", body)
+	}
+	if c, body, _ := e.do("DELETE", "/v1/projects/"+url.PathEscape("~/code/app-web"), e.ingest, "", nil); c != 200 || !strings.Contains(string(body), `"deleted":1`) {
+		t.Fatalf("delete by folder: %d %s", c, body)
+	}
+	if _, txt := call(t, cs, "recent_activity", nil); !strings.Contains(txt, "Backend work") || strings.Contains(txt, "Frontend work") {
+		t.Errorf("only the folder's sessions went:\n%s", txt)
+	}
+	if c, body, _ := e.do("DELETE", "/v1/projects/p_app1", e.ingest, "", nil); c != 200 || !strings.Contains(string(body), `"deleted":1`) {
+		t.Fatalf("delete by id: %d %s", c, body)
+	}
+	if _, txt := call(t, cs, "list_projects", nil); strings.Contains(txt, "App") || !strings.Contains(txt, "~/code/old") {
+		t.Errorf("after deleting the project:\n%s", txt)
+	}
+	// the audit log names project ids, never content
+	ev, _ := e.st.ListAudit(context.Background(), 100)
+	seen := map[string]bool{}
+	for _, a := range ev {
+		seen[a.Action+" "+a.Project] = true
+	}
+	for _, want := range []string{"ingest p_app1", "ingest ~/code/old", "delete_project p_app1", "mcp:recent_activity p_app1"} {
+		if !seen[want] {
+			t.Errorf("audit lacks %q: %v", want, seen)
+		}
+	}
+}

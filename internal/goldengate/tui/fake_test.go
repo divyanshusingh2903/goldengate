@@ -87,7 +87,7 @@ func newFake() *fakeBackend {
 		},
 		previews: map[string]Preview{},
 		srvInfo: ServerInfo{URL: "https://bridge.example.com", Configured: true, Healthy: true, TokenOK: true, TokenStore: "keyring",
-			Projects: []RemoteProject{{"~/code/pharmfindr", 44, ago(2 * time.Hour)}, {"~/code/forge", 11, ago(6 * time.Hour)}}},
+			Projects: []RemoteProject{{Label: "~/code/pharmfindr", Sessions: 44, Last: ago(2 * time.Hour)}, {ID: "p_forge1", Label: "~/code/forge", Sessions: 11, Last: ago(6 * time.Hour)}}},
 		syncFail: map[string]string{},
 	}
 	f.previews["/home/u/code/pharmfindr"] = f.samplePreview()

@@ -192,3 +192,60 @@ func TestResummarizeUpgradesSessionsSyncedWithTheHeuristic(t *testing.T) {
 		t.Errorf("an upgraded session is not summarized again: %d calls", len(fake.bodies))
 	}
 }
+
+func TestRenamingOrMergingAProjectReachesTheServerOnTheNextSync(t *testing.T) {
+	b := startBridge(t)
+	l := newLaptop(t)
+	fake := &fakeChatServer{}
+	ts := fake.start(t)
+	ctx := context.Background()
+	l.must(l.initEnv(b), "init", "--non-interactive")
+	l.must(nil, "projects", "create", "Widgets", "~/projects/demo")
+	l.must(nil, "sync")
+	ps, _ := b.st.ListProjects(ctx)
+	if len(ps) != 1 || ps[0].Project != "Widgets" || ps[0].Sessions != 1 {
+		t.Fatalf("first sync: %+v", ps)
+	}
+	id := ps[0].ID
+	ingests := countAction(t, b, "ingest")
+
+	// nothing changed: nothing is sent
+	l.must(nil, "sync")
+	if got := countAction(t, b, "ingest"); got != ingests {
+		t.Fatalf("an unchanged project must not be re-sent: %d -> %d", ingests, got)
+	}
+
+	// a rename re-sends the stored payloads under the new name; with a model
+	// on, it must not ask the model anything
+	l.must(nil, "summarizer", "use", "custom", "--model", "tiny", "--base-url", ts.URL+"/v1")
+	l.must(nil, "projects", "rename", "Widgets", "Widget work")
+	l.must(map[string]string{"GOLDENGATE_SUMMARIZER_KEY": "sk-local"}, "sync")
+	if len(fake.bodies) != 0 {
+		t.Fatalf("re-filing a session never calls the model: %d calls", len(fake.bodies))
+	}
+	if !strings.Contains(l.errOut.String(), "1 synced sessions re-sent as they were") {
+		t.Errorf("the run says why it sent something:\n%s", l.errOut)
+	}
+	ps, _ = b.st.ListProjects(ctx)
+	if len(ps) != 1 || ps[0].Project != "Widget work" || ps[0].ID != id || ps[0].Sessions != 1 {
+		t.Fatalf("the server shows the new name under the same id: %+v", ps)
+	}
+	if held := everythingTheServerHolds(t, b); !strings.Contains(held, `"summarized_by":"heuristic"`) {
+		t.Errorf("the summary itself is untouched:\n%s", held)
+	}
+	l.must(nil, "summarizer", "use", "heuristic")
+
+	// a merge moves the sessions to the other project's id; the emptied one goes
+	l.must(nil, "projects", "create", "Everything")
+	l.must(nil, "projects", "merge", "Widget work", "Everything")
+	l.must(nil, "sync")
+	ps, _ = b.st.ListProjects(ctx)
+	if len(ps) != 1 || ps[0].Project != "Everything" || ps[0].ID == id || ps[0].Sessions != 1 {
+		t.Fatalf("after the merge: %+v", ps)
+	}
+	ingests = countAction(t, b, "ingest")
+	l.must(nil, "sync")
+	if got := countAction(t, b, "ingest"); got != ingests {
+		t.Errorf("once re-filed, nothing more is sent: %d -> %d", ingests, got)
+	}
+}
