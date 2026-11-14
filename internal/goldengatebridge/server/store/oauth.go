@@ -27,6 +27,9 @@ type OAuthTxn struct {
 	Challenge   string
 	Resource    string
 	Scope       string
+	// Approved is set once the owner has proved the admin secret for this
+	// request. Only then may the request choose an agent and projects.
+	Approved bool
 }
 
 // OAuthCode is an issued authorization code.

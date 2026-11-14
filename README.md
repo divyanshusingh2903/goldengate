@@ -139,6 +139,8 @@ goldengate agents limit ChatGPT 30                   # at most the last 30 days
 goldengate agents remove ChatGPT                     # also revokes its tokens
 ```
 
+An assistant that connects through OAuth is asked about on the consent page instead: after the admin secret, you choose which agent it is and tick the projects it may see (nothing is ticked for you).
+
 Grants and revocations apply to the assistant's next request. A project an assistant may not see is, for that assistant, simply not there.
 
 `goldengate share add <folder>` still works and puts the folder in a project of its own, named after it. Configs that use `[share] allow` are read as projects and written back in the new shape on the next save.

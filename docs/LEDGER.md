@@ -11,8 +11,8 @@ This file lets any Claude Code session (or person) pick up the Product v2 work w
 
 _Last updated 2026-11-14. Update this section whenever a row in the queue changes._
 
-**Progress:** 7 of 31 scheduled issues done (plus 2 stretch). Phase 1, Foundations, is under way.
-**In progress:** #26 API and CLI for agents and grants, size M, planned Nov 17. **Next after it:** #27 OAuth consent picks agent and projects.
+**Progress:** 8 of 31 scheduled issues done (plus 2 stretch). Phase 1, Foundations, is under way.
+**In progress:** #27 OAuth consent picks agent and projects, size M, planned Nov 18. **Next after it:** #28 TUI Agents screen, view as agent.
 
 ### Done
 
@@ -25,6 +25,7 @@ _Last updated 2026-11-14. Update this section whenever a row in the queue change
 | #19 | Server files everything under stable project ids with display names; payload v2; in-place SQLite upgrade; MCP tools take a name or id; client re-files renamed or merged projects without re-summarizing | #62 | 2026-11-14 |
 | #24 | Agents and grants data model: every read token and OAuth client belongs to one agent; upgrade creates `Default` with every existing project; new projects granted to no one | #63 | 2026-11-14 |
 | #25 | Every MCP tool is limited to the calling agent's grants and history window, applied inside the store queries; ungranted looks like missing; audit records the agent | #64 | 2026-11-14 |
+| #26 | Admin-only agents API and `goldengate agents` commands; per-agent `all_projects` switch; init makes the first assistant see every shared project | #65 | 2026-11-14 |
 
 Supporting changes (not queue issues):
 
@@ -99,8 +100,8 @@ Status values: `todo`, `in progress`, `in review`, `blocked`, `done`. Size: S ab
 | 5 | #19 Server: stable project IDs, migration | M | #18 | Nov 16 | done | #62 |
 | 6 | #24 Server: agents and grants model | M | #19 | Nov 16 | done | #63 |
 | 7 | #25 Enforce grants in every MCP tool | M | #24 | Nov 17 | done | #64 |
-| 8 | #26 API and CLI for agents and grants | M | #24 | Nov 17 | in progress | |
-| 9 | #27 OAuth consent picks agent and projects | M | #24, #25 | Nov 18 | todo | |
+| 8 | #26 API and CLI for agents and grants | M | #24 | Nov 17 | done | #65 |
+| 9 | #27 OAuth consent picks agent and projects | M | #24, #25 | Nov 18 | in progress | |
 | 10 | #28 TUI Agents screen, view as agent | M | #26 | Nov 18 | todo | |
 | 11 | #20 Local inbox: pending, approved, excluded | L | #17 | Nov 19 | todo | |
 | 12 | #29 Session include, exclude, retract | S | #20 | Nov 20 | todo | |
@@ -150,3 +151,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-14: #19 done (#62). #24 implemented: `agents` and `agent_grants` tables, every read token and OAuth client belongs to one agent, upgrade gives existing readers a `Default` agent granted every existing project, new projects are granted to no one, grants follow a project to a new id.
 - 2026-11-14: #24 done (#63). #25 implemented: the MCP middleware resolves the token's agent and its grants per request; the store applies the scope inside its read queries; an ungranted project looks like a missing one; `max_days` caps every tool (closes the #37 follow-up); the audit log records the agent id.
 - 2026-11-14: #25 done (#64). #26 implemented: admin-only agents API (list, create, update, delete, grant, revoke, mint a read token for an agent), `goldengate agents` commands, a per-agent `all_projects` switch, and init turning it on for the first assistant on a server without agents. `token rotate read` now leaves other agents' tokens alone.
+- 2026-11-14: #26 done (#65). #27 implemented: OAuth consent is two steps (admin secret, then agent and projects with nothing ticked); the first page shows no agent or project names; the client is attached to the chosen agent.

@@ -19,6 +19,7 @@ import (
 	"github.com/divyanshusingh2903/goldengate/internal/goldengatebridge/server"
 	"github.com/divyanshusingh2903/goldengate/internal/goldengatebridge/server/auth"
 	"github.com/divyanshusingh2903/goldengate/internal/goldengatebridge/server/store"
+	"github.com/divyanshusingh2903/goldengate/internal/model"
 )
 
 const redirect = "https://assistant.example/oauth/callback"
@@ -129,8 +130,33 @@ func (c *oc) begin(clientID, challenge string, extra map[string]string) string {
 	return string(m[1])
 }
 
-func (c *oc) consent(tx, decision, secret string) (*reply, []byte) {
+// secretStep posts the first consent page (the admin secret).
+func (c *oc) secretStep(tx, decision, secret string) (*reply, []byte) {
 	return c.req("POST", "/oauth/authorize", url.Values{"tx": {tx}, "decision": {decision}, "secret": {secret}}, nil, nil)
+}
+
+// accessStep posts the second consent page: which agent, which projects.
+func (c *oc) accessStep(tx string, form url.Values) (*reply, []byte) {
+	f := url.Values{"tx": {tx}, "decision": {"grant"}}
+	for k, v := range form {
+		f[k] = v
+	}
+	return c.req("POST", "/oauth/authorize", f, nil, nil)
+}
+
+// consent runs the whole consent: the secret page and, when that is accepted,
+// the access page, attaching the client to the Default agent with nothing
+// ticked. Tests about what the agent sees drive the two steps themselves.
+func (c *oc) consent(tx, decision, secret string) (*reply, []byte) {
+	resp, b := c.secretStep(tx, decision, secret)
+	if decision != "approve" || resp.StatusCode != 200 {
+		return resp, b
+	}
+	m := txRe.FindSubmatch(b)
+	if m == nil || !strings.Contains(string(b), "What may it see?") {
+		c.t.Fatalf("the secret was accepted but no access page came back:\n%s", b)
+	}
+	return c.accessStep(string(m[1]), url.Values{"agent": {store.DefaultAgentID}})
 }
 
 // approve runs authorize + consent and returns the authorization code.
@@ -717,5 +743,168 @@ func TestMigrationOfPreOAuthDatabase(t *testing.T) {
 	e := oauthEnv(t)
 	if resp, _ := newOC(t, e).req("GET", "/.well-known/oauth-authorization-server", nil, nil, nil); resp.StatusCode != 200 {
 		t.Fatal(resp.StatusCode)
+	}
+}
+
+// connectAs runs a full OAuth connection, choosing access on the second
+// consent page, and returns the access token.
+func (c *oc) connectAs(access url.Values) (clientID, token string) {
+	c.t.Helper()
+	reg := c.register(nil)
+	clientID = reg["client_id"].(string)
+	verifier, challenge := pkce()
+	resp, b := c.secretStep(c.begin(clientID, challenge, nil), "approve", adminSecret)
+	if resp.StatusCode != 200 {
+		c.t.Fatalf("secret step: %d %s", resp.StatusCode, b)
+	}
+	resp, b = c.accessStep(string(txRe.FindSubmatch(b)[1]), access)
+	if resp.StatusCode != 302 {
+		c.t.Fatalf("access step: %d %s", resp.StatusCode, b)
+	}
+	loc, _ := url.Parse(resp.Header.Get("Location"))
+	status, tr := c.token(codeForm(clientID, loc.Query().Get("code"), verifier), nil)
+	if status != 200 || tr.Access == "" {
+		c.t.Fatalf("token: %d %+v", status, tr)
+	}
+	return clientID, tr.Access
+}
+
+func TestOAuthConsentChoosesTheAgentAndItsProjects(t *testing.T) {
+	e := oauthEnv(t)
+	c := newOC(t, e)
+	e.noGrants = true
+	ctx := context.Background()
+	mk := func(id, member, pid, name string) model.SessionPayload {
+		p := payload(id, member, name+" work")
+		p.Version, p.ProjectID, p.ProjectName = model.PayloadV2, pid, name
+		return p
+	}
+	e.ingestOK(mk("1", "~/code/alpha", "p_alpha", "Alpha"), mk("2", "~/code/beta", "p_beta", "Beta <b>bold</b>"))
+	if err := e.st.CreateAgent(ctx, store.Agent{ID: "agt_exist", Name: "Existing one", CreatedAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	if err := e.st.Grant(ctx, "agt_exist", "p_alpha", now); err != nil {
+		t.Fatal(err)
+	}
+	projectsOf := func(token string) string {
+		_, txt := call(t, e.mcpSession(token), "list_projects", nil)
+		return txt
+	}
+
+	// The first page is open to anyone, so it names no agent and no project.
+	reg := c.register(nil)
+	id := reg["client_id"].(string)
+	_, challenge := pkce()
+	resp, page := c.req("GET", c.authorizeQuery(id, challenge, nil), nil, nil, nil)
+	for _, leak := range []string{"Alpha", "Beta", "Existing one", "p_alpha", "agt_"} {
+		if resp.StatusCode != 200 || strings.Contains(string(page), leak) {
+			t.Fatalf("the page before the admin secret shows %q:\n%s", leak, page)
+		}
+	}
+	tx := string(txRe.FindSubmatch(page)[1])
+	// Skipping the secret does not reach the second step: an unapproved
+	// request posting the second form is a denial.
+	if resp, _ := c.accessStep(tx, url.Values{"agent": {"new"}, "agent_name": {"Sneaky"}, "project": {"p_alpha"}}); resp.StatusCode != 302 || !strings.Contains(resp.Header.Get("Location"), "error=access_denied") {
+		t.Fatalf("the access form without the secret step: %d %s", resp.StatusCode, resp.Header.Get("Location"))
+	}
+	if as, _ := e.st.ListAgents(ctx); len(as) != 2 {
+		t.Fatalf("nothing was created: %+v", as)
+	}
+
+	// With the secret, the second page lists agents and projects, nothing ticked.
+	resp, page = c.secretStep(c.begin(id, challenge, nil), "approve", adminSecret)
+	body := string(page)
+	if resp.StatusCode != 200 || !strings.Contains(body, "What may it see?") || !strings.Contains(body, `value="p_alpha"> Alpha`) ||
+		!strings.Contains(body, "Existing one</label> <small>already sees: Alpha") || !strings.Contains(body, `value="new" checked`) {
+		t.Fatalf("the access page: %d\n%s", resp.StatusCode, body)
+	}
+	if strings.Contains(body, `name="project" value="p_alpha" checked`) || strings.Contains(body, `name="all" value="1" checked`) || strings.Count(body, "checked") != 1 {
+		t.Errorf("nothing but the new-assistant choice is preselected:\n%s", body)
+	}
+	if strings.Contains(body, "<b>bold</b>") || !strings.Contains(body, "Beta &lt;b&gt;bold&lt;/b&gt;") {
+		t.Errorf("project names are escaped:\n%s", body)
+	}
+	if strings.Contains(strings.ToLower(body), "<script") || resp.Header.Get("Content-Security-Policy") == "" || resp.Header.Get("Cache-Control") != "no-store" {
+		t.Errorf("the page needs no JavaScript and keeps its security headers: %v", resp.Header)
+	}
+	tx2 := string(txRe.FindSubmatch(page)[1])
+
+	// Form mistakes change nothing and can be corrected on the same request.
+	for name, bad := range map[string]url.Values{
+		"no agent":        {"project": {"p_alpha"}},
+		"empty name":      {"agent": {"new"}, "agent_name": {"  "}},
+		"taken name":      {"agent": {"new"}, "agent_name": {"existing ONE"}},
+		"unknown agent":   {"agent": {"agt_nope"}},
+		"unknown project": {"agent": {"new"}, "agent_name": {"Fresh"}, "project": {"p_nope"}},
+	} {
+		resp, b := c.accessStep(tx2, bad)
+		if resp.StatusCode != 400 || !strings.Contains(string(b), `class="err"`) || !strings.Contains(string(b), `value="`+tx2+`"`) {
+			t.Fatalf("%s: %d\n%s", name, resp.StatusCode, b)
+		}
+	}
+	if as, _ := e.st.ListAgents(ctx); len(as) != 2 {
+		t.Fatalf("a rejected form creates nothing: %+v", as)
+	}
+	// A new agent with exactly the ticked project.
+	resp, _ = c.accessStep(tx2, url.Values{"agent": {"new"}, "agent_name": {"My Claude"}, "project": {"p_beta"}})
+	if resp.StatusCode != 302 || !strings.Contains(resp.Header.Get("Location"), "code=") {
+		t.Fatalf("approve: %d %s", resp.StatusCode, resp.Header.Get("Location"))
+	}
+	if resp, _ := c.accessStep(tx2, url.Values{"agent": {"new"}, "agent_name": {"Again"}}); resp.StatusCode != 400 {
+		t.Errorf("the access form is single use: %d", resp.StatusCode)
+	}
+	var made store.Agent
+	as, _ := e.st.ListAgents(ctx)
+	for _, a := range as {
+		if a.Name == "My Claude" {
+			made = a
+		}
+	}
+	if g, _ := e.st.Grants(ctx, made.ID); made.ID == "" || made.AllProjects || strings.Join(g, ",") != "p_beta" {
+		t.Fatalf("the new agent has exactly the ticked project: %+v %v", made, g)
+	}
+	if cl, err := e.st.OAuthClient(ctx, id); err != nil || cl.AgentID != made.ID {
+		t.Fatalf("the client belongs to the new agent: %+v %v", cl, err)
+	}
+
+	// End to end: each connection sees what was ticked for it.
+	_, tok := c.connectAs(url.Values{"agent": {"new"}, "agent_name": {"Beta only"}, "project": {"p_beta"}})
+	if txt := projectsOf(tok); !strings.Contains(txt, "Beta") || strings.Contains(txt, "Alpha") {
+		t.Errorf("ticked Beta only:\n%s", txt)
+	}
+	_, tok = c.connectAs(url.Values{"agent": {"new"}, "agent_name": {"Nothing ticked"}})
+	if txt := projectsOf(tok); !strings.Contains(txt, "(no shared projects)") {
+		t.Errorf("nothing ticked means nothing visible:\n%s", txt)
+	}
+	cid, tok := c.connectAs(url.Values{"agent": {"agt_exist"}, "project": {"p_beta"}})
+	if txt := projectsOf(tok); !strings.Contains(txt, "Alpha") || !strings.Contains(txt, "Beta") {
+		t.Errorf("an existing agent keeps what it had and gains the ticks:\n%s", txt)
+	}
+	if cl, _ := e.st.OAuthClient(ctx, cid); cl.AgentID != "agt_exist" {
+		t.Errorf("attached to the existing agent: %+v", cl)
+	}
+	_, tok = c.connectAs(url.Values{"agent": {"new"}, "agent_name": {"Sees all"}, "all": {"1"}})
+	e.ingestOK(mk("3", "~/code/gamma", "p_gamma", "Gamma"))
+	if txt := projectsOf(tok); !strings.Contains(txt, "Alpha") || !strings.Contains(txt, "Gamma") {
+		t.Errorf("every project, including later ones:\n%s", txt)
+	}
+	// Denying on the second page issues nothing.
+	reg = c.register(nil)
+	_, ch := pkce()
+	_, page = c.secretStep(c.begin(reg["client_id"].(string), ch, nil), "approve", adminSecret)
+	resp, _ = c.req("POST", "/oauth/authorize", url.Values{"tx": {string(txRe.FindSubmatch(page)[1])}, "decision": {"deny"}}, nil, nil)
+	if resp.StatusCode != 302 || !strings.Contains(resp.Header.Get("Location"), "error=access_denied") {
+		t.Errorf("deny on the access page: %d %s", resp.StatusCode, resp.Header.Get("Location"))
+	}
+	// The approval is audited with the agent.
+	ev, _ := e.st.ListAudit(ctx, 300)
+	found := false
+	for _, a := range ev {
+		if a.Action == "oauth_approve" && a.AgentID == made.ID && a.TokenID == id {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("oauth_approve must record the client and the agent")
 	}
 }
