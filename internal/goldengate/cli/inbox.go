@@ -31,7 +31,7 @@ func (a *app) pendingSessions(ctx context.Context, cfg config.Config, st *gsync.
 	}
 	s := &gsync.Syncer{Registry: reg, Config: cfg, Matcher: m, State: st, Home: a.Home, Now: a.Now, Resolver: a.resolver(cfg),
 		Log: slog.New(slog.NewTextHandler(io.Discard, nil)), Summarizer: a.summarizer(cfg)}
-	_, rep, err := s.Plan(ctx, gsync.RunOpts{Project: project})
+	_, rep, err := s.Plan(ctx, gsync.RunOpts{Project: project, Offline: true}) // listing never calls a model
 	if err != nil {
 		return nil, err
 	}
@@ -211,64 +211,69 @@ func (a *app) inboxReset(ctx context.Context, ids []string) error {
 
 // Inbox implements tui.Backend.
 func (b *tuiBackend) Inbox(ctx context.Context) (tui.Inbox, error) {
-	cfg, err := b.a.load()
-	if err != nil {
-		return tui.Inbox{}, err
-	}
-	st, err := b.a.openState()
-	if err != nil {
-		return tui.Inbox{}, err
-	}
-	defer func() { _ = st.Close() }()
-	items, err := b.a.pendingSessions(ctx, cfg, st, "")
-	if err != nil {
-		return tui.Inbox{}, err
-	}
 	var in tui.Inbox
-	for _, it := range items {
-		in.Pending = append(in.Pending, tui.InboxItem{Source: it.Source, ID: it.SessionID, Project: projectLabel(it), Title: it.Title,
-			Updated: it.Updated, Changed: it.Changed, Hash: it.ContentHash})
-	}
-	ex, err := st.Decisions(ctx, gsync.DecisionExcluded)
-	if err != nil {
-		return tui.Inbox{}, err
-	}
-	for _, d := range ex {
-		in.Excluded = append(in.Excluded, tui.InboxItem{Source: d.Source, ID: d.SessionID, Project: d.Project, Title: d.Title, Updated: d.At, Hash: d.ContentHash})
-	}
-	return in, nil
+	err := b.a.withRows(ctx, func(_ config.Config, _ *gsync.State, rows []sessionRow) error {
+		for _, r := range rows {
+			it := tui.InboxItem{Source: r.Source, ID: r.ID, Project: r.Project, Title: r.Title, Updated: r.Updated, Hash: r.Hash, State: r.State,
+				Changed: r.State == sessChanged}
+			switch {
+			case r.State == sessExcluded:
+				in.Excluded = append(in.Excluded, it)
+			case r.State == sessRetracted:
+				in.Retracted = append(in.Retracted, it)
+			case r.Waits:
+				in.Pending = append(in.Pending, it)
+			default:
+				in.Sent = append(in.Sent, it)
+			}
+		}
+		return nil
+	})
+	return in, err
 }
 
 // InboxDecide implements tui.Backend.
 func (b *tuiBackend) InboxDecide(ctx context.Context, items []tui.InboxItem, decision string) error {
-	st, err := b.a.openState()
-	if err != nil {
-		return err
-	}
-	defer func() { _ = st.Close() }()
+	defer func() {
+		b.mu.Lock()
+		b.reviewed = nil // what was reviewed may no longer be what would be sent
+		b.mu.Unlock()
+	}()
+	ids := make([]string, 0, len(items))
 	for _, it := range items {
-		switch decision {
-		case tui.InboxApprove, tui.InboxExclude:
-			state := gsync.DecisionApproved
-			if decision == tui.InboxExclude {
-				state = gsync.DecisionExcluded
-			}
-			if it.Hash == "" {
-				return fmt.Errorf("session %s: no content to decide on (list the inbox again)", it.ID)
-			}
-			if err := st.Decide(ctx, gsync.Decision{Source: it.Source, SessionID: it.ID, State: state, ContentHash: it.Hash, At: b.a.Now(), Project: it.Project, Title: it.Title}); err != nil {
-				return err
-			}
-		case tui.InboxReset:
-			if _, err := st.Undecide(ctx, it.Source, it.ID); err != nil {
-				return err
-			}
-		default:
-			return fmt.Errorf("unknown inbox decision %q", decision)
-		}
+		ids = append(ids, it.ID)
 	}
-	b.mu.Lock()
-	b.reviewed = nil // what was reviewed may no longer be what would be sent
-	b.mu.Unlock()
-	return nil
+	switch decision {
+	case tui.InboxApprove:
+		_, err := b.a.decideInclude(ctx, ids)
+		return err
+	case tui.InboxExclude, tui.InboxReset, tui.InboxRetract:
+		return b.a.withRows(ctx, func(cfg config.Config, st *gsync.State, rows []sessionRow) error {
+			picked, err := pick(rows, ids)
+			if err != nil {
+				return err
+			}
+			for _, r := range picked {
+				switch decision {
+				case tui.InboxExclude:
+					err = st.Decide(ctx, gsync.Decision{Source: r.Source, SessionID: r.ID, State: gsync.DecisionExcluded, ContentHash: r.Hash, At: b.a.Now(), Project: r.Project, Title: r.Title})
+				case tui.InboxReset:
+					_, err = st.Undecide(ctx, r.Source, r.ID)
+				default:
+					if _, seen, gerr := st.Get(ctx, r.Source, r.ID); gerr != nil {
+						err = gerr
+					} else if !seen {
+						err = fmt.Errorf("session %s was not sent from this computer: there is nothing to retract", r.ID)
+					} else {
+						err = b.a.retractSession(ctx, cfg, st, r)
+					}
+				}
+				if err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+	}
+	return fmt.Errorf("unknown inbox decision %q", decision)
 }

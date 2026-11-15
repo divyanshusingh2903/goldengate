@@ -198,6 +198,9 @@ type RunOpts struct {
 	// the user has seen them (a reviewed plan) or asked for it outright:
 	// sending is then the approval.
 	Approve bool
+	// Offline never calls the model summarizer: summaries come from the
+	// rules, or from answers already cached. For listings.
+	Offline bool
 }
 
 // Report summarizes a run. Counts only: no project names or content.
@@ -268,6 +271,7 @@ func (s *Syncer) Plan(ctx context.Context, o RunOpts) (Batch, Report, error) {
 	wo := workitems.Options{Providers: s.Config.Issues.Providers}
 	wo.KnownPrefixes = append(append([]string{}, s.Config.Issues.LinearTeams...), s.Config.Issues.JiraProjects...)
 	pool := s.newPool(ctx, wo, o.OnPlanned)
+	pool.offline, pool.approve = o.Offline, o.Approve
 	defer pool.stop() // on an early return the workers must not wait forever
 
 	for _, a := range s.Registry.All() {
@@ -463,6 +467,9 @@ type buildPool struct {
 	mu       stdsync.Mutex
 	err      error
 	failures int
+	// offline never calls the model; approve means sessions waiting in the
+	// inbox are part of the plan (so they may be summarized by the model).
+	offline, approve bool
 }
 
 func (s *Syncer) newPool(ctx context.Context, wo workitems.Options, onDone func(*model.SessionPayload)) *buildPool {
@@ -511,7 +518,28 @@ func (p *buildPool) work() {
 			p.mu.Unlock()
 			p.s.log().Warn("model summary failed; the heuristic summary is used", "session", j.ref.ID, "err", err)
 		}
-		pl, err := summarize.Build(j.raw, p.s.summarizeOptions(p.ctx, j.ref, p.wo, false, onErr))
+		// A session that waits for approval is not sent to the model: it
+		// is built with the rules (and cached answers) first, and only one
+		// that will be in the plan is summarized by the model.
+		offline := p.offline
+		var pl *model.SessionPayload
+		var err error
+		if !offline && p.s.Summarizer != nil && !p.approve && !p.s.autoApprove(j.ref) {
+			if pl, err = summarize.Build(j.raw, p.s.summarizeOptions(p.ctx, j.ref, p.wo, true, nil)); err == nil {
+				dec, decided, derr := p.s.State.Decision(p.ctx, j.ref.Source, j.ref.ID)
+				switch {
+				case derr != nil:
+					err = derr
+				case !decided || dec.State != DecisionApproved || dec.ContentHash != pl.ContentHash:
+					offline = true // it waits: keep the offline build
+				default:
+					pl = nil // approved: build it for real below
+				}
+			}
+		}
+		if err == nil && pl == nil {
+			pl, err = summarize.Build(j.raw, p.s.summarizeOptions(p.ctx, j.ref, p.wo, offline, onErr))
+		}
 		p.mu.Lock()
 		if err != nil && p.err == nil {
 			p.err = fmt.Errorf("sync: summarize: %w", err)

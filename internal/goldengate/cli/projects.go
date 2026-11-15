@@ -30,7 +30,9 @@ func (a *app) projectsCmd() *cobra.Command {
 	list := &cobra.Command{Use: "list", Short: "List projects and their members", Args: cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error { return a.projectsList() }}
 	create := &cobra.Command{Use: "create <name> [member...]", Short: "Create a project, optionally with members (they become shared)", Args: cobra.MinimumNArgs(1),
-		RunE: func(c *cobra.Command, args []string) error { return a.projectsCreate(c.Context(), args[0], args[1:], autoApprove) }}
+		RunE: func(c *cobra.Command, args []string) error {
+			return a.projectsCreate(c.Context(), args[0], args[1:], autoApprove)
+		}}
 	create.Flags().BoolVar(&autoApprove, "auto-approve", false, "send this project's new and changed sessions without asking")
 	rename := &cobra.Command{Use: "rename <project> <new name>", Short: "Rename a project (its id stays the same)", Args: cobra.ExactArgs(2),
 		RunE: func(c *cobra.Command, args []string) error { return a.projectsRename(args[0], args[1]) }}

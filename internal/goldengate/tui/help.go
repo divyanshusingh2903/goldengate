@@ -22,6 +22,7 @@ func (m *Model) helpBox() []string {
 		m.th.Title.Render("Everywhere"),
 		k("1-5 tab", "projects / sync / server / settings / agents"),
 		k("s", "sync: review first, then send"),
+		k("i", "inbox: approve, exclude or retract single sessions"),
 		k("r", "refresh"),
 		k("?", "this help"),
 		k("q ctrl+c", "quit"),

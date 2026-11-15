@@ -90,12 +90,16 @@ func (m *Model) onKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		case "tab":
 			if m.scr != scrWizard && m.scr != scrPreview {
-				next := map[screen]int{scrProjects: 2, scrSync: 3, scrServer: 4, scrSettings: 5, scrAgents: 1}[m.scr]
+				next := map[screen]int{scrProjects: 2, scrSync: 3, scrServer: 4, scrSettings: 5, scrAgents: 1, scrInbox: 2}[m.scr]
 				return m, m.goTo(next)
 			}
 		case "s":
 			if m.scr == scrProjects {
 				return m, m.openSync()
+			}
+		case "i":
+			if (m.scr == scrProjects && !m.pk.srcOpen) || (m.scr == scrSync && m.sy.phase != syncRunning) {
+				return m, m.openInbox()
 			}
 		}
 	}
@@ -110,6 +114,8 @@ func (m *Model) onKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.onKeySettings(k)
 	case scrAgents:
 		return m.onKeyAgents(k)
+	case scrInbox:
+		return m.onKeyInbox(k)
 	case scrWizard:
 		return m.onKeyWizard(k)
 	}

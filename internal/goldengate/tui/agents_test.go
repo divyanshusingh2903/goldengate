@@ -291,7 +291,7 @@ func TestSyncReviewSaysWhatSendingApproves(t *testing.T) {
 	be.approving, be.excluded = 3, 1
 	h := newHarnessWith(t, be, 110, 34)
 	h.key("2")
-	h.contains("3 sessions were waiting for your approval: sending approves what you reviewed here.", "1 session you excluded stays on this machine.")
+	h.contains("3 sessions were waiting for your approval: sending approves what you reviewed here (i: decide one by one).", "1 session you excluded stays on this machine.")
 	h.checkGeometry(110, 34)
 
 	be = newFake()

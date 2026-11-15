@@ -136,11 +136,57 @@ func (f *fakeBackend) Inbox(context.Context) (Inbox, error) {
 	return f.inbox, nil
 }
 
+// InboxDecide records the decision and moves the item between the lists the
+// way the real backend's next listing would show it.
 func (f *fakeBackend) InboxDecide(_ context.Context, items []InboxItem, decision string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.inboxErr != nil {
+		return f.inboxErr
+	}
 	for _, it := range items {
 		f.inboxDecs = append(f.inboxDecs, decision+":"+it.ID)
+		drop := func(l []InboxItem) []InboxItem {
+			var keep []InboxItem
+			for _, x := range l {
+				if x.ID != it.ID {
+					keep = append(keep, x)
+				}
+			}
+			return keep
+		}
+		in := &f.inbox
+		in.Pending, in.Excluded, in.Sent, in.Retracted = drop(in.Pending), drop(in.Excluded), drop(in.Sent), drop(in.Retracted)
+		switch decision {
+		case InboxApprove:
+			it.State = "queued"
+			in.Sent = append(in.Sent, it)
+		case InboxExclude:
+			it.State = "excluded"
+			in.Excluded = append(in.Excluded, it)
+		case InboxRetract:
+			it.State = "retracted"
+			in.Retracted = append(in.Retracted, it)
+		case InboxReset:
+			it.State = "pending"
+			in.Pending = append(in.Pending, it)
+		}
 	}
 	return nil
+}
+
+// sampleInbox is an inbox with something in every section.
+func sampleInbox() Inbox {
+	return Inbox{
+		Pending: []InboxItem{
+			{Source: "claude-code", ID: "s-pend-1", Project: "Pharmfindr", Title: "Fix OAuth redirect mismatch", Updated: ago(2 * time.Hour), State: "pending", Hash: "h1"},
+			{Source: "codex", ID: "s-pend-2", Project: "Forge", Title: "Add gRPC health checks; key [REDACTED:aws-access-key]", Updated: ago(5 * time.Hour), State: "changed", Changed: true, Hash: "h2"},
+		},
+		Excluded: []InboxItem{{Source: "claude-code", ID: "s-excl-1", Project: "Pharmfindr", Title: "Salary spreadsheet cleanup", Updated: ago(30 * time.Hour), State: "excluded", Hash: "h3"}},
+		Sent: []InboxItem{
+			{Source: "claude-code", ID: "s-sent-1", Project: "Website", Title: "Refactor token store", Updated: ago(3 * time.Hour), State: "sent", Hash: "h4"},
+			{Source: "opencode", ID: "s-queued-1", Project: "Website", Title: "Tidy the footer", Updated: ago(4 * time.Hour), State: "queued", Hash: "h5"},
+		},
+		Retracted: []InboxItem{{Source: "claude-code", ID: "s-retr-1", Project: "Forge", Title: "Customer data migration", Updated: ago(50 * time.Hour), State: "retracted", Hash: "h6"}},
+	}
 }
