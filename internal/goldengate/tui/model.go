@@ -53,6 +53,9 @@ type modal struct {
 	title string
 	lines []string
 	yes   func(m *Model) tea.Cmd // nil: informational, any key closes
+	// no, when set, makes "n" a decision of its own ("not now", which is
+	// remembered) rather than just closing; esc still only closes.
+	no func(m *Model) tea.Cmd
 }
 
 // Model is the whole UI.
@@ -382,7 +385,9 @@ func (m *Model) hints(w int, pairs ...string) string {
 
 func (m *Model) modalBox() []string {
 	lines := append([]string{}, m.modal.lines...)
-	if m.modal.yes != nil {
+	if m.modal.yes != nil && m.modal.no != nil {
+		lines = append(lines, "", m.button(m.th.ButtonGo, -1, "y", "Yes")+"  "+m.button(m.th.Button, -1, "n", "Not now")+"  "+m.button(m.th.Button, -1, "esc", "Ask me later"))
+	} else if m.modal.yes != nil {
 		lines = append(lines, "", m.button(m.th.ButtonGo, -1, "y", "Yes")+"  "+m.button(m.th.Button, -1, "n", "No"))
 	} else {
 		lines = append(lines, "", m.button(m.th.Button, -1, "enter", "OK"))

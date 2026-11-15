@@ -130,6 +130,26 @@ func (f *fakeBackend) RevokeAgentToken(_ context.Context, admin, tokenID string)
 	return nil
 }
 
+// OfferDecide records the answer and removes the offer, as the real backend's
+// next listing would.
+func (f *fakeBackend) OfferDecide(_ context.Context, id string, accept bool) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	verb, what := "dismiss", "not now: the offer will not be made again"
+	if accept {
+		verb, what = "accept", "added rule r_0a1b2c3d; trust level is now auto"
+	}
+	f.offerDecs = append(f.offerDecs, verb+":"+id)
+	var keep []RuleOffer
+	for _, o := range f.inbox.Offers {
+		if o.ID != id {
+			keep = append(keep, o)
+		}
+	}
+	f.inbox.Offers = keep
+	return what, nil
+}
+
 func (f *fakeBackend) Receipts(context.Context) ([]Receipt, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

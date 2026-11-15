@@ -169,6 +169,8 @@ goldengate inbox approve --suggested               # at "suggest": approve what 
 
 Whatever auto sends is listed in a receipt, with the rule that sent it. `goldengate receipts` lists them, `goldengate receipts show` prints the latest (add `--agents` to see which assistants can read each project), and `goldengate receipts retract <receipt-id> --all` deletes those sessions from the server again. In the TUI, press `c` in the inbox.
 
+**Offers.** If you send five or more sessions from the same folder by hand within 30 days, the inbox offers the rule that would have done it for you ("Share sessions from ~/code/app automatically?"), with the exact rule and what saying yes changes. `goldengate rules accept <offer-id>` says yes, `goldengate rules dismiss <offer-id>` says not now and the offer is not made again. Nothing changes without a yes. In the TUI inbox, press `o`.
+
 **Sync in the background.** To send without thinking about it, let the system run the unattended sync:
 
 ```bash

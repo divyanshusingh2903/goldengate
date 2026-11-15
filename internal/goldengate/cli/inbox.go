@@ -123,6 +123,11 @@ func (a *app) inboxList(ctx context.Context) error {
 		}
 		fmt.Fprintln(a.Stdout, "undo with:   goldengate inbox reset <session-id>")
 	}
+	offers, err := a.ruleOffers(ctx, cfg, st)
+	if err != nil {
+		return err
+	}
+	a.printOffers(offers)
 	return nil
 }
 
@@ -278,7 +283,25 @@ func (b *tuiBackend) Inbox(ctx context.Context) (tui.Inbox, error) {
 		}
 		return nil
 	})
+	if err != nil {
+		return in, err
+	}
+	err = b.a.withOffers(ctx, func(_ config.Config, _ *gsync.State, offers []ruleOffer) error {
+		for _, o := range offers {
+			in.Offers = append(in.Offers, tui.RuleOffer{ID: o.ID, Question: o.Question(), Effect: o.Effect(),
+				Because: fmt.Sprintf("You sent %d sessions from there by hand in the last 30 days.", o.Count)})
+		}
+		return nil
+	})
 	return in, err
+}
+
+// OfferDecide implements tui.Backend.
+func (b *tuiBackend) OfferDecide(ctx context.Context, id string, accept bool) (string, error) {
+	b.mu.Lock()
+	b.reviewed = nil // a new rule changes what the next sync sends
+	b.mu.Unlock()
+	return b.a.decideOffer(ctx, id, accept)
 }
 
 // InboxDecide implements tui.Backend.

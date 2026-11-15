@@ -193,6 +193,23 @@ func (m *Model) onKeyInbox(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.openInbox()
 	case "c":
 		return m, m.openReceipts()
+	case "o":
+		if len(ib.in.Offers) == 0 {
+			m.setStatus("No offers. One appears when you keep sending sessions from the same folder by hand.", false)
+			break
+		}
+		o := ib.in.Offers[0]
+		be, ctx := m.be, m.ctx
+		decide := func(accept bool) func(*Model) tea.Cmd {
+			return func(*Model) tea.Cmd {
+				return func() tea.Msg {
+					what, err := be.OfferDecide(ctx, o.ID, accept)
+					return inboxDoneMsg{what, err}
+				}
+			}
+		}
+		lines := append([]string{o.Because, "", "Saying yes:"}, o.Effect...)
+		m.modal = &modal{title: o.Question, lines: lines, yes: decide(true), no: decide(false)}
 	case "up", "k":
 		ib.cursor--
 		ib.clamp(m, -1)
@@ -278,6 +295,8 @@ func (m *Model) viewInbox() string {
 		}
 		if it, ok := ib.current(); ok && it.Note != "" && it.State != InboxStateConflict {
 			note = "Your rules: " + it.Note + "."
+		} else if len(ib.in.Offers) > 0 && (!ok || it.State != InboxStateConflict) {
+			note = "Offer: " + ib.in.Offers[0].Question + " Press o to see what it would do."
 		}
 		out = append(out, " "+m.th.Dim.Render(clip(note, w-2)), "")
 		h := max(bh-2, 1)
@@ -309,6 +328,10 @@ func (m *Model) viewInbox() string {
 	}
 	f := frame{th: m.th, w: m.w, h: m.h, title: m.header("inbox"), right: m.serverBadge(), top: " " + strings.TrimSpace(m.sourcesLine())}
 	f.left = lines(strings.Join(out, "\n"), w, bh)
-	f.hint = m.statusLine(m.hints(w, "a", "approve", "x", "exclude", "e", "edit summary", "u", "undo", "R", "retract", "c", "receipts", "esc", "back"))
+	pairs := []string{"a", "approve", "x", "exclude", "e", "edit summary", "u", "undo", "R", "retract", "c", "receipts", "esc", "back"}
+	if len(ib.in.Offers) > 0 {
+		pairs = append([]string{"o", "offer"}, pairs...)
+	}
+	f.hint = m.statusLine(m.hints(w, pairs...))
 	return f.render()
 }

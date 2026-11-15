@@ -65,6 +65,9 @@ func (m *Model) onKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if md.yes != nil && (s == "y" || s == "Y") {
 			return m, md.yes(m)
 		}
+		if md.no != nil && (s == "n" || s == "N") {
+			return m, md.no(m)
+		}
 		return m, nil
 	}
 	if m.help {

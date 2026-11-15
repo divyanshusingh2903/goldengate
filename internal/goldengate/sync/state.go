@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS receipt_items(
   rule_id TEXT NOT NULL DEFAULT '', why TEXT NOT NULL DEFAULT '', retracted_at INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY(receipt_id, source, session_id));
 CREATE INDEX IF NOT EXISTS receipt_items_session ON receipt_items(source, session_id);
+CREATE TABLE IF NOT EXISTS offers_dismissed(key TEXT PRIMARY KEY, dismissed_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS imports(
   id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT NOT NULL, path TEXT NOT NULL, added_at INTEGER NOT NULL, UNIQUE(source, path));
 `

@@ -1,6 +1,7 @@
 package e2e
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -279,5 +280,97 @@ func TestAutoSyncSendsOnlyWhatIsApproved(t *testing.T) {
 	l.must(nil, "sync", "--auto")
 	if line := strings.TrimSpace(l.errOut.String()); !strings.HasPrefix(line, "goldengate auto sync: nothing new was sent") {
 		t.Fatalf("idle run: %q", line)
+	}
+}
+
+// After the same manual choice several times, Golden Gate offers a rule. It
+// only offers: nothing changes without a yes, the offer shows the exact rule
+// and what it would have matched, and "not now" is remembered.
+func TestRuleOffersFromManualChoices(t *testing.T) {
+	b := startBridge(t)
+	l := newLaptop(t)
+	l.must(l.initEnv(b), "init", "--non-interactive")
+	l.must(nil, "share", "add", "~/projects/demo")
+	l.must(nil, "share", "add", "~/projects/other")
+	session := func(n int, folder, prompt string) {
+		id := fmt.Sprintf("%08d-0000-4000-8000-000000000000", n)
+		l.addClaudeSession(id, "/home/user/projects/"+folder, prompt)
+	}
+	// four sessions sent by hand from demo (one is there already): no offer yet
+	for i := 1; i <= 3; i++ {
+		session(i, "demo", fmt.Sprintf("demo task %d", i))
+	}
+	l.must(nil, "sync", "--approve")
+	if out := l.must(nil, "rules", "offers"); !strings.Contains(out, "no offers") {
+		t.Fatalf("four manual sends are not a pattern yet: %s", out)
+	}
+	// the fifth makes the offer, in the inbox and under rules offers
+	session(4, "demo", "demo task 4")
+	for i := 11; i <= 15; i++ {
+		session(i, "other", fmt.Sprintf("other task %d", i))
+	}
+	l.must(nil, "sync", "--approve")
+	out := l.must(nil, "inbox")
+	ids := regexp.MustCompile(`offer (o_[0-9a-f]{8}): Share sessions from (~/projects/\w+) automatically\?`).FindAllStringSubmatch(out, -1)
+	if len(ids) != 2 {
+		t.Fatalf("two folders, two offers:\n%s", out)
+	}
+	offer := map[string]string{}
+	for _, m := range ids {
+		offer[m[2]] = m[1]
+	}
+	for _, want := range []string{
+		"You sent 5 sessions from there by hand in the last 30 days, such as:", "demo task",
+		`adds to project "demo" the rule: approve sessions in ~/projects/demo`,
+		"sets the project's trust level to auto",
+		"goldengate rules accept " + offer["~/projects/demo"], "goldengate rules dismiss " + offer["~/projects/demo"],
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("the offer lacks %q:\n%s", want, out)
+		}
+	}
+	// an offer changes nothing by itself
+	if cfg := l.readConfig(t); strings.Contains(cfg, "rules") || strings.Contains(cfg, "trust") {
+		t.Fatalf("an offer wrote to the config:\n%s", cfg)
+	}
+	if out := l.must(nil, "rules", "offers"); !strings.Contains(out, "nothing changes unless you accept") || strings.Count(out, "offer o_") != 2 {
+		t.Fatalf("rules offers: %s", out)
+	}
+
+	// not now is remembered, even as more sessions are sent by hand
+	if out := l.must(nil, "rules", "dismiss", offer["~/projects/other"]); !strings.Contains(out, "will not be made again") {
+		t.Fatalf("dismiss: %s", out)
+	}
+	session(16, "other", "other task 16")
+	l.must(nil, "sync", "--approve")
+	if out := l.must(nil, "rules", "offers"); strings.Contains(out, "~/projects/other") || !strings.Contains(out, "~/projects/demo") {
+		t.Fatalf("a dismissed offer came back, or the other one went: %s", out)
+	}
+
+	// yes adds exactly the rule shown and sets the trust level
+	out = l.must(nil, "rules", "accept", offer["~/projects/demo"])
+	if !strings.Contains(out, "approve sessions in ~/projects/demo") || !strings.Contains(out, "trust level is now auto") {
+		t.Fatalf("accept: %s", out)
+	}
+	cfg := l.readConfig(t)
+	if strings.Count(cfg, "[[projects.rules]]") != 1 || !strings.Contains(cfg, "folder = '~/projects/demo'") || strings.Count(cfg, "trust = 'auto'") != 1 {
+		t.Fatalf("one rule and one trust level, for demo only:\n%s", cfg)
+	}
+	if out := l.must(nil, "rules", "offers"); !strings.Contains(out, "no offers") {
+		t.Fatalf("an accepted offer is not made again: %s", out)
+	}
+	// the rule now does what the user kept doing by hand
+	session(5, "demo", "demo task AUTOSENT")
+	session(17, "other", "other task WAITS")
+	l.must(nil, "sync")
+	held := everythingTheServerHolds(t, b)
+	if !strings.Contains(held, "AUTOSENT") || strings.Contains(held, "WAITS") {
+		t.Fatal("demo sends on its own now; other still waits")
+	}
+	// sessions the rule sent are not counted as manual choices
+	for _, bad := range [][]string{{"rules", "accept", "o_00000000"}, {"rules", "dismiss", offer["~/projects/other"]}} {
+		if err := l.run(nil, bad...); err == nil {
+			t.Errorf("%v must be refused", bad)
+		}
 	}
 }

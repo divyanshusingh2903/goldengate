@@ -65,6 +65,7 @@ An exclude rule keeps matching sessions on this machine at every trust level.
 	remove := &cobra.Command{Use: "remove <project> <rule-id>", Short: "Remove a rule", Args: cobra.ExactArgs(2),
 		RunE: func(c *cobra.Command, args []string) error { return a.rulesRemove(args[0], args[1]) }}
 	cmd.AddCommand(list, add, remove)
+	cmd.AddCommand(a.offerCmds()...)
 	return cmd
 }
 

@@ -153,3 +153,54 @@ func (s *State) MarkRetracted(ctx context.Context, source, id string, now time.T
 	}
 	return nil
 }
+
+// WhyApprovedByHand is the reason recorded for a session an unattended run
+// sent because the user had approved it, not because a rule did.
+const WhyApprovedByHand = "you approved it in the inbox"
+
+// SentByRules returns the sessions that some receipt lists as sent by a
+// project's trust level and rules (not approved by hand), keyed by
+// source + "\x00" + session id.
+func (s *State) SentByRules(ctx context.Context) (map[string]bool, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT DISTINCT source, session_id FROM receipt_items WHERE why<>?`, WhyApprovedByHand)
+	if err != nil {
+		return nil, fmt.Errorf("state: receipts: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	out := map[string]bool{}
+	for rows.Next() {
+		var src, id string
+		if err := rows.Scan(&src, &id); err != nil {
+			return nil, fmt.Errorf("state: receipts: %w", err)
+		}
+		out[src+"\x00"+id] = true
+	}
+	return out, rows.Err()
+}
+
+// DismissOffer remembers that the user said "not now" to an offer, so the
+// same offer is not made again.
+func (s *State) DismissOffer(ctx context.Context, key string, now time.Time) error {
+	if _, err := s.db.ExecContext(ctx, `INSERT OR REPLACE INTO offers_dismissed(key, dismissed_at) VALUES(?,?)`, key, now.UnixNano()); err != nil {
+		return fmt.Errorf("state: offer: %w", err)
+	}
+	return nil
+}
+
+// DismissedOffers returns the keys of the offers the user turned down.
+func (s *State) DismissedOffers(ctx context.Context) (map[string]bool, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT key FROM offers_dismissed`)
+	if err != nil {
+		return nil, fmt.Errorf("state: offers: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	out := map[string]bool{}
+	for rows.Next() {
+		var k string
+		if err := rows.Scan(&k); err != nil {
+			return nil, fmt.Errorf("state: offers: %w", err)
+		}
+		out[k] = true
+	}
+	return out, rows.Err()
+}
