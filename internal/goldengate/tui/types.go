@@ -349,12 +349,13 @@ type Inbox struct {
 	Excluded  []InboxItem
 	Sent      []InboxItem // on the server, or queued for the next sync
 	Retracted []InboxItem
-	// Offers are rules Golden Gate offers because the user keeps making the
-	// same choice by hand. Nothing changes unless one is accepted.
+	// Offers are what Golden Gate proposes: a rule, because the user keeps
+	// making the same choice by hand, or a project for a folder that is in
+	// none. Nothing changes unless one is accepted.
 	Offers []RuleOffer
 }
 
-// RuleOffer is one offered rule, in words.
+// RuleOffer is one offer (a rule, or a project for a folder), in words.
 type RuleOffer struct {
 	ID       string
 	Question string   // "Share sessions from ~/code/app automatically?"

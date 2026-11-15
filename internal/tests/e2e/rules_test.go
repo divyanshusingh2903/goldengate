@@ -320,7 +320,7 @@ func TestRuleOffersFromManualChoices(t *testing.T) {
 		offer[m[2]] = m[1]
 	}
 	for _, want := range []string{
-		"You sent 5 sessions from there by hand in the last 30 days, such as:", "demo task",
+		"You sent 5 sessions from there by hand in the last 30 days.", "Such as:", "demo task",
 		`adds to project "demo" the rule: approve sessions in ~/projects/demo`,
 		"sets the project's trust level to auto",
 		"goldengate rules accept " + offer["~/projects/demo"], "goldengate rules dismiss " + offer["~/projects/demo"],
@@ -338,7 +338,7 @@ func TestRuleOffersFromManualChoices(t *testing.T) {
 	}
 
 	// not now is remembered, even as more sessions are sent by hand
-	if out := l.must(nil, "rules", "dismiss", offer["~/projects/other"]); !strings.Contains(out, "will not be made again") {
+	if out := l.must(nil, "rules", "dismiss", offer["~/projects/other"]); !strings.Contains(out, "will not be offered again") {
 		t.Fatalf("dismiss: %s", out)
 	}
 	session(16, "other", "other task 16")

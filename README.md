@@ -171,6 +171,8 @@ Whatever auto sends is listed in a receipt, with the rule that sent it. `goldeng
 
 **Offers.** If you send five or more sessions from the same folder by hand within 30 days, the inbox offers the rule that would have done it for you ("Share sessions from ~/code/app automatically?"), with the exact rule and what saying yes changes. `goldengate rules accept <offer-id>` says yes, `goldengate rules dismiss <offer-id>` says not now and the offer is not made again. Nothing changes without a yes. In the TUI inbox, press `o`.
 
+**Project suggestions.** If a folder with sessions is in no project but looks like it belongs to one (a worktree of a shared repository, the same repository remote, or a branch named after one of the project's issues), the inbox suggests the project and says why. `goldengate projects accept <id>` adds the folder in one step and its sessions then wait in the inbox; `goldengate projects dismiss <id>` says not now. Comparing remotes and branches needs `git = true` under `[enrich]` in the config, which lets Golden Gate read each folder's git `HEAD` and `config` files; sessions of folders you have not shared are never read.
+
 **Sync in the background.** To send without thinking about it, let the system run the unattended sync:
 
 ```bash
