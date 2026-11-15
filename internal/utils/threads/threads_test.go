@@ -226,3 +226,25 @@ func TestFromPayload(t *testing.T) {
 		t.Errorf("%+v", s)
 	}
 }
+
+func TestGitLabKeys(t *testing.T) {
+	// a session that merged "api!7" by number joins the one that created the full key
+	got := threads.Build([]threads.Session{
+		{Source: "a", ID: "1", ProjectID: "p", UpdatedAt: at(1), Items: []model.WorkItem{
+			item(model.KindIssue, "linear", "linear:LIN-1", model.StatusMentioned, model.ViaBranch, "", 0),
+			item(model.KindPR, "gitlab", "acme/api!7", model.StatusCreated, model.ViaToolResult, "", 0)}},
+		{Source: "b", ID: "2", ProjectID: "p", UpdatedAt: at(2), Items: []model.WorkItem{
+			item(model.KindPR, "gitlab", "api!7", model.StatusMerged, model.ViaToolResult, "", 1)}},
+		// GitHub's #7 in the same project is something else
+		{Source: "c", ID: "3", ProjectID: "p", UpdatedAt: at(3), Items: []model.WorkItem{
+			item(model.KindPR, "github", "acme/api#7", model.StatusMentioned, model.ViaText, "", 2)}},
+	})
+	if len(got) != 2 {
+		t.Fatalf("threads: %v", ids(got))
+	}
+	for _, th := range got {
+		if th.ID == "issue:linear:LIN-1" && (members(th) != "2 1" || th.Items[1].Status != model.StatusMerged) {
+			t.Errorf("gitlab thread: %s %+v", members(th), th.Items)
+		}
+	}
+}

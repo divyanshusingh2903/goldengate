@@ -164,8 +164,8 @@ Besides the prose summary, every session yields structured **work items**, becau
 ```go
 type WorkItem struct {
     Kind     string     // commit | pull_request | issue | file | artifact
-    Provider string     // for issues and PRs: github | linear | jira | "" 
-    Key      string     // stable id: "<repo>@<sha>", "<repo>#<n>", "linear:ENG-123", "jira:PLAT-45", "<relpath>", "artifact:<id>"
+    Provider string     // for issues and PRs: github | gitlab | linear | jira | "" 
+    Key      string     // stable id: "<repo>@<sha>", "<repo>#<n>", "<group>/<project>!<n>" (GitLab merge request), "linear:ENG-123", "jira:PLAT-45", "<relpath>", "artifact:<id>"
     Title    string     // commit subject, PR/issue title, file or artifact name
     URL      string     // PR/issue/commit URL when known (credentials stripped)
     Status   string     // mentioned | created | updated | merged | closed | completed | canceled
@@ -184,7 +184,7 @@ What each source can provide
 
 | Source | Commits and PRs | Files and artifacts |
 |---|---|---|
-| Claude Code, Codex, OpenCode | From shell tool calls and results (`git commit`, `git push`, `gh pr create\|merge\|close`), plus SHAs, URLs and `#n` in text | Files created vs modified, from write/edit/patch tool calls (each tool names these differently; the adapter normalizes them) |
+| Claude Code, Codex, OpenCode | From shell tool calls and results (`git commit`, `git push`, `gh pr create\|merge\|close`, `glab mr create\|merge\|close`), plus SHAs, URLs and `#n` in text | Files created vs modified, from write/edit/patch tool calls (each tool names these differently; the adapter normalizes them) |
 | claude.ai export | Mentions in text only (status `mentioned`) | Artifacts and files created or uploaded in chats, if the export includes them (verify against a real export) |
 
 Privacy
@@ -192,7 +192,7 @@ Privacy
 - File paths are project-relative and scrubbed. Files matching secret patterns (`.env*`, `*.pem`, `id_rsa*`, `credentials*`) are omitted entirely.
 - Commit messages and PR titles go through the same redaction pipeline as everything else.
 
-Issue trackers (Linear, Jira/Atlassian, GitHub Issues)
+Issue trackers (Linear, Jira/Atlassian, GitHub Issues, GitLab)
 
 Issues use the same model with `Kind = "issue"`, a `Provider`, a `Key` such as `linear:ENG-123` (include the workspace or site when known), and `RawState` holding the tracker's own state name.
 
@@ -206,6 +206,7 @@ Status mapping
 Detection
 - Anything above `mentioned` needs tool-result evidence: MCP calls to the tracker (for example Linear's issue save/get tools or Atlassian's Jira tools), CLI calls (`gh issue create|close`, similar), or API-shaped results. Exact tool names and result shapes must be inspected per tool and per server version, not assumed.
 - URLs: `linear.app/<workspace>/issue/<KEY-N>`, `<site>.atlassian.net/browse/<KEY-N>` (and Jira board URLs with `selectedIssue=`), `github.com/<owner>/<repo>/issues/<n>`.
+- GitLab: `gitlab.com/<group>[/<subgroup>]/<project>/-/issues/<n>` and `/-/merge_requests/<n>`, and the same on self-hosted hosts listed in `issues.gitlab_hosts` (a host that is not listed is never read). A merge request is a `pull_request` with provider `gitlab` and the key `<group>/<project>!<n>`; an issue is `gitlab:<group>/<project>#<n>`; a self-hosted project's key starts with its host. `glab mr create|merge|close|reopen|update|note` and `glab issue create|close|reopen|update|note` are evidence under the same rules as `gh`: the command must have succeeded, a create counts only when its result holds the new URL, and viewing or listing changes nothing. "MR !12" in text is a mention. Merge requests are always extracted, as GitHub pull requests are; GitLab issues follow the `gitlab` entry in `issues.providers`.
 - Bare keys like `ENG-123` are ambiguous (`UTF-8`, `SHA-256`, `ISO-8601`, `CVE-2024-1234`). Accept a bare key only if its prefix is known from a URL or tool result in the same project, is listed in config (`[issues]`), or came from a tool result. Otherwise ignore it, and keep a denylist of common false-positive prefixes.
 - Branch names: a session on `fix/LIN-412-auth`, `lin-412-auth` or `user/eng-12_title` belongs with that issue even when nobody types the key. The key must be whole words of the branch name (either case) and its prefix must pass the same rule as a bare key, so `feature/utf-8-export` yields nothing. The evidence is recorded as `via: "branch"` and the status is `mentioned`: a branch proves which issue the session is about, not what happened to it. Plain numbers in branch names (`feat/21-threads`) are not read as GitHub issues: they are too ambiguous.
 
@@ -274,7 +275,8 @@ git = false                      # verify commits against the local repo (read-o
 github = false                   # look up PR state via the GitHub API (network call, opt-in)
 
 [issues]
-providers = ["linear", "jira", "github"]   # trackers to extract; empty list disables
+providers = ["linear", "jira", "github", "gitlab"]   # trackers to extract; empty list disables
+gitlab_hosts = []                           # self-hosted GitLab hosts, e.g. ["gitlab.example.com"]
 linear_teams = ["ENG"]                      # known key prefixes, helps bare-key detection
 jira_projects = ["PLAT"]
 refresh_state = false                       # look up live state via each tracker's API (network call, opt-in)

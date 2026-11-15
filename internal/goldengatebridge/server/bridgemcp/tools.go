@@ -763,7 +763,7 @@ type ListWorkIn struct {
 	Since    string `json:"since,omitempty" jsonschema:"start of the range, YYYY-MM-DD (UTC) or RFC 3339; takes precedence over days"`
 	Until    string `json:"until,omitempty" jsonschema:"end of the range, YYYY-MM-DD (that whole day is included) or RFC 3339; default now"`
 	Status   string `json:"status,omitempty" jsonschema:"filter by status: mentioned, created, updated, merged, closed, completed or canceled"`
-	Provider string `json:"provider,omitempty" jsonschema:"issues only: github, linear or jira"`
+	Provider string `json:"provider,omitempty" jsonschema:"github, gitlab, linear or jira"`
 	Source   string `json:"source,omitempty" jsonschema:"artifacts only: claude-code, codex, opencode or claude-ai"`
 	Limit    int    `json:"limit,omitempty" jsonschema:"maximum results (default 20, max 50)"`
 	Cursor   string `json:"cursor,omitempty" jsonschema:"opaque cursor from a previous result's next_cursor"`

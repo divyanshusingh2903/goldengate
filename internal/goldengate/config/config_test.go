@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -99,5 +100,47 @@ func TestResolveDirsXDG(t *testing.T) {
 	d := ResolveDirs(func(k string) string { return map[string]string{"XDG_CONFIG_HOME": "/x/cfg"}[k] }, "/home/u")
 	if d.ConfigPath() != "/x/cfg/goldengate/config.toml" || d.StatePath() != "/home/u/.local/state/goldengate/state.db" {
 		t.Fatalf("%+v", d)
+	}
+}
+
+func TestGitLabJoinsTheDefaultProviders(t *testing.T) {
+	load := func(body string) Config {
+		t.Helper()
+		p := filepath.Join(t.TempDir(), "config.toml")
+		if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		c, err := Load(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+	// the list every earlier build wrote gains gitlab, once
+	c := load("version = 2\n[issues]\nproviders = [\"linear\", \"jira\", \"github\"]\n")
+	if !slices.Contains(c.Issues.Providers, "gitlab") || c.Version != CurrentVersion {
+		t.Errorf("old default: %v v%d", c.Issues.Providers, c.Version)
+	}
+	// a list the user changed is left alone
+	if c := load("version = 2\n[issues]\nproviders = [\"github\"]\n"); len(c.Issues.Providers) != 1 {
+		t.Errorf("changed list: %v", c.Issues.Providers)
+	}
+	// and so is the old default once the file is at this version
+	if c := load("version = 3\n[issues]\nproviders = [\"linear\", \"jira\", \"github\"]\n"); slices.Contains(c.Issues.Providers, "gitlab") {
+		t.Errorf("current file: %v", c.Issues.Providers)
+	}
+	if !slices.Contains(Default().Issues.Providers, "gitlab") {
+		t.Error("new installs read GitLab issues")
+	}
+	c = Default()
+	c.Issues.GitLabHosts = []string{"gitlab.example.com"}
+	if err := c.Validate(); err != nil {
+		t.Error(err)
+	}
+	for _, bad := range []string{"https://gitlab.example.com", "gitlab.example.com/group", "", "a b"} {
+		c.Issues.GitLabHosts = []string{bad}
+		if c.Validate() == nil {
+			t.Errorf("host %q accepted", bad)
+		}
 	}
 }

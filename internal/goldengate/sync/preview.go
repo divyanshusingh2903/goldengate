@@ -74,7 +74,7 @@ func (s *Syncer) Preview(ctx context.Context, project string, limit int) (Previe
 	if limit > 0 && len(refs) > limit {
 		refs = refs[:limit]
 	}
-	wo := workitems.Options{Providers: s.Config.Issues.Providers}
+	wo := workitems.Options{Providers: s.Config.Issues.Providers, GitLabHosts: s.Config.Issues.GitLabHosts}
 	wo.KnownPrefixes = append(append([]string{}, s.Config.Issues.LinearTeams...), s.Config.Issues.JiraProjects...)
 	for _, f := range refs {
 		raw, err := f.a.Load(ctx, f.ref)

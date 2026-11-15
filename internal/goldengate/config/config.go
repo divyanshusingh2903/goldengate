@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"runtime"
 	"slices"
 	"strconv"
@@ -41,7 +42,7 @@ type Config struct {
 }
 
 // CurrentVersion is the Version written by this build.
-const CurrentVersion = 2
+const CurrentVersion = 3
 
 // Summarize chooses how session summaries are written. The default is the
 // local heuristic; a model is opt-in, and then the redacted conversation of
@@ -110,6 +111,9 @@ type Issues struct {
 	Providers    []string `toml:"providers"`
 	LinearTeams  []string `toml:"linear_teams"`
 	JiraProjects []string `toml:"jira_projects"`
+	// GitLabHosts are self-hosted GitLab hosts whose issue and merge request
+	// URLs are read like gitlab.com's.
+	GitLabHosts  []string `toml:"gitlab_hosts,omitempty"`
 	RefreshState bool     `toml:"refresh_state"`
 }
 
@@ -129,10 +133,13 @@ func Default() Config {
 			Since:          "90d",
 			Level:          model.LevelSummary,
 		},
-		Issues: Issues{Providers: []string{"linear", "jira", "github"}},
+		Issues: Issues{Providers: []string{"linear", "jira", "github", "gitlab"}},
 		Redact: Redact{StripHomePrefix: true},
 	}
 }
+
+// reHost is a bare host name: no scheme, path or port.
+var reHost = regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9.\-]*[A-Za-z0-9])?$`)
 
 // Validate checks the configuration for unsafe or inconsistent values.
 func (c Config) Validate() error {
@@ -153,6 +160,11 @@ func (c Config) Validate() error {
 	}
 	if _, err := ParseSince(c.Share.Since); err != nil {
 		return err
+	}
+	for _, h := range c.Issues.GitLabHosts {
+		if !reHost.MatchString(h) {
+			return fmt.Errorf("config: issues.gitlab_hosts takes host names such as gitlab.example.com, got %q", h)
+		}
 	}
 	switch c.Summarize.Provider {
 	case "", "heuristic", "anthropic", "openai", "gemini", "opencode", "ollama", "custom":
@@ -279,12 +291,19 @@ func Load(path string) (Config, error) {
 		return Default(), err
 	}
 	c.migrate()
-	if c.Version < CurrentVersion {
+	if c.Version < 2 {
 		// Everything shared before the inbox existed keeps being sent as it
 		// was. Projects shared from now on wait for approval.
 		for i := range c.Projects {
 			c.Projects[i].AutoApprove = true
 		}
+	}
+	if c.Version < 3 && slices.Equal(c.Issues.Providers, []string{"linear", "jira", "github"}) {
+		// The list every earlier build wrote: GitLab joins it. A list the
+		// user changed is left as it is.
+		c.Issues.Providers = append(c.Issues.Providers, "gitlab")
+	}
+	if c.Version < CurrentVersion {
 		c.Version = CurrentVersion
 	}
 	if c.Version > CurrentVersion {

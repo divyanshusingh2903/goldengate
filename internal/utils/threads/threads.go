@@ -108,14 +108,19 @@ func union(a, b *node) {
 
 func anchors(it model.WorkItem) bool { return it.Kind == model.KindIssue || it.Kind == model.KindPR }
 
-// repoOf splits a GitHub key ("owner/repo#7", "github:owner/repo#7", "repo#7")
-// into its repository and number. ok is false for tracker keys.
+// hosted reports whether an item lives in a repository (GitHub, GitLab)
+// rather than in a tracker with keys of its own.
+func hosted(it model.WorkItem) bool { return it.Provider == "github" || it.Provider == "gitlab" }
+
+// repoOf splits a repository key ("owner/repo#7", "github:owner/repo#7",
+// "repo#7", GitLab's "group/project!7") into its repository and number. ok
+// is false for tracker keys.
 func repoOf(it model.WorkItem) (repo, num string, ok bool) {
-	if it.Provider != "github" {
+	if !hosted(it) {
 		return "", "", false
 	}
-	key := strings.TrimPrefix(it.Key, "github:")
-	i := strings.LastIndex(key, "#")
+	key := strings.TrimPrefix(it.Key, it.Provider+":")
+	i := strings.LastIndexAny(key, "#!")
 	if i < 0 {
 		return "", "", false
 	}
@@ -133,17 +138,17 @@ func repoOf(it model.WorkItem) (repo, num string, ok bool) {
 // the pull request's title names the issue. A session that only mentions two
 // issues never joins them; it appears in both threads.
 //
-// A GitHub key without an owner ("app#7", written by a session that never saw
+// A GitHub or GitLab key without an owner ("app#7", written by a session that never saw
 // the URL) is taken as the full key ("example/app#7") when exactly one full
 // key of that kind and number exists in the same project.
 func Build(sessions []Session) []Thread {
-	// full GitHub keys per project, kind and number
-	type slot struct{ project, kind, num string }
+	// full repository keys per project, host, kind and number
+	type slot struct{ project, provider, kind, num string }
 	full := map[slot][]string{}
 	for _, s := range sessions {
 		for _, it := range s.Items {
 			if repo, num, ok := repoOf(it); ok && anchors(it) && strings.Contains(repo, "/") {
-				k := slot{s.ProjectID, it.Kind, num}
+				k := slot{s.ProjectID, it.Provider, it.Kind, num}
 				if !slices.Contains(full[k], it.Key) {
 					full[k] = append(full[k], it.Key)
 				}
@@ -154,7 +159,7 @@ func Build(sessions []Session) []Thread {
 	canonical := func(s Session, it model.WorkItem) (id, key string) {
 		key = it.Key
 		if repo, num, ok := repoOf(it); ok && !strings.Contains(repo, "/") {
-			if c := full[slot{s.ProjectID, it.Kind, num}]; len(c) == 1 {
+			if c := full[slot{s.ProjectID, it.Provider, it.Kind, num}]; len(c) == 1 {
 				key = c[0]
 			} else {
 				// no owner and nothing to match: the key means something
@@ -216,7 +221,7 @@ func Build(sessions []Session) []Thread {
 			continue
 		}
 		for _, i := range all {
-			if i.item.Kind == model.KindIssue && i.item.Provider != "github" && namesKey(p.item.Title, i.item.Key) {
+			if i.item.Kind == model.KindIssue && !hosted(i.item) && namesKey(p.item.Title, i.item.Key) {
 				union(i, p)
 			}
 		}
@@ -287,10 +292,11 @@ func thread(ns []*node, sessions []Session, canonical func(Session, model.WorkIt
 	return th
 }
 
-// rank orders a thread's items: tracker issue, GitHub issue, pull request.
+// rank orders a thread's items: tracker issue, GitHub or GitLab issue, pull
+// or merge request.
 func rank(it model.WorkItem) int {
 	switch {
-	case it.Kind == model.KindIssue && it.Provider != "github":
+	case it.Kind == model.KindIssue && !hosted(it):
 		return 0
 	case it.Kind == model.KindIssue:
 		return 1
