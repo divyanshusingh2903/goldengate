@@ -11,8 +11,8 @@ This file lets any Claude Code session (or person) pick up the Product v2 work w
 
 _Last updated 2026-11-15. Update this section whenever a row in the queue changes._
 
-**Progress:** 20 of 31 scheduled issues done (plus 2 stretch). Phases 1 (Foundations), 2 (Per-agent access) and 3 (Inbox and curation) are complete.
-**In progress:** #32 Suggest rules from manual choices, size S, planned Nov 25. **Next up:** #22 Suggest projects (inbox only).
+**Progress:** 21 of 31 scheduled issues done (plus 2 stretch). Phases 1 (Foundations), 2 (Per-agent access) and 3 (Inbox and curation) are complete.
+**Next up:** #22 Suggest projects (inbox only), size M, planned Nov 25. Its dependencies #18, #20 and #21 are done. Phase 4 so far: #21, #35, #36, #45, #31, #33, #34 and #32 done.
 
 ### Done
 
@@ -38,6 +38,7 @@ _Last updated 2026-11-15. Update this section whenever a row in the queue change
 | #31 | Per-project trust levels (ask, suggest, auto) and user-written rules on deterministic facts that approve or exclude a project's sessions; broad patterns ask before first sending from a new folder or chat; `goldengate rules`, `projects trust` | #82 | 2026-11-15 |
 | #33 | Receipts: every automatic send is listed in one receipt with its rule; `goldengate receipts` (list, show, retract), TUI receipts screen, opt-in notification | #84 | 2026-11-15 |
 | #34 | `goldengate sync --auto` for unattended runs (approved or rule-approved only, one-line report, receipt); `install-schedule` and `install-hook claude-code` with `--print` and uninstall | #86 | 2026-11-15 |
+| #32 | Rule offers from repeated manual choices: exact rule, what it would have matched, yes or not now (remembered); CLI inbox, `rules offers`, TUI inbox | #88 | 2026-11-15 |
 
 Supporting changes (not queue issues):
 
@@ -47,7 +48,7 @@ Supporting changes (not queue issues):
 | First `pr-template` check (unblocked the `main` ruleset); later replaced | #52 | 2026-11-14 |
 | The user's stricter `pr-template` check (Checklist with every item ticked; skips Dependabot) | #9 | 2026-11-14 |
 | This ledger, then its checklist rule, status section and roadmap sync | #54, #56, #57, #58 | 2026-11-14 |
-| Ledger status updates between issues (#49 done; phase 2 complete; refresh; phase 3 complete; #21 done; #35 done; #36 done; #45 done; #31 done; #33 done; #34 done) | #61, #68, #69, #73, #75, #77, #79, #81, #83, #85, #87 | 2026-11-15 |
+| Ledger status updates between issues (#49 done; phase 2 complete; refresh; phase 3 complete; #21 done; #35 done; #36 done; #45 done; #31 done; #33 done; #34 done; #32 done) | #61, #68, #69, #73, #75, #77, #79, #81, #83, #85, #87, #89 | 2026-11-15 |
 
 ### Open loose ends
 
@@ -135,7 +136,7 @@ Status values: `todo`, `in progress`, `in review`, `blocked`, `done`. Size: S ab
 | 18 | #31 Rules and per-project trust levels | L | #20, #18 | Nov 23 | done | #82 |
 | 19 | #33 Receipts for automatic sends | S | #31, #29 | Nov 24 | done | #84 |
 | 20 | #34 Background sync, rule-approved only | M | #31, #33 | Nov 24 | done | #86 |
-| 21 | #32 Suggest rules from manual choices | S | #31 | Nov 25 | in progress | |
+| 21 | #32 Suggest rules from manual choices | S | #31 | Nov 25 | done | #88 |
 | 22 | #22 Suggest projects (inbox only) | M | #18, #20, #21 | Nov 25 | todo | |
 | 23 | #44 Cursor adapter: spike, then build | L | | Nov 26 | todo | |
 | 24 | #39 Spike: share-link import | S | #17 | Nov 27 | todo | |
@@ -196,3 +197,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-15: #34 implemented: `goldengate sync --auto` for unattended runs (only approved or rule-approved sessions, one-line report, everything sent listed in the receipt), `install-schedule` (systemd user timer, launchd agent, Task Scheduler) and `install-hook claude-code`, each with `--print` and an uninstall command.
 - 2026-11-15: #34 done (#86). Roadmap page updated. Next: #32.
 - 2026-11-15: #32 implemented: after 5 sessions sent by hand from one folder or chat grouping within 30 days, an offer shows the exact rule, what it would have matched and what accepting changes; only a yes adds it; not now is remembered; shown in the CLI inbox, `rules offers` and the TUI inbox.
+- 2026-11-15: #32 done (#88). Roadmap page updated. Next: #22.
