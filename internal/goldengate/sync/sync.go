@@ -484,7 +484,7 @@ func (s *Syncer) Plan(ctx context.Context, o RunOpts) (Batch, Report, error) {
 				switch {
 				case g.auto:
 				case g.manual:
-					why = "you approved it in the inbox"
+					why = WhyApprovedByHand
 				default:
 					why = "its folder is shared outside any project, which sends everything"
 				}

@@ -299,6 +299,11 @@ type Backend interface {
 	EditBegin(ctx context.Context, item InboxItem) (path string, err error)
 	EditFinish(ctx context.Context, item InboxItem, path string) (string, error)
 
+	// OfferDecide accepts a rule offer (the rule is added to its project) or
+	// turns it down, which is remembered so it is not offered again. It
+	// says what happened.
+	OfferDecide(ctx context.Context, offerID string, accept bool) (string, error)
+
 	// Receipts lists what was sent automatically (by a project's trust
 	// level and rules), newest receipt first. An item is retracted with
 	// InboxDecide and InboxRetract.
@@ -344,6 +349,17 @@ type Inbox struct {
 	Excluded  []InboxItem
 	Sent      []InboxItem // on the server, or queued for the next sync
 	Retracted []InboxItem
+	// Offers are rules Golden Gate offers because the user keeps making the
+	// same choice by hand. Nothing changes unless one is accepted.
+	Offers []RuleOffer
+}
+
+// RuleOffer is one offered rule, in words.
+type RuleOffer struct {
+	ID       string
+	Question string   // "Share sessions from ~/code/app automatically?"
+	Because  string   // "You sent 6 sessions from there by hand in the last 30 days."
+	Effect   []string // exactly what saying yes changes
 }
 
 // InboxItem is one session in the inbox.

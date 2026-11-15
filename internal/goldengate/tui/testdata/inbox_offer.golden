@@ -1,0 +1,40 @@
+┌ goldengate  1 Projects  2 Sync  3 Server  4 Settings  5 Agents  ───────────────────── ● connected bridge.example.com ┐
+│ Sources ● CC Claude Code 142  ● CX Codex 37  ● OC OpenCode 58  ○ AI claude.ai                                        │
+├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ Offer: Share sessions from ~/code/app automatically? Press o to see what it would do.                                │
+│                                                                                                                      │
+│ Waiting for your approval (2)                                                                                        │
+│▌ CC Pharmfindr              2h ago    pending             Fix OAuth redirect mismatch                                │
+│  CX Forge                   5h ago    changed since sent  Add gRPC health checks; key [REDACTED:aws-access-key]      │
+│ Excluded: kept on this machine (1)                                                                                   │
+│  CC Pharmfindr              30h ago   excluded            Salary spreadsheet cleanup                                 │
+│ Sent, or queued for the next sync (2)                                                                                │
+│  CC Website                 3h ago    sent                Refactor token store                                       │
+│  OC Website                 4h ago    queued              Tidy the footer                                            │
+│ Retracted: deleted from the server (1)                                                                               │
+│  CC Forge                   2d ago    retracted           Customer data migration                                    │
+│          ┌ Share sessions from ~/code/app automatically? ─────────────────────────────────────────────────┐          │
+│          │ You sent 6 sessions from there by hand in the last 30 days.                                    │          │
+│          │                                                                                                │          │
+│          │ Saying yes:                                                                                    │          │
+│          │ adds to project "App" the rule: approve sessions in ~/code/app                                 │          │
+│          │ sets the project's trust level to auto, so sessions the rule matches are sent on the next sync │          │
+│          │                                                                                                │          │
+│          │ [y Yes]  [n Not now]  [esc Ask me later]                                                       │          │
+│          └────────────────────────────────────────────────────────────────────────────────────────────────┘          │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+│                                                                                                                      │
+├──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┤
+│ o offer  a approve  x exclude  e edit summary  u undo  R retract  c receipts  esc back                               │
+└──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘
