@@ -12,7 +12,7 @@ This file lets any Claude Code session (or person) pick up the Product v2 work w
 _Last updated 2026-11-15. Update this section whenever a row in the queue changes._
 
 **Progress:** 22 of 31 scheduled issues done (plus 2 stretch). Phases 1 (Foundations), 2 (Per-agent access) and 3 (Inbox and curation) are complete.
-**Next up:** #44 Cursor adapter: spike, then build, size L, planned Nov 26. It has no dependencies. Phase 4 (work items, rules and automation) is complete: #21, #35, #36, #45, #31, #33, #34, #32 and #22.
+**In progress:** #44 Cursor adapter: spike, then build, size L, planned Nov 26. **Next up:** #39 Spike: share-link import. Phase 4 (work items, rules and automation) is complete: #21, #35, #36, #45, #31, #33, #34, #32 and #22.
 
 ### Done
 
@@ -140,7 +140,7 @@ Status values: `todo`, `in progress`, `in review`, `blocked`, `done`. Size: S ab
 | 20 | #34 Background sync, rule-approved only | M | #31, #33 | Nov 24 | done | #86 |
 | 21 | #32 Suggest rules from manual choices | S | #31 | Nov 25 | done | #88 |
 | 22 | #22 Suggest projects (inbox only) | M | #18, #20, #21 | Nov 25 | done | #90 |
-| 23 | #44 Cursor adapter: spike, then build | L | | Nov 26 | todo | |
+| 23 | #44 Cursor adapter: spike, then build | L | | Nov 26 | in progress | |
 | 24 | #39 Spike: share-link import | S | #17 | Nov 27 | todo | |
 | 25 | #41 Per-conversation sharing for chats | M | #18, #29 | Nov 27 | todo | |
 | 26 | #42 Incremental export re-import | S | #20 | Nov 27 | todo | |
