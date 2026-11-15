@@ -25,7 +25,7 @@ func TestInboxFromTheCommandLine(t *testing.T) {
 	if !strings.Contains(out, "wait for your approval") {
 		t.Fatalf("sharing says the sessions wait: %s", out)
 	}
-	if out := l.must(nil, "projects", "list"); !strings.Contains(out, "[new sessions wait in the inbox]") {
+	if out := l.must(nil, "projects", "list"); !strings.Contains(out, "[ask: new sessions wait in the inbox]") {
 		t.Fatalf("projects list shows the mode: %s", out)
 	}
 
@@ -119,7 +119,7 @@ func TestInboxFromTheCommandLine(t *testing.T) {
 		t.Error("on or off only")
 	}
 	l.must(nil, "projects", "auto", "demo", "off")
-	if out := l.must(nil, "projects", "list"); !strings.Contains(out, "[new sessions wait in the inbox]") {
+	if out := l.must(nil, "projects", "list"); !strings.Contains(out, "[ask: new sessions wait in the inbox]") {
 		t.Fatalf("auto off: %s", out)
 	}
 }

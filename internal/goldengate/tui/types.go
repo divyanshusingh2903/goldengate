@@ -356,6 +356,9 @@ type InboxItem struct {
 	Edited bool
 	// Hash is the content a decision is made for; pass it back unchanged.
 	Hash string
+	// Note says what the project's rules think of a waiting session
+	// ("suggested by rule r_1a2b"); empty when they say nothing.
+	Note string
 }
 
 // AgentsInfo is the Agents screen's content.

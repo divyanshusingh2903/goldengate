@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/config"
+	"github.com/divyanshusingh2903/goldengate/internal/goldengate/rules"
 )
 
 // projectsCmd manages named projects. A project's members are what is shared;
@@ -62,7 +63,9 @@ func (a *app) projectsCmd() *cobra.Command {
 	}
 	auto := &cobra.Command{Use: "auto <project> on|off", Short: "Auto-approve: send a project's new sessions without asking (off: they wait in the inbox)", Args: cobra.ExactArgs(2),
 		RunE: func(c *cobra.Command, args []string) error { return a.projectsAuto(args[0], args[1]) }}
-	cmd.AddCommand(list, create, rename, merge, add, remove, del, auto)
+	trust := &cobra.Command{Use: "trust <project> ask|suggest|auto", Short: "How far a project's automation goes: ask (everything waits), suggest (rules mark sessions in the inbox), auto (rules send them)", Args: cobra.ExactArgs(2),
+		RunE: func(c *cobra.Command, args []string) error { return a.projectsTrust(args[0], args[1]) }}
+	cmd.AddCommand(list, create, rename, merge, add, remove, del, auto, trust)
 	return cmd
 }
 
@@ -80,9 +83,15 @@ func (a *app) projectsList() error {
 		return err
 	}
 	for _, p := range cfg.Projects {
-		mode := "new sessions wait in the inbox"
-		if p.AutoApprove {
-			mode = "auto-approve: new sessions are sent"
+		mode := "ask: new sessions wait in the inbox"
+		switch p.TrustLevel() {
+		case rules.TrustAuto:
+			mode = "auto: new sessions are sent"
+			if hasApproveRule(p) {
+				mode = "auto: sessions its rules approve are sent"
+			}
+		case rules.TrustSuggest:
+			mode = "suggest: new sessions wait, marked for approval"
 		}
 		fmt.Fprintf(a.Stdout, "%s  (%s)  [%s]\n", p.Name, p.ID, mode)
 		if len(p.Members) == 0 {
@@ -101,6 +110,9 @@ func (a *app) projectsList() error {
 		if len(p.WorkItems) > 0 {
 			fmt.Fprintf(a.Stdout, "  work items: %s\n", strings.Join(p.WorkItems, ", "))
 		}
+		for _, r := range p.Rules {
+			fmt.Fprintf(a.Stdout, "  rule %s: %s\n", r.ID, r)
+		}
 	}
 	return nil
 }
@@ -117,7 +129,7 @@ func (a *app) projectsCreate(ctx context.Context, name string, members []string,
 		if _, err := cfg.CreateProject(name); err != nil {
 			return err
 		}
-		cfg.Projects[cfg.ProjectIndex(name)].AutoApprove = auto
+		cfg.Projects[cfg.ProjectIndex(name)].SetAuto(auto)
 		if err := config.Save(a.cfgPath(), cfg); err != nil {
 			return err
 		}
@@ -261,6 +273,15 @@ func (a *app) projectsDelete(ctx context.Context, ref, purge string) error {
 		fmt.Sprintf("deleted project %q; its %d member(s) are no longer shared", p.Name, len(p.Members)), purge)
 }
 
+func hasApproveRule(p config.Project) bool {
+	for _, r := range p.Rules {
+		if r.Action == rules.ActionApprove {
+			return true
+		}
+	}
+	return false
+}
+
 func (a *app) projectsAuto(ref, v string) error {
 	var on bool
 	switch strings.ToLower(v) {
@@ -278,7 +299,7 @@ func (a *app) projectsAuto(ref, v string) error {
 	if i < 0 {
 		return fmt.Errorf("no project named %q", ref)
 	}
-	cfg.Projects[i].AutoApprove = on
+	cfg.Projects[i].SetAuto(on)
 	if err := config.Save(a.cfgPath(), cfg); err != nil {
 		return err
 	}

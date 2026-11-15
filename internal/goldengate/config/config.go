@@ -295,9 +295,12 @@ func Load(path string) (Config, error) {
 		// Everything shared before the inbox existed keeps being sent as it
 		// was. Projects shared from now on wait for approval.
 		for i := range c.Projects {
-			c.Projects[i].AutoApprove = true
+			if c.Projects[i].Trust == "" {
+				c.Projects[i].AutoApprove = true
+			}
 		}
 	}
+	c.normalizeTrust()
 	if c.Version < 3 && slices.Equal(c.Issues.Providers, []string{"linear", "jira", "github"}) {
 		// The list every earlier build wrote: GitLab joins it. A list the
 		// user changed is left as it is.

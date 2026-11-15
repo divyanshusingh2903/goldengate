@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"strings"
 	stdsync "sync"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/config"
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/llm"
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/project"
+	"github.com/divyanshusingh2903/goldengate/internal/goldengate/rules"
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/selection"
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/summarize"
 	"github.com/divyanshusingh2903/goldengate/internal/model"
@@ -236,12 +238,37 @@ type Report struct {
 	// Approving counts planned sessions that were waiting in the inbox and
 	// are in the plan only because RunOpts.Approve is set: sending the plan
 	// approves them.
-	Approving int
+	Approving      int
+	ApprovingItems []PendingItem
+	// Auto lists planned sessions that are sent without the user having
+	// approved them one by one: the project's trust level is "auto" and its
+	// rules approve them. A receipt is written from this.
+	Auto []AutoItem
+	// Suggested counts waiting sessions the rules approve in a "suggest"
+	// project; NewGroupings counts those held in an "auto" project because
+	// their folder or chat grouping is new. Both are part of Pending.
+	// RuleExcluded counts sessions an exclude rule keeps back; they are part
+	// of Excluded.
+	Suggested    int
+	NewGroupings int
+	RuleExcluded int
 	// Conflicts counts sessions the user edited that changed afterwards.
 	// They are never planned, whatever the project or the options say, until
 	// the user has decided about their edit; they are listed in
 	// PendingItems with Conflict set.
 	Conflicts int
+}
+
+// AutoItem is a session sent by a project's trust level and rules.
+type AutoItem struct {
+	Source, SessionID string
+	Project           string // local project key
+	ProjectID         string
+	ProjectName       string
+	Title             string // redacted, as sent
+	// RuleID is the approve rule that matched; empty when the project has
+	// none and sends everything.
+	RuleID string
 }
 
 func (s *Syncer) log() *slog.Logger {
@@ -400,22 +427,35 @@ func (s *Syncer) Plan(ctx context.Context, o RunOpts) (Batch, Report, error) {
 					ProjectName: p.ProjectName, Title: payloadTitle(p), Updated: p.UpdatedAt, ContentHash: p.ContentHash, Changed: true, Conflict: true})
 				continue
 			}
-			// New or changed content. In a project that is not auto-approved
-			// it is sent only if the user approved exactly this content.
-			if !s.autoApprove(ref) {
-				dec, decided, err := s.State.Decision(ctx, ref.Source, ref.ID)
-				if err != nil {
-					return b, rep, err
-				}
-				waiting := !decided || dec.State != DecisionApproved || dec.ContentHash != p.ContentHash
-				if waiting && o.Approve {
+			// New or changed content: sent if the user approved exactly this
+			// content, or if the project's trust level and rules send it.
+			g := j.gate
+			switch {
+			case g.excluded:
+				rep.Excluded++
+				rep.RuleExcluded++
+				continue
+			case !g.send:
+				item := PendingItem{Source: ref.Source, SessionID: ref.ID, Project: ref.ProjectKey,
+					ProjectName: p.ProjectName, Title: payloadTitle(p), Updated: p.UpdatedAt, ContentHash: p.ContentHash, Changed: seen || g.decided,
+					Suggested: g.suggested, NewGrouping: g.newGrouping, RuleID: g.ruleID}
+				if o.Approve {
 					rep.Approving++
-				} else if waiting {
-					rep.Pending++
-					rep.PendingItems = append(rep.PendingItems, PendingItem{Source: ref.Source, SessionID: ref.ID, Project: ref.ProjectKey,
-						ProjectName: p.ProjectName, Title: payloadTitle(p), Updated: p.UpdatedAt, ContentHash: p.ContentHash, Changed: seen || decided})
-					continue
+					rep.ApprovingItems = append(rep.ApprovingItems, item)
+					break
 				}
+				rep.Pending++
+				if g.suggested {
+					rep.Suggested++
+				}
+				if g.newGrouping {
+					rep.NewGroupings++
+				}
+				rep.PendingItems = append(rep.PendingItems, item)
+				continue
+			case g.auto:
+				rep.Auto = append(rep.Auto, AutoItem{Source: ref.Source, SessionID: ref.ID, Project: ref.ProjectKey,
+					ProjectID: p.ProjectID, ProjectName: p.ProjectName, Title: payloadTitle(p), RuleID: g.ruleID})
 			}
 			for k, n := range p.Redactions {
 				rep.Redactions[k] += n
@@ -486,6 +526,7 @@ type job struct {
 	payload *model.SessionPayload
 	// resummarize sends the session even though its conversation is unchanged
 	resummarize bool
+	gate        gate
 }
 
 // buildPool summarizes sessions while the plan keeps listing them: with a
@@ -560,26 +601,31 @@ func (p *buildPool) work() {
 		offline := p.offline
 		var pl *model.SessionPayload
 		var err error
-		if !offline && p.s.Summarizer != nil && !p.approve && !p.s.autoApprove(j.ref) {
+		var g gate
+		gated := false
+		if !offline && p.s.Summarizer != nil && !p.approve {
 			if pl, err = summarize.Build(j.raw, p.s.summarizeOptions(p.ctx, j.ref, p.wo, true, nil)); err == nil {
-				dec, decided, derr := p.s.State.Decision(p.ctx, j.ref.Source, j.ref.ID)
-				switch {
-				case derr != nil:
-					err = derr
-				case !decided || dec.State != DecisionApproved || dec.ContentHash != pl.ContentHash:
-					offline = true // it waits: keep the offline build
-				default:
-					pl = nil // approved: build it for real below
+				if g, err = p.s.gate(p.ctx, j.ref, j.raw, pl); err == nil {
+					gated = true
+					if g.send {
+						pl = nil // it will be sent: build it for real below
+					} else {
+						offline = true // it waits or is excluded: keep the offline build
+					}
 				}
 			}
 		}
 		if err == nil && pl == nil {
 			pl, err = summarize.Build(j.raw, p.s.summarizeOptions(p.ctx, j.ref, p.wo, offline, onErr))
 		}
+		if err == nil && !gated {
+			g, err = p.s.gate(p.ctx, j.ref, j.raw, pl)
+		}
 		p.mu.Lock()
 		if err != nil && p.err == nil {
 			p.err = fmt.Errorf("sync: summarize: %w", err)
 		}
+		p.jobs[i].gate = g
 		p.jobs[i].payload, p.jobs[i].raw = pl, nil // the transcript is no longer needed
 		p.mu.Unlock()
 		if err == nil && p.onDone != nil {
@@ -616,20 +662,109 @@ func (s *Syncer) projectOf(ref model.SessionRef) (id, name string) {
 	return "", ""
 }
 
-// autoApprove reports whether a session's project sends new and changed
-// sessions without asking. A folder shared outside any named project (a
-// default-allow configuration) has always sent everything and still does.
-func (s *Syncer) autoApprove(ref model.SessionRef) bool {
-	id, _ := s.projectOf(ref)
-	if id == "" {
-		return true
+// gate is what happens to new or changed content of one session.
+type gate struct {
+	send     bool // it goes into the plan without being asked about
+	auto     bool // send because of the project's trust level and rules, not a decision of the user's
+	excluded bool // an exclude rule keeps it back
+	// decided is set when the user decided about an earlier version.
+	decided bool
+	// Why it waits, when the rules approve it: see PendingItem.
+	suggested, newGrouping bool
+	ruleID                 string
+}
+
+// Facts are the deterministic properties of a session that rules may see.
+// They come from the tool's own record and the local rules' extraction,
+// never from a summary.
+func Facts(ref model.SessionRef, raw *model.RawSession, p *model.SessionPayload) rules.Facts {
+	f := rules.Facts{Source: ref.Source, Folder: ref.ProjectKey}
+	if raw != nil {
+		f.Remote, f.Branch = raw.GitRemote, raw.GitBranch
 	}
-	for _, p := range s.Config.Projects {
-		if p.ID == id {
-			return p.AutoApprove
+	if p != nil {
+		for _, it := range p.WorkItems {
+			if it.Kind == model.KindIssue || it.Kind == model.KindPR {
+				f.WorkItems = append(f.WorkItems, it.Key)
+			}
 		}
 	}
-	return true
+	return f
+}
+
+// gate decides about a session's new or changed content, in this order: the
+// user's own approval of exactly this content; an exclude rule; then the
+// project's trust level applied to what its rules approve. A folder shared
+// outside any named project (a default-allow configuration) has always sent
+// everything and still does.
+func (s *Syncer) gate(ctx context.Context, ref model.SessionRef, raw *model.RawSession, p *model.SessionPayload) (gate, error) {
+	id, _ := s.projectOf(ref)
+	var proj *config.Project
+	for i := range s.Config.Projects {
+		if s.Config.Projects[i].ID == id && id != "" {
+			proj = &s.Config.Projects[i]
+		}
+	}
+	if proj == nil {
+		return gate{send: true}, nil
+	}
+	dec, decided, err := s.State.Decision(ctx, ref.Source, ref.ID)
+	if err != nil {
+		return gate{}, err
+	}
+	g := gate{decided: decided}
+	if decided && dec.State == DecisionApproved && dec.ContentHash == p.ContentHash {
+		g.send = true
+		return g, nil
+	}
+	v := rules.Evaluate(proj.Rules, Facts(ref, raw, p), s.Home)
+	g.ruleID = v.RuleID()
+	switch {
+	case v.Exclude != nil:
+		g.excluded = true
+	case !v.Approved():
+		g.ruleID = ""
+	case proj.TrustLevel() == rules.TrustSuggest:
+		g.suggested = true
+	case proj.TrustLevel() == rules.TrustAuto:
+		known, err := s.knownGrouping(ctx, proj, ref)
+		if err != nil {
+			return gate{}, err
+		}
+		if known {
+			g.send, g.auto = true, true
+		} else {
+			g.newGrouping = true
+		}
+	default:
+		g.ruleID = ""
+	}
+	return g, nil
+}
+
+// knownGrouping reports whether automation may act on a folder or chat
+// grouping without asking: the user named it as a member of the project, or
+// something from it was already sent. A grouping the project
+// reaches only through a broader member (a parent folder, a glob such as
+// chatgpt:*) is asked about once.
+func (s *Syncer) knownGrouping(ctx context.Context, p *config.Project, ref model.SessionRef) (bool, error) {
+	// a worktree is its repository: the key it is filed under counts too
+	key, filed := ref.ProjectKey, s.serverKey(ref)
+	for _, m := range p.Members {
+		if strings.ContainsAny(m.Path, "*?[{") {
+			continue
+		}
+		mk := m.Path
+		if !pathutil.IsVirtualKey(mk) {
+			mk = pathutil.Normalize(pathutil.ExpandHome(mk, s.Home))
+		}
+		for _, k := range []string{key, filed} {
+			if mk == k || (s.caseInsensitive() && strings.EqualFold(mk, k)) {
+				return true, nil
+			}
+		}
+	}
+	return s.State.KnownGrouping(ctx, key)
 }
 
 // projectFields reads which project a stored payload was sent under. ok is

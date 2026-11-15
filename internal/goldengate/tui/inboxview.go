@@ -274,6 +274,9 @@ func (m *Model) viewInbox() string {
 		if it, ok := ib.current(); ok && it.State == InboxStateConflict {
 			note = "This session changed after you edited its summary. e: edit again · K: keep your version · D: use the new one"
 		}
+		if it, ok := ib.current(); ok && it.Note != "" && it.State != InboxStateConflict {
+			note = "Your rules: " + it.Note + "."
+		}
 		out = append(out, " "+m.th.Dim.Render(clip(note, w-2)), "")
 		h := max(bh-2, 1)
 		for i := ib.off; i < min(ib.off+h, len(ib.rows)); i++ {

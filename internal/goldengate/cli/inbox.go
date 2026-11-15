@@ -47,27 +47,30 @@ func (a *app) inboxCmd() *cobra.Command {
 		Use:   "inbox",
 		Short: "Sessions waiting for your approval before they are sent",
 		Long: `New and changed sessions of a project you share wait here until you approve them,
-unless the project is set to auto-approve (goldengate projects auto <project> on).
+unless the project's trust level is "auto" (goldengate projects trust <project> auto),
+which sends what the project's rules approve (goldengate rules).
 A session that changes after you approved it comes back here.
 
   goldengate inbox                     list what is waiting
   goldengate sync --dry-run --approve  print exactly what approving would send
   goldengate inbox approve --all       approve everything listed
+  goldengate inbox approve --suggested approve what your rules suggest
   goldengate sync                      send what is approved`,
 		Args: cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error { return a.inboxList(c.Context()) },
 	}
 	list := &cobra.Command{Use: "list", Short: "List sessions waiting for approval, and the ones you excluded", Args: cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error { return a.inboxList(c.Context()) }}
-	var all bool
+	var all, suggested bool
 	var project string
-	approve := &cobra.Command{Use: "approve <session-id>... | --all", Short: "Approve waiting sessions; the next sync sends them",
+	approve := &cobra.Command{Use: "approve <session-id>... | --all | --suggested", Short: "Approve waiting sessions; the next sync sends them",
 		RunE: func(c *cobra.Command, args []string) error {
-			return a.inboxDecide(c.Context(), gsync.DecisionApproved, args, all, project)
+			return a.inboxDecide(c.Context(), gsync.DecisionApproved, args, all, suggested, project)
 		}}
+	approve.Flags().BoolVar(&suggested, "suggested", false, "every waiting session your rules approve (marked \"suggested\" in the list)")
 	exclude := &cobra.Command{Use: "exclude <session-id>... | --all", Short: "Keep waiting sessions on this machine: they are never sent",
 		RunE: func(c *cobra.Command, args []string) error {
-			return a.inboxDecide(c.Context(), gsync.DecisionExcluded, args, all, project)
+			return a.inboxDecide(c.Context(), gsync.DecisionExcluded, args, all, false, project)
 		}}
 	for _, c := range []*cobra.Command{approve, exclude} {
 		c.Flags().BoolVar(&all, "all", false, "every waiting session (of --project, if given)")
@@ -102,6 +105,9 @@ func (a *app) inboxList(ctx context.Context) error {
 			if it.Changed {
 				note = "changed since you approved or sent it"
 			}
+			if w := waitNote(it); w != "" {
+				note += "; " + w
+			}
 			fmt.Fprintf(a.Stdout, "  %s  %-11s  %s  %s  (%s)\n", it.SessionID, it.Source, projectLabel(it), it.Title, note)
 		}
 		fmt.Fprintln(a.Stdout, "\nlook first:  goldengate sync --dry-run --approve\napprove:     goldengate inbox approve --all    (or name session ids)\nkeep local:  goldengate inbox exclude <session-id>")
@@ -120,6 +126,21 @@ func (a *app) inboxList(ctx context.Context) error {
 	return nil
 }
 
+// waitNote says what the project's rules think of a waiting session.
+func waitNote(it gsync.PendingItem) string {
+	by := "the project's trust level"
+	if it.RuleID != "" {
+		by = "rule " + it.RuleID
+	}
+	switch {
+	case it.Suggested:
+		return "suggested by " + by
+	case it.NewGrouping:
+		return "first session from this folder or chat: " + by + " sends the next ones once you have sent one"
+	}
+	return ""
+}
+
 func projectLabel(it gsync.PendingItem) string {
 	if it.ProjectName != "" {
 		return it.ProjectName
@@ -127,9 +148,9 @@ func projectLabel(it gsync.PendingItem) string {
 	return it.Project
 }
 
-func (a *app) inboxDecide(ctx context.Context, state string, ids []string, all bool, project string) error {
-	if all == (len(ids) > 0) {
-		return errors.New("name the session ids, or pass --all (not both)")
+func (a *app) inboxDecide(ctx context.Context, state string, ids []string, all, suggested bool, project string) error {
+	if n := len(ids); (all && suggested) || ((all || suggested) == (n > 0)) {
+		return errors.New("name the session ids, or pass --all or --suggested (one of them)")
 	}
 	cfg, err := a.load()
 	if err != nil {
@@ -150,7 +171,10 @@ func (a *app) inboxDecide(ctx context.Context, state string, ids []string, all b
 	}
 	n := 0
 	for _, it := range items {
-		if !all && !want[it.SessionID] {
+		if suggested && !it.Suggested && !it.NewGrouping {
+			continue
+		}
+		if !all && !suggested && !want[it.SessionID] {
 			continue
 		}
 		delete(want, it.SessionID)
@@ -216,7 +240,7 @@ func (b *tuiBackend) Inbox(ctx context.Context) (tui.Inbox, error) {
 	err := b.a.withRows(ctx, func(_ config.Config, _ *gsync.State, rows []sessionRow) error {
 		for _, r := range rows {
 			it := tui.InboxItem{Source: r.Source, ID: r.ID, Project: r.Project, Title: r.Title, Updated: r.Updated, Hash: r.Hash, State: r.State,
-				Changed: r.State == sessChanged, Edited: r.Edited}
+				Changed: r.State == sessChanged, Edited: r.Edited, Note: r.Note}
 			switch {
 			case r.State == sessConflict: // needs the user's attention like anything that waits
 				in.Pending = append(in.Pending, it)
