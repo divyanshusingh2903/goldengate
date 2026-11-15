@@ -170,7 +170,7 @@ type WorkItem struct {
     URL      string     // PR/issue/commit URL when known (credentials stripped)
     Status   string     // mentioned | created | updated | merged | closed | completed | canceled
     RawState string     // the tracker's own state name as seen in the session ("In Progress", "Done")
-    Evidence []Evidence // {session_id, turn, via: "tool_result" | "text"}
+    Evidence []Evidence // {session_id, turn, via: "tool_result" | "harness_event" | "text" | "branch"}
 }
 ```
 
@@ -197,7 +197,7 @@ Issue trackers (Linear, Jira/Atlassian, GitHub Issues)
 Issues use the same model with `Kind = "issue"`, a `Provider`, a `Key` such as `linear:ENG-123` (include the workspace or site when known), and `RawState` holding the tracker's own state name.
 
 Status mapping
-- `mentioned`: the key or URL appears in text, or the issue was only read, listed or fetched.
+- `mentioned`: the key or URL appears in text, the session's git branch is named after the issue, or the issue was only read, listed or fetched.
 - `created`: a create call succeeded and returned the key.
 - `updated`: an edit, comment, or transition into a non-done state succeeded.
 - `completed`: the result shows a done state (Linear state type `completed`, Jira status category Done, GitHub closed as completed).
@@ -207,6 +207,7 @@ Detection
 - Anything above `mentioned` needs tool-result evidence: MCP calls to the tracker (for example Linear's issue save/get tools or Atlassian's Jira tools), CLI calls (`gh issue create|close`, similar), or API-shaped results. Exact tool names and result shapes must be inspected per tool and per server version, not assumed.
 - URLs: `linear.app/<workspace>/issue/<KEY-N>`, `<site>.atlassian.net/browse/<KEY-N>` (and Jira board URLs with `selectedIssue=`), `github.com/<owner>/<repo>/issues/<n>`.
 - Bare keys like `ENG-123` are ambiguous (`UTF-8`, `SHA-256`, `ISO-8601`, `CVE-2024-1234`). Accept a bare key only if its prefix is known from a URL or tool result in the same project, is listed in config (`[issues]`), or came from a tool result. Otherwise ignore it, and keep a denylist of common false-positive prefixes.
+- Branch names: a session on `fix/LIN-412-auth`, `lin-412-auth` or `user/eng-12_title` belongs with that issue even when nobody types the key. The key must be whole words of the branch name (either case) and its prefix must pass the same rule as a bare key, so `feature/utf-8-export` yields nothing. The evidence is recorded as `via: "branch"` and the status is `mentioned`: a branch proves which issue the session is about, not what happened to it. Plain numbers in branch names (`feat/21-threads`) are not read as GitHub issues: they are too ambiguous.
 
 Privacy
 - Send only key, title, URL, provider, state and timestamps. **Never issue descriptions or comments**, even though tool results may contain them. Titles go through redaction because they can contain client names. Each provider can be switched off.
@@ -220,6 +221,17 @@ Optional enrichment (all off by default, shown in the TUI)
 
 Deduplication
 - The same commit or PR shows up in many sessions. The server keeps work items in their own table keyed by `(project, kind, key)` with `first_seen`, `last_seen`, status, and links to the sessions that mention them.
+
+Threads (`internal/utils/threads`)
+
+A **thread** is one piece of work: its issues and pull requests, and every session, from any source, that has one of them. It is computed from payloads alone (work items and their evidence), so the laptop and the server get the same answer, and it only ever combines items with the merge rules above: grouping never changes a status.
+
+- Two sessions are in one thread when they carry the same issue or the same pull request, whatever the status. A chat that mentions LIN-412 and the coding session on its branch belong together.
+- An issue and a pull request become one thread only when something ties them: a session that ran on the issue's branch (`via: "branch"`) and has evidence about the pull request (it opened, changed or merged it, or the tool recorded the pull request for the session), or a pull request title that names the issue key. A session that merely mentions two issues appears in both threads and joins neither, so a triage chat cannot glue unrelated work together.
+- Tracker keys (`linear:LIN-412`) and full GitHub keys (`owner/repo#7`) mean the same thing in every project. A GitHub key without an owner (`app#7`, from a session that never saw the URL) is matched to the full key only when exactly one full key of that kind and number exists in the same project; otherwise it stays inside its project.
+- A thread is named after its primary item: a tracker issue before a GitHub issue before a pull request, the earliest seen first. Each session in it lists what it touched, with the status as of that session and whether it was on the issue's branch.
+
+`get_project_context` and `get_work_item` are built on this in M7 (issue #36).
 
 ## 5. Selection model (what is shared)
 

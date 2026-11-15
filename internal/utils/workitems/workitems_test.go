@@ -252,3 +252,57 @@ func TestCommandTextInsideHeredocOrQuotesIsNotACommand(t *testing.T) {
 		t.Fatalf("real commands must count: %+v", items)
 	}
 }
+
+func TestBranchKeys(t *testing.T) {
+	known := func(p string) bool { return p == "LIN" || p == "ENG" || p == "UTF" }
+	for branch, want := range map[string]string{
+		"fix/LIN-412-auth":               "LIN-412",
+		"fix/lin-412-auth":               "LIN-412",
+		"ENG-12-new-login":               "ENG-12",
+		"user/eng-12_title":              "ENG-12",
+		"lin-412-and-eng-12":             "LIN-412 ENG-12",
+		"LIN-412":                        "LIN-412",
+		"feature/utf-8-export":           "", // a false prefix stays false even when configured
+		"feature/sha-256":                "",
+		"release/abc-9":                  "", // unknown prefix
+		"main":                           "",
+		"fix/berlin-412":                 "", // LIN must be a whole word
+		"fix/LIN-412x":                   "",
+		"fix/lin412":                     "",
+		"dependabot/npm_and_yarn/eng-12": "ENG-12",
+	} {
+		if got := strings.Join(workitems.BranchKeys(branch, known), " "); got != want {
+			t.Errorf("%s: got %q want %q", branch, got, want)
+		}
+	}
+	if got := workitems.BranchKeys("fix/abc-9-utf-8", nil); len(got) != 1 || got[0] != "ABC-9" {
+		t.Errorf("nil known: %v", got)
+	}
+}
+
+func TestBranchIssueIsOnlyAMention(t *testing.T) {
+	start := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	s := &model.RawSession{Ref: model.SessionRef{ID: "s", ProjectKey: "/p", StartedAt: start}, GitBranch: "fix/lin-412-auth",
+		Turns: []model.Turn{{Role: "user", Text: "LIN-412 is done and closed, also see LIN-413", Time: start.Add(time.Hour)}}}
+	items := workitems.Extract(s, workitems.Options{KnownPrefixes: []string{"LIN"}})
+	it := find(items, "issue", "linear:LIN-412")
+	if it == nil || it.Status != model.StatusMentioned || it.Evidence[0].Via != model.ViaBranch || it.Evidence[0].Turn != -1 {
+		t.Fatalf("branch issue: %+v", it)
+	}
+	if find(items, "issue", "linear:LIN-413") == nil {
+		t.Error("text mention lost")
+	}
+	// the prefix must be known, exactly as for a key in text
+	if items := workitems.Extract(s, workitems.Options{}); len(items) != 0 {
+		t.Errorf("unknown prefix: %+v", items)
+	}
+	// and the tracker must be on
+	if items := workitems.Extract(s, workitems.Options{KnownPrefixes: []string{"LIN"}, Providers: []string{"github"}}); len(items) != 0 {
+		t.Errorf("linear off: %+v", items)
+	}
+	// no usable time, no item (the server rejects a zero observed_at)
+	s.Ref.StartedAt, s.Turns = time.Time{}, nil
+	if items := workitems.Extract(s, workitems.Options{KnownPrefixes: []string{"LIN"}}); len(items) != 0 {
+		t.Errorf("zero time: %+v", items)
+	}
+}

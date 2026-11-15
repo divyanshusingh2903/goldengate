@@ -1,0 +1,276 @@
+[
+  {
+    "id": "issue:linear:LIN-412",
+    "primary": {
+      "kind": "issue",
+      "provider": "linear",
+      "key": "linear:LIN-412",
+      "url": "https://linear.app/acme/issue/LIN-412",
+      "status": "mentioned",
+      "evidence": [
+        {
+          "session_id": "chat-plan",
+          "turn": 0,
+          "via": "text",
+          "at": "2026-03-02T09:00:00Z"
+        },
+        {
+          "session_id": "code-impl",
+          "turn": -1,
+          "via": "branch",
+          "at": "2026-03-02T11:00:00Z"
+        },
+        {
+          "session_id": "codex-pr",
+          "turn": -1,
+          "via": "branch",
+          "at": "2026-03-02T13:00:00Z"
+        },
+        {
+          "session_id": "chat-triage",
+          "turn": 0,
+          "via": "text",
+          "at": "2026-03-02T19:00:00Z"
+        }
+      ],
+      "observed_at": "2026-03-02T19:00:00Z"
+    },
+    "items": [
+      {
+        "kind": "issue",
+        "provider": "linear",
+        "key": "linear:LIN-412",
+        "url": "https://linear.app/acme/issue/LIN-412",
+        "status": "mentioned",
+        "evidence": [
+          {
+            "session_id": "chat-plan",
+            "turn": 0,
+            "via": "text",
+            "at": "2026-03-02T09:00:00Z"
+          },
+          {
+            "session_id": "code-impl",
+            "turn": -1,
+            "via": "branch",
+            "at": "2026-03-02T11:00:00Z"
+          },
+          {
+            "session_id": "codex-pr",
+            "turn": -1,
+            "via": "branch",
+            "at": "2026-03-02T13:00:00Z"
+          },
+          {
+            "session_id": "chat-triage",
+            "turn": 0,
+            "via": "text",
+            "at": "2026-03-02T19:00:00Z"
+          }
+        ],
+        "observed_at": "2026-03-02T19:00:00Z"
+      },
+      {
+        "kind": "pull_request",
+        "provider": "github",
+        "key": "example/app#7",
+        "title": "Refresh tokens before expiry",
+        "url": "https://github.com/example/app/pull/7",
+        "status": "merged",
+        "evidence": [
+          {
+            "session_id": "codex-pr",
+            "turn": 0,
+            "via": "tool_result",
+            "at": "2026-03-02T13:00:00Z"
+          },
+          {
+            "session_id": "code-merge",
+            "turn": 0,
+            "via": "tool_result",
+            "at": "2026-03-02T15:00:00Z"
+          }
+        ],
+        "observed_at": "2026-03-02T15:00:00Z"
+      }
+    ],
+    "sessions": [
+      {
+        "source": "chatgpt",
+        "id": "chat-triage",
+        "project_id": "prj_app",
+        "project_name": "App",
+        "title": "chat-triage",
+        "updated_at": "2026-03-02T20:00:00Z",
+        "touches": [
+          {
+            "kind": "issue",
+            "key": "linear:LIN-412",
+            "status": "mentioned"
+          }
+        ]
+      },
+      {
+        "source": "claude-code",
+        "id": "code-merge",
+        "project_id": "prj_app",
+        "project_name": "App",
+        "title": "code-merge",
+        "updated_at": "2026-03-02T16:00:00Z",
+        "touches": [
+          {
+            "kind": "pull_request",
+            "key": "example/app#7",
+            "status": "merged"
+          }
+        ]
+      },
+      {
+        "source": "codex",
+        "id": "codex-pr",
+        "project_id": "prj_app",
+        "project_name": "App",
+        "title": "codex-pr",
+        "updated_at": "2026-03-02T14:00:00Z",
+        "touches": [
+          {
+            "kind": "issue",
+            "key": "linear:LIN-412",
+            "status": "mentioned",
+            "branch": true
+          },
+          {
+            "kind": "pull_request",
+            "key": "example/app#7",
+            "status": "created"
+          }
+        ]
+      },
+      {
+        "source": "claude-code",
+        "id": "code-impl",
+        "project_id": "prj_app",
+        "project_name": "App",
+        "title": "code-impl",
+        "updated_at": "2026-03-02T12:00:00Z",
+        "touches": [
+          {
+            "kind": "issue",
+            "key": "linear:LIN-412",
+            "status": "mentioned",
+            "branch": true
+          }
+        ]
+      },
+      {
+        "source": "claude-ai",
+        "id": "chat-plan",
+        "project_id": "prj_app",
+        "project_name": "App",
+        "title": "chat-plan",
+        "updated_at": "2026-03-02T10:00:00Z",
+        "touches": [
+          {
+            "kind": "issue",
+            "key": "linear:LIN-412",
+            "status": "mentioned"
+          }
+        ]
+      }
+    ],
+    "sources": [
+      "chatgpt",
+      "claude-ai",
+      "claude-code",
+      "codex"
+    ],
+    "first_seen": "2026-03-02T09:00:00Z",
+    "last_activity": "2026-03-02T20:00:00Z"
+  },
+  {
+    "id": "issue:linear:LIN-500",
+    "primary": {
+      "kind": "issue",
+      "provider": "linear",
+      "key": "linear:LIN-500",
+      "status": "mentioned",
+      "evidence": [
+        {
+          "session_id": "other-work",
+          "turn": -1,
+          "via": "branch",
+          "at": "2026-03-02T17:00:00Z"
+        },
+        {
+          "session_id": "chat-triage",
+          "turn": 0,
+          "via": "text",
+          "at": "2026-03-02T19:00:00Z"
+        }
+      ],
+      "observed_at": "2026-03-02T19:00:00Z"
+    },
+    "items": [
+      {
+        "kind": "issue",
+        "provider": "linear",
+        "key": "linear:LIN-500",
+        "status": "mentioned",
+        "evidence": [
+          {
+            "session_id": "other-work",
+            "turn": -1,
+            "via": "branch",
+            "at": "2026-03-02T17:00:00Z"
+          },
+          {
+            "session_id": "chat-triage",
+            "turn": 0,
+            "via": "text",
+            "at": "2026-03-02T19:00:00Z"
+          }
+        ],
+        "observed_at": "2026-03-02T19:00:00Z"
+      }
+    ],
+    "sessions": [
+      {
+        "source": "chatgpt",
+        "id": "chat-triage",
+        "project_id": "prj_app",
+        "project_name": "App",
+        "title": "chat-triage",
+        "updated_at": "2026-03-02T20:00:00Z",
+        "touches": [
+          {
+            "kind": "issue",
+            "key": "linear:LIN-500",
+            "status": "mentioned"
+          }
+        ]
+      },
+      {
+        "source": "opencode",
+        "id": "other-work",
+        "project_id": "prj_app",
+        "project_name": "App",
+        "title": "other-work",
+        "updated_at": "2026-03-02T18:00:00Z",
+        "touches": [
+          {
+            "kind": "issue",
+            "key": "linear:LIN-500",
+            "status": "mentioned",
+            "branch": true
+          }
+        ]
+      }
+    ],
+    "sources": [
+      "chatgpt",
+      "opencode"
+    ],
+    "first_seen": "2026-03-02T17:00:00Z",
+    "last_activity": "2026-03-02T20:00:00Z"
+  }
+]
