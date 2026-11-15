@@ -60,6 +60,8 @@ var (
 	reIssueRef   = regexp.MustCompile(`(?i)\bissue\s*#(\d+)`)
 	reSHACtx     = regexp.MustCompile("(?i)(?:commit|sha|cherry-pick|revert|reverted|amend)\\w*\\s*[:`(]?\\s*`?([0-9a-f]{7,40})\\b|`([0-9a-f]{7,40})`")
 	reMergedOut  = regexp.MustCompile(`(?i)pull request\s+(?:([\w.\-]+/[\w.\-]+))?#(\d+)`)
+	reKeyPrefix  = regexp.MustCompile(`^[A-Z][A-Z0-9]{1,9}$`)
+	reDigits     = regexp.MustCompile(`^\d+$`)
 )
 
 type extractor struct {
@@ -81,6 +83,7 @@ func Extract(s *model.RawSession, o Options) []model.WorkItem {
 	e.repo = e.inferRepo()
 	e.learnPrefixes()
 
+	e.fromBranch() // first, so its evidence survives the caps on later mentions
 	for ti, t := range s.Turns {
 		for _, c := range t.Tools {
 			e.fromTool(ti, c, t.Time)
@@ -529,6 +532,48 @@ func (e *extractor) fromText(ti int, t model.Turn) {
 			mention(model.KindIssue, "linear", "linear:"+prefix+"-"+m[2], "")
 		} else if e.o.enabled("jira") && e.prefixProvider(prefix) == "jira" {
 			mention(model.KindIssue, "jira", "jira:"+prefix+"-"+m[2], "")
+		}
+	}
+}
+
+// BranchKeys returns the tracker keys ("LIN-412") a branch name carries, in
+// upper case and in order. A key counts only when its prefix passes known,
+// the same rule as for a bare key in text; a nil known accepts any prefix
+// that is not a common false one (UTF-8, SHA-256).
+func BranchKeys(branch string, known func(prefix string) bool) []string {
+	var out []string
+	// "PREFIX-123" must be whole words of the name, in either case:
+	// fix/LIN-412-auth, lin-412-auth, user/eng-12_title.
+	for _, seg := range strings.FieldsFunc(branch, func(r rune) bool { return r == '/' || r == '_' || r == '.' }) {
+		words := strings.Split(seg, "-")
+		for i := 0; i+1 < len(words); i++ {
+			prefix, num := strings.ToUpper(words[i]), words[i+1]
+			if !reKeyPrefix.MatchString(prefix) || !reDigits.MatchString(num) || falsePrefixes[prefix] {
+				continue
+			}
+			if key := prefix + "-" + num; (known == nil || known(prefix)) && !slices.Contains(out, key) {
+				out = append(out, key)
+			}
+		}
+	}
+	return out
+}
+
+// fromBranch records the issues the session's git branch is named after. The
+// branch proves that the session belongs with the issue and nothing about
+// the issue's state, so the status is "mentioned".
+func (e *extractor) fromBranch() {
+	at := e.s.Ref.StartedAt
+	if at.IsZero() {
+		at = e.s.Ref.UpdatedAt
+	}
+	if at.IsZero() || e.s.GitBranch == "" {
+		return
+	}
+	for _, key := range BranchKeys(e.s.GitBranch, func(p string) bool { return e.known[p] }) {
+		prefix, _, _ := splitKey(key)
+		if p := e.prefixProvider(prefix); e.o.enabled(p) {
+			e.touch(model.KindIssue, p, p+":"+key, "", "", model.StatusMentioned, "", -1, model.ViaBranch, at)
 		}
 	}
 }

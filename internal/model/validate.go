@@ -45,7 +45,7 @@ var (
 	validKinds     = map[string]bool{KindCommit: true, KindPR: true, KindIssue: true, KindFile: true, KindArtifact: true}
 	validProviders = map[string]bool{"": true, "github": true, "linear": true, "jira": true}
 	validStatuses  = map[string]bool{StatusMentioned: true, StatusCreated: true, StatusUpdated: true, StatusMerged: true, StatusClosed: true, StatusCompleted: true, StatusCanceled: true}
-	validVia       = map[string]bool{ViaToolResult: true, ViaHarnessEvent: true, ViaText: true}
+	validVia       = map[string]bool{ViaToolResult: true, ViaHarnessEvent: true, ViaText: true, ViaBranch: true}
 	reSessionID    = regexp.MustCompile(`^[A-Za-z0-9._:-]{1,128}$`)
 	reHash         = regexp.MustCompile(`^[0-9a-f]{64}$`)
 	reProjectID    = regexp.MustCompile(`^p_[0-9a-z]{4,40}$`)

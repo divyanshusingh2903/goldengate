@@ -24,6 +24,9 @@ const (
 	ViaToolResult   = "tool_result"
 	ViaHarnessEvent = "harness_event"
 	ViaText         = "text"
+	// ViaBranch: the session ran on a git branch named after the issue. Like
+	// text, it proves association only: the status stays "mentioned".
+	ViaBranch = "branch"
 )
 
 // Evidence records why a work item has its status.
