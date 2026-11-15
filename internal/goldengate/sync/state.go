@@ -311,6 +311,35 @@ func (s *State) SessionKeys(ctx context.Context, project string) ([][2]string, e
 	return out, rows.Err()
 }
 
+// Sent lists every remembered (pushed) session, with the payload that was sent.
+func (s *State) Sent(ctx context.Context) ([]Entry, error) {
+	rows, err := s.db.QueryContext(ctx, `SELECT source, session_id, project, content_hash, size, mtime_ns, synced_at, payload FROM sessions ORDER BY synced_at DESC, source, session_id`)
+	if err != nil {
+		return nil, fmt.Errorf("state: sent: %w", err)
+	}
+	defer func() { _ = rows.Close() }()
+	var out []Entry
+	for rows.Next() {
+		var e Entry
+		var at int64
+		var payload string
+		if err := rows.Scan(&e.Source, &e.SessionID, &e.Project, &e.ContentHash, &e.Size, &e.MTimeNS, &at, &payload); err != nil {
+			return nil, fmt.Errorf("state: sent: %w", err)
+		}
+		e.SyncedAt, e.Payload = time.Unix(at, 0).UTC(), []byte(payload)
+		out = append(out, e)
+	}
+	return out, rows.Err()
+}
+
+// Forget drops what is remembered about one pushed session.
+func (s *State) Forget(ctx context.Context, source, id string) error {
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE source=? AND session_id=?`, source, id); err != nil {
+		return fmt.Errorf("state: forget: %w", err)
+	}
+	return nil
+}
+
 // Payloads returns the payload last pushed for every remembered session that
 // has one: the already-redacted JSON the server received.
 func (s *State) Payloads(ctx context.Context) ([][]byte, error) {

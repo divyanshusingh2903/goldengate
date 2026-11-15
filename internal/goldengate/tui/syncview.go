@@ -466,7 +466,7 @@ func (m *Model) viewSync() string {
 			add(m.th.Dim.Render(fmt.Sprintf("%s in projects you don't share stay on this machine.", plural(s.plan.NotSelected, "session"))))
 		}
 		if s.plan.Approving > 0 {
-			add(m.th.Changed.Render(fmt.Sprintf("%s waiting for your approval: sending approves what you reviewed here.", plural(s.plan.Approving, "session")+" "+wasWere(s.plan.Approving))))
+			add(m.th.Changed.Render(fmt.Sprintf("%s waiting for your approval: sending approves what you reviewed here (i: decide one by one).", plural(s.plan.Approving, "session")+" "+wasWere(s.plan.Approving))))
 		}
 		if s.plan.Excluded > 0 {
 			add(m.th.Dim.Render(fmt.Sprintf("%s you excluded %s on this machine.", plural(s.plan.Excluded, "session"), map[bool]string{true: "stays", false: "stay"}[s.plan.Excluded == 1])))

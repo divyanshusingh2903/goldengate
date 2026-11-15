@@ -140,6 +140,15 @@ goldengate sync                         # sends what is approved
 goldengate sync --approve               # approve and send everything waiting, in one step
 ```
 
+To decide one session at a time, wherever its project stands, use `sessions` (or press `i` in the terminal UI for the same list: `a` approve, `x` exclude, `u` undo, `R` retract):
+
+```bash
+goldengate sessions list                  # every session of your shared projects and its state
+goldengate sessions include <session-id>  # approve it; also undoes an exclude or a retract
+goldengate sessions exclude <session-id>  # never send it
+goldengate sessions retract <session-id>  # delete a sent session from the server, and never send it again
+```
+
 A session that continues after you approved or sent it comes back to the inbox. To skip the inbox for a project you trust, turn on auto-approve: `goldengate projects auto <project> on`, or share with `goldengate share add <folder> --auto-approve`. Projects you were already sharing before this existed keep sending as they did.
 
 **Which assistant sees what.** Each assistant you connect is an *agent* with its own read token and its own list of projects. The assistant you set up first sees every project you share; any other starts with nothing. These commands ask for the admin secret (or read `GOLDENGATE_ADMIN_TOKEN`) and never store it:

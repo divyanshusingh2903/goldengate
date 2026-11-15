@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/tui"
+	"github.com/divyanshusingh2903/goldengate/internal/goldengatebridge/server/store"
 )
 
 const demoSession = "11111111-1111-4111-8111-111111111111"
@@ -203,5 +204,154 @@ func (l *laptop) addClaudeTurn(id, cwd, text string) {
 		cwd, 10+l.turns, text)
 	if _, err := f.WriteString(line); err != nil {
 		l.t.Fatal(err)
+	}
+}
+
+// An excluded or retracted session never reaches any payload again.
+func TestSessionsIncludeExcludeRetractEndToEnd(t *testing.T) {
+	b := startBridge(t)
+	l := newLaptop(t)
+	ctx := context.Background()
+	const second = "22222222-2222-4222-8222-222222222222"
+	l.addClaudeSession(second, "/home/user/projects/demo", "SECOND-SESSION refactor the gadget")
+	l.must(l.initEnv(b), "init", "--non-interactive")
+	l.must(nil, "share", "add", "~/projects/demo")
+
+	out := l.must(nil, "sessions", "list")
+	if strings.Count(out, "[pending]") != 2 || !strings.Contains(out, demoSession) || !strings.Contains(out, second) || !strings.Contains(out, "demo") {
+		t.Fatalf("both sessions wait: %s", out)
+	}
+	if err := l.run(nil, "sessions", "include", "no-such-id"); err == nil || !strings.Contains(err.Error(), "no session no-such-id") {
+		t.Fatalf("unknown id: %v", err)
+	}
+
+	// include one, exclude the other: only the included one is ever sent
+	if out := l.must(nil, "sessions", "include", demoSession); !strings.Contains(out, "included 1 session(s)") {
+		t.Fatalf("include: %s", out)
+	}
+	if out := l.must(nil, "sessions", "exclude", second); !strings.Contains(out, "excluded 1 session(s)") {
+		t.Fatalf("exclude: %s", out)
+	}
+	out = l.must(nil, "sessions", "list")
+	if !strings.Contains(out, "[queued]") || !strings.Contains(out, "[excluded]") {
+		t.Fatalf("states after deciding: %s", out)
+	}
+	if out := l.must(nil, "sessions", "list", "--state", "excluded"); !strings.Contains(out, second) || strings.Contains(out, demoSession) {
+		t.Fatalf("--state filters: %s", out)
+	}
+	for _, args := range [][]string{{"sync"}, {"sync", "--approve"}, {"sync", "--dry-run", "--approve"}} {
+		if out := l.must(nil, args...); strings.Contains(out, "SECOND-SESSION") {
+			t.Fatalf("%v printed an excluded session", args)
+		}
+	}
+	held := everythingTheServerHolds(t, b)
+	if !strings.Contains(held, "please ship the widget") || strings.Contains(held, "SECOND-SESSION") {
+		t.Fatalf("only the included session is on the server:\n%s", held)
+	}
+	if out := l.must(nil, "sessions", "list"); !strings.Contains(out, "[sent]") {
+		t.Fatalf("sent: %s", out)
+	}
+
+	// retract what was sent: gone from the server with its work items, never re-sent
+	if err := l.run(nil, "sessions", "retract", second); err == nil || !strings.Contains(err.Error(), "nothing to retract") {
+		t.Fatalf("a session that was never sent cannot be retracted: %v", err)
+	}
+	if items, _ := b.st.WorkItems(ctx, store.WorkItemQuery{}); len(items) == 0 {
+		t.Fatal("the sent session brought work items")
+	}
+	if out := l.must(nil, "sessions", "retract", demoSession); !strings.Contains(out, "retracted 1 session(s)") {
+		t.Fatalf("retract: %s", out)
+	}
+	if ps, _ := b.st.ListProjects(ctx); len(ps) != 0 {
+		t.Fatalf("the server holds nothing after the retract: %+v", ps)
+	}
+	if items, _ := b.st.WorkItems(ctx, store.WorkItemQuery{}); len(items) != 0 {
+		t.Fatalf("its work-item links went with it: %+v", items)
+	}
+	if held := everythingTheServerHolds(t, b); strings.Contains(held, "please ship the widget") {
+		t.Fatal("a retracted session is still on the server")
+	}
+	sent := countAction(t, b, "ingest")
+	l.addClaudeTurn(demoSession, "/home/user/projects/demo", "the retracted session continues")
+	for _, args := range [][]string{{"sync"}, {"sync", "--approve"}} {
+		l.must(nil, args...)
+	}
+	l.must(nil, "projects", "auto", "demo", "on") // not even an auto-approved project sends it
+	l.must(nil, "sync")
+	if got := countAction(t, b, "ingest"); got != sent {
+		t.Fatalf("a retracted or excluded session was sent again: %d -> %d", sent, got)
+	}
+	out = l.must(nil, "sessions", "list")
+	if !strings.Contains(out, "[retracted]") || !strings.Contains(out, "[excluded]") || strings.Contains(out, "[sent]") {
+		t.Fatalf("states after the retract: %s", out)
+	}
+	if err := l.run(nil, "inbox", "reset", demoSession); err == nil || !strings.Contains(err.Error(), "sessions include") {
+		t.Fatalf("a retract is undone with sessions include, on purpose: %v", err)
+	}
+
+	// include undoes both, and then they are sent again
+	l.must(nil, "projects", "auto", "demo", "off")
+	l.must(nil, "sessions", "include", demoSession, second)
+	l.must(nil, "sync")
+	held = everythingTheServerHolds(t, b)
+	if !strings.Contains(held, "please ship the widget") || !strings.Contains(held, "SECOND-SESSION") {
+		t.Fatalf("included again, both are sent:\n%s", held)
+	}
+
+	// excluding a session that is on the server stops updates and says how to remove it
+	l.must(nil, "sessions", "exclude", second)
+	if !strings.Contains(l.errOut.String(), "already reached the server") || !strings.Contains(l.errOut.String(), "sessions retract") {
+		t.Fatalf("excluding a sent session points at retract:\n%s", l.errOut)
+	}
+	if out := l.must(nil, "sessions", "retract", second); !strings.Contains(out, "retracted 1") {
+		t.Fatalf("an excluded, sent session can be retracted: %s", out)
+	}
+	if held := everythingTheServerHolds(t, b); strings.Contains(held, "SECOND-SESSION") {
+		t.Fatal("retract after exclude left it on the server")
+	}
+}
+
+// The same decisions through the backend the TUI inbox uses.
+func TestInboxBackendRetractAndStates(t *testing.T) {
+	b := startBridge(t)
+	l := newLaptop(t)
+	ctx := context.Background()
+	l.must(l.initEnv(b), "init", "--non-interactive")
+	l.must(nil, "share", "add", "~/projects/demo")
+	be := backend(l)
+	in, _ := be.Inbox(ctx)
+	if len(in.Pending) != 1 || in.Pending[0].State != "pending" {
+		t.Fatalf("pending: %+v", in)
+	}
+	if err := be.InboxDecide(ctx, in.Pending, tui.InboxRetract); err == nil {
+		t.Fatal("nothing to retract before it was sent")
+	}
+	if err := be.InboxDecide(ctx, in.Pending, tui.InboxApprove); err != nil {
+		t.Fatal(err)
+	}
+	if in, _ = be.Inbox(ctx); len(in.Pending) != 0 || len(in.Sent) != 1 || in.Sent[0].State != "queued" {
+		t.Fatalf("approved is queued: %+v", in)
+	}
+	l.must(nil, "sync")
+	if in, _ = be.Inbox(ctx); len(in.Sent) != 1 || in.Sent[0].State != "sent" {
+		t.Fatalf("sent: %+v", in)
+	}
+	if err := be.InboxDecide(ctx, in.Sent, tui.InboxRetract); err != nil {
+		t.Fatal(err)
+	}
+	if ps, _ := b.st.ListProjects(ctx); len(ps) != 0 {
+		t.Fatalf("retracted from the server: %+v", ps)
+	}
+	in, _ = be.Inbox(ctx)
+	if len(in.Retracted) != 1 || len(in.Sent) != 0 || len(in.Pending) != 0 {
+		t.Fatalf("retracted: %+v", in)
+	}
+	// approving a retracted session takes it back in: it is judged afresh and approved
+	if err := be.InboxDecide(ctx, in.Retracted, tui.InboxApprove); err != nil {
+		t.Fatal(err)
+	}
+	l.must(nil, "sync")
+	if ps, _ := b.st.ListProjects(ctx); len(ps) != 1 {
+		t.Fatalf("included again and sent: %+v", ps)
 	}
 }

@@ -58,6 +58,7 @@ type fakeBackend struct {
 	excluded   int
 	inbox      Inbox
 	inboxDecs  []string // "decision:id" in order
+	inboxErr   error
 	stale      int      // synced sessions with heuristic summaries (a model is configured when > 0)
 }
 

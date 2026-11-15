@@ -309,15 +309,21 @@ type Backend interface {
 
 // Inbox decisions for InboxDecide.
 const (
-	InboxApprove = "approve"
+	InboxApprove = "approve" // also undoes an exclude or a retract
 	InboxExclude = "exclude"
 	InboxReset   = "reset"
+	// InboxRetract deletes a sent session from the server and never sends
+	// it again.
+	InboxRetract = "retract"
 )
 
-// Inbox is what waits for the user's approval, and what they excluded.
+// Inbox is every session of the shared projects by where it stands: waiting
+// for approval, excluded, sent (or about to be), and retracted.
 type Inbox struct {
-	Pending  []InboxItem
-	Excluded []InboxItem
+	Pending   []InboxItem
+	Excluded  []InboxItem
+	Sent      []InboxItem // on the server, or queued for the next sync
+	Retracted []InboxItem
 }
 
 // InboxItem is one session in the inbox.
@@ -328,6 +334,9 @@ type InboxItem struct {
 	Updated    time.Time
 	// Changed is set when an earlier version was approved or sent.
 	Changed bool
+	// State says where it stands: pending, queued, sent, changed, excluded
+	// or retracted.
+	State string
 	// Hash is the content a decision is made for; pass it back unchanged.
 	Hash string
 }

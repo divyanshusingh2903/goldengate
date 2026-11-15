@@ -198,3 +198,41 @@ func TestExcludedSessionsAreNeverReadOrSent(t *testing.T) {
 		t.Error("no decision for an unknown session")
 	}
 }
+
+func TestSessionsWaitingForApprovalNeverReachTheModel(t *testing.T) {
+	e := inboxEnv(t)
+	ctx := context.Background()
+	rec := &recorder{}
+	e.s.Summarizer = rec
+
+	// a plain sync: only the auto-approved project's session goes to the model
+	sink := &capture{}
+	rep, err := e.s.Run(ctx, gsync.RunOpts{}, sink, false)
+	if err != nil || ids(sink) != "a1" || rep.Pending != 2 {
+		t.Fatalf("%s %+v %v", ids(sink), rep, err)
+	}
+	if len(rec.inputs) != 1 {
+		t.Fatalf("one model call, for the session that is sent: %d", len(rec.inputs))
+	}
+	for _, in := range rec.inputs {
+		if strings.Contains(in, "PENDING") {
+			t.Fatal("a session waiting for approval was sent to the model")
+		}
+	}
+	// listing offline calls nothing
+	if _, rep, err := e.s.Plan(ctx, gsync.RunOpts{Offline: true, Approve: true}); err != nil || rep.Approving != 2 || len(rec.inputs) != 1 {
+		t.Fatalf("an offline plan never calls the model: %+v %v, %d calls", rep, err, len(rec.inputs))
+	}
+	// once approved, the session is summarized by the model and sent
+	r1 := rep.PendingItems[0]
+	if err := e.st.Decide(ctx, gsync.Decision{Source: r1.Source, SessionID: r1.SessionID, State: gsync.DecisionApproved, ContentHash: r1.ContentHash, At: t0}); err != nil {
+		t.Fatal(err)
+	}
+	sink = &capture{}
+	if _, err := e.s.Run(ctx, gsync.RunOpts{}, sink, false); err != nil || ids(sink) != "r1" || sink.got[0].Summary.SummarizedBy != "fake:model" {
+		t.Fatalf("approved, so the model writes its summary: %s %v", ids(sink), err)
+	}
+	if len(rec.inputs) != 2 || !strings.Contains(rec.inputs[1], "PENDING-ONE") || strings.Contains(strings.Join(rec.inputs, " "), "PENDING-TWO") {
+		t.Fatalf("only the approved session reached the model: %d calls", len(rec.inputs))
+	}
+}

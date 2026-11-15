@@ -19,10 +19,11 @@
 │                 │ Everywhere                                                   │                 │
 │                 │ 1-5 tab   projects / sync / server / settings / agents       │                 │
 │                 │ s         sync: review first, then send                      │                 │
-│                 │ r         refresh                                            │ · changed       │
-│                 │ ?         this help                                          │w                │
-│                 │ q ctrl+c  quit                                               │                 │
-│                 │ Mouse                                                        │ding             │
+│                 │ i         inbox: approve, exclude or retract single sessions │ · changed       │
+│                 │ r         refresh                                            │w                │
+│                 │ ?         this help                                          │                 │
+│                 │ q ctrl+c  quit                                               │ding             │
+│                 │ Mouse                                                        │                 │
 │                 │ click     select · on the box: share / un-share              │                 │
 │                 │ dbl-click preview   (ctrl+click marks)                       │                 │
 │                 │ wheel     scroll; tabs, chips, buttons and keys below click  │                 │
@@ -34,7 +35,6 @@
 │                 │ code  CC Claude Code  CX Codex  OC OpenCode                  │                 │
 │                 │ chat  AI claude.ai  GPT ChatGPT                              │                 │
 │                 │                                                              │                 │
-│                 │ Nothing is sent until you sync, and previews are exact.      │                 │
-├─────────────────└──────────────────────────────────────────────────────────────┘─────────────────┤
-│ space unshare  p preview  s sync  f view  / search  d deny  u undo  t tree  ? help               │
+├─────────────────│ Nothing is sent until you sync, and previews are exact.      │─────────────────┤
+│ space unshare  p└──────────────────────────────────────────────────────────────┘lp               │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘
