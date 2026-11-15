@@ -94,10 +94,14 @@ type laptop struct {
 	claude  string
 	secrets *secrets.Memory
 	turns   int // messages appended by addClaudeTurn
-	out     *bytes.Buffer
-	errOut  *bytes.Buffer
-	home    string
-	http    *http.Client
+	// edit stands in for the user's editor: it gets the form and returns
+	// what the user saved. forms records every form that was opened.
+	edit   func(form string) string
+	forms  []string
+	out    *bytes.Buffer
+	errOut *bytes.Buffer
+	home   string
+	http   *http.Client
 }
 
 func newLaptop(t *testing.T) *laptop {
@@ -136,6 +140,17 @@ func (l *laptop) deps(env map[string]string) cli.Deps {
 		},
 		Now: func() time.Time { return fakeNow }, HTTP: l.http, Hostname: func() string { return "testbox" },
 		SecretStore: func(string, func(string)) secrets.Store { return l.secrets },
+		EditFile: func(path string) error {
+			b, err := os.ReadFile(path)
+			if err != nil {
+				return err
+			}
+			l.forms = append(l.forms, string(b))
+			if l.edit == nil {
+				return nil
+			}
+			return os.WriteFile(path, []byte(l.edit(string(b))), 0o600)
+		},
 	}
 }
 

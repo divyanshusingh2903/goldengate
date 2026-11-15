@@ -15,6 +15,7 @@ import (
 
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/config"
 	gsync "github.com/divyanshusingh2903/goldengate/internal/goldengate/sync"
+	"github.com/divyanshusingh2903/goldengate/internal/goldengate/tui"
 	"github.com/divyanshusingh2903/goldengate/internal/model"
 )
 
@@ -26,6 +27,9 @@ const (
 	sessChanged   = "changed"   // on the server; a newer version waits or is queued
 	sessExcluded  = "excluded"  // kept on this machine
 	sessRetracted = "retracted" // was sent, then taken back
+	// sessConflict: the user edited its summary and it changed since; it is
+	// held until they decide about the edit.
+	sessConflict = tui.InboxStateConflict
 )
 
 // sessionRow is one session of a shared project and where it stands.
@@ -34,6 +38,7 @@ type sessionRow struct {
 	Project    string // the named project, or the folder
 	Title      string // redacted
 	State      string
+	Edited     bool   // its summary is the user's own version
 	Waits      bool   // a version of it waits for approval (pending, or changed and not auto-approved)
 	Hash       string // the content a decision would be made for
 	Updated    time.Time
@@ -55,7 +60,7 @@ func (a *app) sessionRows(ctx context.Context, cfg config.Config, st *gsync.Stat
 		Log: slog.New(slog.NewTextHandler(io.Discard, nil)), Summarizer: a.summarizer(cfg)}
 	// with Approve the plan holds everything new or changed; which of it
 	// waits is decided below from the project and the decisions
-	batch, _, err := s.Plan(ctx, gsync.RunOpts{Offline: true, Approve: true})
+	batch, rep, err := s.Plan(ctx, gsync.RunOpts{Offline: true, Approve: true})
 	if err != nil {
 		return nil, err
 	}
@@ -84,6 +89,7 @@ func (a *app) sessionRows(ctx context.Context, cfg config.Config, st *gsync.Stat
 		var p model.SessionPayload
 		if json.Unmarshal(e.Payload, &p) == nil {
 			r.Project, r.Title, r.Updated = p.ProjectLabel(), payloadTitle(&p), p.UpdatedAt
+			r.Edited = p.Summary != nil && p.Summary.Edited
 		}
 		put(r)
 	}
@@ -101,13 +107,31 @@ func (a *app) sessionRows(ctx context.Context, cfg config.Config, st *gsync.Stat
 			if cur.Hash != p.ContentHash { // a re-filed or re-summarized session is not a change of content
 				cur.State, cur.Waits, cur.Hash, cur.Title, cur.Updated = sessChanged, waits, p.ContentHash, payloadTitle(p), p.UpdatedAt
 			}
+			cur.Edited = p.Summary != nil && p.Summary.Edited
 			continue
 		}
 		state := sessQueued
 		if waits {
 			state = sessPending
 		}
-		put(sessionRow{Source: p.Source, ID: p.SessionID, Project: p.ProjectLabel(), Title: payloadTitle(p), State: state, Waits: waits, Hash: p.ContentHash, Updated: p.UpdatedAt})
+		put(sessionRow{Source: p.Source, ID: p.SessionID, Project: p.ProjectLabel(), Title: payloadTitle(p), State: state, Waits: waits, Hash: p.ContentHash, Updated: p.UpdatedAt,
+			Edited: p.Summary != nil && p.Summary.Edited})
+	}
+	// sessions held because the user edited an earlier version
+	for _, it := range rep.PendingItems {
+		if !it.Conflict {
+			continue
+		}
+		name := it.ProjectName
+		if name == "" {
+			name = it.Project
+		}
+		k := key{it.Source, it.SessionID}
+		if cur, ok := rows[k]; ok {
+			cur.State, cur.Edited, cur.Waits, cur.Hash = sessConflict, true, false, it.ContentHash
+			continue
+		}
+		put(sessionRow{Source: it.Source, ID: it.SessionID, Project: name, Title: it.Title, State: sessConflict, Edited: true, Hash: it.ContentHash, Updated: it.Updated})
 	}
 	decs, err := st.Decisions(ctx, "")
 	if err != nil {
@@ -171,7 +195,25 @@ func (a *app) sessionsCmd() *cobra.Command {
 		RunE: func(c *cobra.Command, args []string) error { return a.sessionsExclude(c.Context(), args) }}
 	retract := &cobra.Command{Use: "retract <session-id>...", Short: "Delete sent sessions from the server and never send them again", Args: cobra.MinimumNArgs(1),
 		RunE: func(c *cobra.Command, args []string) error { return a.sessionsRetract(c.Context(), args) }}
-	cmd.AddCommand(list, include, exclude, retract)
+	var keep, discard bool
+	edit := &cobra.Command{Use: "edit <session-id>", Short: "Edit a session's summary in your editor; your version is what is sent and is never overwritten",
+		Long: `Opens the session's summary in $VISUAL or $EDITOR. Change text, delete a line to strike
+it, delete a work-item line to unlink it. Your version is redacted like everything else and
+no summarizer replaces it (not even sync --resummarize).
+
+If the session continues later, your edit is not applied silently and the new summary is
+not sent in its place: the session is held, and editing it again shows the new generated
+summary next to your earlier version.
+
+  --keep      use your earlier version, as it is, for the session as it is now
+  --discard   remove your edit and use the generated summary`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(c *cobra.Command, args []string) error {
+			return a.sessionsEdit(c.Context(), args[0], keep, discard)
+		}}
+	edit.Flags().BoolVar(&keep, "keep", false, "keep your earlier edit for the changed session, without opening the editor")
+	edit.Flags().BoolVar(&discard, "discard", false, "remove your edit")
+	cmd.AddCommand(list, include, exclude, retract, edit)
 	return cmd
 }
 
@@ -204,6 +246,9 @@ func (a *app) sessionsList(ctx context.Context, project, state string) error {
 				note = "changed, waits for approval"
 			} else if r.State == sessChanged {
 				note = "changed, queued"
+			}
+			if r.Edited && r.State != sessConflict {
+				note += ", edited"
 			}
 			fmt.Fprintf(a.Stdout, "%s  %-11s  %-28s  %s  %s\n", r.ID, r.Source, "["+note+"]", r.Project, r.Title)
 			n++

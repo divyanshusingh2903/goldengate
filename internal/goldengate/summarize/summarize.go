@@ -62,6 +62,11 @@ type Options struct {
 	// UserNarrative returns the narrative the user wrote for a session, if
 	// any. It wins over a model's and is never replaced by one.
 	UserNarrative func(source, sessionID string) (string, bool)
+	// Edit is the user's own version of this session's summary. It is used
+	// as long as the session's content is what they edited; no model is
+	// asked then. If the session has changed since, nothing of the edit is
+	// applied and the payload is marked EditConflict.
+	Edit *Edit
 }
 
 // Build produces the payload for one session. It never mutates s.
@@ -93,10 +98,35 @@ func Build(s *model.RawSession, o Options) (*model.SessionPayload, error) {
 		p.Version, p.ProjectID, p.ProjectName = model.PayloadV2, o.ProjectID, o.ProjectName
 	}
 	p.StartedAt, p.UpdatedAt = activityWindow(s)
+	// the fingerprint covers the conversation, not the summary, so it is
+	// known before the summary is written
+	h, err := fingerprint(s, p)
+	if err != nil {
+		return nil, err
+	}
+	p.ContentHash = h
+	edit := o.Edit
+	if edit != nil && edit.ContentHash != h {
+		p.EditConflict, edit = true, nil
+	}
 
 	title := r.str(deriveTitle(s), maxTitle)
 	if level == model.LevelTitlesOnly {
 		p.TitleOnly = title
+		if edit != nil {
+			if t := r.str(edit.Title, maxTitle); t != "" {
+				p.TitleOnly = t
+			}
+		}
+	} else if edit != nil {
+		// The user's version: their text (redacted like everything else),
+		// the rules' facts, and no model.
+		sum := heuristic(s, r)
+		sum.Title = title
+		edit.apply(sum, r)
+		capSummary(sum)
+		p.Summary = sum
+		p.WorkItems = edit.keep(workItems(s, o.Work, r))
 	} else {
 		sum := heuristic(s, r)
 		sum.Title = title
@@ -115,11 +145,6 @@ func Build(s *model.RawSession, o Options) (*model.SessionPayload, error) {
 		p.WorkItems = workItems(s, o.Work, r)
 	}
 	p.Redactions = model.Redactions(r.counts)
-	h, err := fingerprint(s, p)
-	if err != nil {
-		return nil, err
-	}
-	p.ContentHash = h
 	return p, nil
 }
 

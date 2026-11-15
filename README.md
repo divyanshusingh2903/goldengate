@@ -149,6 +149,8 @@ goldengate sessions exclude <session-id>  # never send it
 goldengate sessions retract <session-id>  # delete a sent session from the server, and never send it again
 ```
 
+**Editing a summary.** `goldengate sessions edit <session-id>` (or `e` in the inbox) opens the session's summary in your editor: change the text, delete a line to strike it, delete a work-item line to unlink it. Your version is what is sent. It is redacted like everything else, the preview shows it exactly, and no summarizer replaces it, `sync --resummarize` included. If the session continues afterwards, the new summary is not sent in place of yours and your edit is not applied blindly: the session is held until you edit it again (the form shows the new summary next to your earlier version), keep your version (`--keep`, or `K`), or drop the edit (`--discard`, or `D`).
+
 A session that continues after you approved or sent it comes back to the inbox. To skip the inbox for a project you trust, turn on auto-approve: `goldengate projects auto <project> on`, or share with `goldengate share add <folder> --auto-approve`. Projects you were already sharing before this existed keep sending as they did.
 
 **Which assistant sees what.** Each assistant you connect is an *agent* with its own read token and its own list of projects. The assistant you set up first sees every project you share; any other starts with nothing. These commands ask for the admin secret (or read `GOLDENGATE_ADMIN_TOKEN`) and never store it:

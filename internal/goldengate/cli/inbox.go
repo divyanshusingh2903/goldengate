@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"sort"
 	"strings"
 
@@ -215,8 +216,10 @@ func (b *tuiBackend) Inbox(ctx context.Context) (tui.Inbox, error) {
 	err := b.a.withRows(ctx, func(_ config.Config, _ *gsync.State, rows []sessionRow) error {
 		for _, r := range rows {
 			it := tui.InboxItem{Source: r.Source, ID: r.ID, Project: r.Project, Title: r.Title, Updated: r.Updated, Hash: r.Hash, State: r.State,
-				Changed: r.State == sessChanged}
+				Changed: r.State == sessChanged, Edited: r.Edited}
 			switch {
+			case r.State == sessConflict: // needs the user's attention like anything that waits
+				in.Pending = append(in.Pending, it)
 			case r.State == sessExcluded:
 				in.Excluded = append(in.Excluded, it)
 			case r.State == sessRetracted:
@@ -247,6 +250,27 @@ func (b *tuiBackend) InboxDecide(ctx context.Context, items []tui.InboxItem, dec
 	case tui.InboxApprove:
 		_, err := b.a.decideInclude(ctx, ids)
 		return err
+	case tui.InboxKeepEdit, tui.InboxDropEdit:
+		cfg, err := b.a.load()
+		if err != nil {
+			return err
+		}
+		st, err := b.a.openState()
+		if err != nil {
+			return err
+		}
+		defer func() { _ = st.Close() }()
+		for _, id := range ids {
+			if decision == tui.InboxKeepEdit {
+				_, err = b.a.editKeep(ctx, cfg, st, id)
+			} else {
+				_, err = b.a.editDiscard(ctx, st, id)
+			}
+			if err != nil {
+				return err
+			}
+		}
+		return nil
 	case tui.InboxExclude, tui.InboxReset, tui.InboxRetract:
 		return b.a.withRows(ctx, func(cfg config.Config, st *gsync.State, rows []sessionRow) error {
 			picked, err := pick(rows, ids)
@@ -276,4 +300,65 @@ func (b *tuiBackend) InboxDecide(ctx context.Context, items []tui.InboxItem, dec
 		})
 	}
 	return fmt.Errorf("unknown inbox decision %q", decision)
+}
+
+// EditBegin implements tui.Backend.
+func (b *tuiBackend) EditBegin(ctx context.Context, item tui.InboxItem) (string, error) {
+	cfg, err := b.a.load()
+	if err != nil {
+		return "", err
+	}
+	st, err := b.a.openState()
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = st.Close() }()
+	f, err := b.a.editPrepare(ctx, cfg, st, item.ID)
+	if err != nil {
+		return "", err
+	}
+	path, err := b.a.editPath(item.ID)
+	if err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(path, []byte(f.text), 0o600); err != nil {
+		return "", err
+	}
+	return path, nil
+}
+
+// EditFinish implements tui.Backend. An empty path only removes the form.
+func (b *tuiBackend) EditFinish(ctx context.Context, item tui.InboxItem, path string) (string, error) {
+	want, err := b.a.editPath(item.ID)
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = os.Remove(want) }()
+	if path == "" {
+		return "", nil
+	}
+	if path != want {
+		return "", errors.New("not the file this session's form was written to")
+	}
+	text, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	cfg, err := b.a.load()
+	if err != nil {
+		return "", err
+	}
+	st, err := b.a.openState()
+	if err != nil {
+		return "", err
+	}
+	defer func() { _ = st.Close() }()
+	f, err := b.a.editPrepare(ctx, cfg, st, item.ID)
+	if err != nil {
+		return "", err
+	}
+	b.mu.Lock()
+	b.reviewed = nil
+	b.mu.Unlock()
+	return b.a.editSave(ctx, cfg, st, f, string(text))
 }

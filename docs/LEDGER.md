@@ -11,8 +11,8 @@ This file lets any Claude Code session (or person) pick up the Product v2 work w
 
 _Last updated 2026-11-14. Update this section whenever a row in the queue changes._
 
-**Progress:** 11 of 31 scheduled issues done (plus 2 stretch). Phases 1 (Foundations) and 2 (Per-agent access) are complete.
-**In progress:** #29 Session include, exclude, retract, size S, planned Nov 20. **Next after it:** #30 Editable summaries that stay edited.
+**Progress:** 12 of 31 scheduled issues done (plus 2 stretch). Phases 1 (Foundations) and 2 (Per-agent access) are complete.
+**In progress:** #30 Editable summaries that stay edited, size M, planned Nov 20 (last issue of phase 3). **Next after it:** #21 Threads from work items and branch names.
 
 ### Done
 
@@ -29,6 +29,7 @@ _Last updated 2026-11-14. Update this section whenever a row in the queue change
 | #27 | OAuth consent in two steps: admin secret, then which agent and which projects (nothing ticked); the open first page shows no names | #66 | 2026-11-14 |
 | #28 | TUI Agents screen: projects by agents grid, review before apply, view as agent, agent details and token revoke; four new `tui.Backend` methods | #67 | 2026-11-14 |
 | #20 | Local inbox: per-session decisions, `auto_approve` per project, sync sends only approved sessions for projects under review, `goldengate inbox`, `sync --approve` | #70 | 2026-11-14 |
+| #29 | `goldengate sessions list|include|exclude|retract`, TUI inbox screen (`i`), retract deletes on the server first; waiting sessions no longer reach the model | #71 | 2026-11-14 |
 
 Supporting changes (not queue issues):
 
@@ -44,7 +45,7 @@ Supporting changes (not queue issues):
 
 - **User's stash** `list-tools wip (user)` (branch `fix/list-tools-empty-hint`): not touched by the loop. Popping it will conflict with #37 in `listWork` (`bridgemcp/tools.go`).
 - **Dependabot #53**: shows a `pr-template` failure from before #9 merged. It clears once the PR is rebased or updated (the user's call).
-- **#49 follow-ups**: the user's own narrative is honoured through `summarize.Options.UserNarrative`, but nothing stores or edits one until #30. Model summaries pushed before #49 (bullets in `description`) are not counted as stale; they gain a narrative when their session changes or the length setting is changed and the user re-summarizes. `get_work_item` (#36) should return the full narrative like `get_session`.
+- **#49 follow-ups**: model summaries pushed before #49 (bullets in `description`) are not counted as stale; they gain a narrative when their session changes or the length setting is changed and the user re-summarizes. `get_work_item` (#36) should return the full narrative like `get_session`. (User narratives are stored and edited through #30's summary edits; `summarize.Options.UserNarrative` is no longer the way in.)
 - **Upgrade order (#19)**: upgrade the server before the client. A server with #19 accepts old clients, but an older server rejects payloads from a newer client (unknown fields). In the server tables the `project` column holds a project id (for data stored before ids, the old key).
 - **Per-agent access, as it stands after phase 2**: grants are enforced in every MCP tool (#25). On an upgraded server `Default` keeps the projects it could see at upgrade time and is not granted later ones; on a fresh install `goldengate init` sets `Default` to see every shared project. Not built yet: creating, renaming or removing agents and minting tokens from the TUI (CLI only), deleting an OAuth application from the client side, and `get_work_item` (#36), which should return the full narrative like `get_session`. "View as agent" is computed on the laptop from what that computer synced, so it does not list sessions synced from another computer. The web UI (#48) should reuse the four agents methods on `tui.Backend`.
 - **Decision made by the user for #20 (2026-11-14)**: a project shared from now on waits in the inbox (manual first). Reviewing and pressing Send on the TUI Sync screen is the approval; `goldengate sync`, hooks and timers send only approved sessions. Auto-approve is a per-project switch. The TUI inbox list (`i`) came with #29. Still to build: showing or toggling a project's auto-approve in the TUI (belongs with #31).
@@ -109,8 +110,8 @@ Status values: `todo`, `in progress`, `in review`, `blocked`, `done`. Size: S ab
 | 9 | #27 OAuth consent picks agent and projects | M | #24, #25 | Nov 18 | done | #66 |
 | 10 | #28 TUI Agents screen, view as agent | M | #26 | Nov 18 | done | #67 |
 | 11 | #20 Local inbox: pending, approved, excluded | L | #17 | Nov 19 | done | #70 |
-| 12 | #29 Session include, exclude, retract | S | #20 | Nov 20 | in progress | |
-| 13 | #30 Editable summaries that stay edited | M | #20 | Nov 20 | todo | |
+| 12 | #29 Session include, exclude, retract | S | #20 | Nov 20 | done | #71 |
+| 13 | #30 Editable summaries that stay edited | M | #20 | Nov 20 | in progress | |
 | 14 | #21 Threads from work items and branch names | M | | Nov 21 | todo | |
 | 15 | #35 GitLab issues and merge requests | S | | Nov 21 | todo | |
 | 16 | #36 MCP context built around work items | M | #21 | Nov 22 | todo | |
@@ -162,3 +163,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-14: Ledger refreshed after phase 2 (#69): supporting PRs #61 and #68 listed, loose ends rewritten for the state after #25 to #28. Roadmap page republished.
 - 2026-11-14: #20 implemented: per-session decisions in the state DB, `auto_approve` per project, sync sends only approved sessions for projects under review, `goldengate inbox`, `sync --approve`, `projects auto`, `share add --auto-approve`; configurations from before the inbox keep auto-approve on. Existing tests that share and then sync now share with `--auto-approve`.
 - 2026-11-14: #20 done (#70). #29 implemented: `goldengate sessions list|include|exclude|retract`, a TUI inbox screen (`i`) with approve, exclude, undo and retract, retract deleting the session on the server before recording it locally. Also fixed in this PR: a session waiting for approval was summarized by the model during a plain sync; it is now built with the local rules until approved, and listings never call a model.
+- 2026-11-14: #29 done (#71). #30 implemented: `goldengate sessions edit` and `e` in the TUI inbox open the summary in the user's editor; the edit is stored per session and content hash, used instead of any summarizer, redacted, and never overwritten; a session that changes after an edit is held until the user edits again, keeps or discards the edit.

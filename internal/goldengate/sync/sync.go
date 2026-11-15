@@ -164,6 +164,9 @@ func (s *Syncer) summarizeOptions(ctx context.Context, ref model.SessionRef, wo 
 	o := summarize.Options{Level: s.Config.Share.Level, Home: s.Home, Work: wo, ExtraRedactions: s.Config.Redact.ExtraPatterns,
 		ProjectKey: s.serverKey(ref)}
 	o.ProjectID, o.ProjectName = s.projectOf(ref)
+	if e, ok, err := s.State.Edit(ctx, ref.Source, ref.ID); err == nil && ok {
+		o.Edit = &e // the user's version; it wins while the content is what they edited
+	}
 	if s.Summarizer != nil {
 		now := s.Now
 		if now == nil {
@@ -234,6 +237,11 @@ type Report struct {
 	// are in the plan only because RunOpts.Approve is set: sending the plan
 	// approves them.
 	Approving int
+	// Conflicts counts sessions the user edited that changed afterwards.
+	// They are never planned, whatever the project or the options say, until
+	// the user has decided about their edit; they are listed in
+	// PendingItems with Conflict set.
+	Conflicts int
 }
 
 func (s *Syncer) log() *slog.Logger {
@@ -373,11 +381,23 @@ func (s *Syncer) Plan(ctx context.Context, o RunOpts) (Batch, Report, error) {
 			// re-summarized session is sent when its payload came out different
 			wasID, wasName, kept := projectFields(prev.Payload)
 			sameProj := !kept || (wasID == p.ProjectID && wasName == p.ProjectName)
-			if seen && prev.ContentHash == p.ContentHash && sameProj && (!j.resummarize || bytes.Equal(body, prev.Payload)) {
+			// an edit made (or removed) after the session was sent changes
+			// the payload without changing the conversation
+			compare := j.resummarize || (p.Summary != nil && p.Summary.Edited) || editedPayload(prev.Payload)
+			if seen && prev.ContentHash == p.ContentHash && sameProj && (!compare || bytes.Equal(body, prev.Payload)) {
 				// same content, only the file's stat changed: remember the new stat, send nothing
 				prev.Size, prev.MTimeNS = ref.SizeBytes, mtime
 				b.refresh = append(b.refresh, prev)
 				rep.Unchanged++
+				continue
+			}
+			// The user edited an earlier version of this session. The new
+			// generated summary is not sent in place of their text: they
+			// decide first (keep the edit, edit again, or drop it).
+			if p.EditConflict {
+				rep.Conflicts++
+				rep.PendingItems = append(rep.PendingItems, PendingItem{Source: ref.Source, SessionID: ref.ID, Project: ref.ProjectKey,
+					ProjectName: p.ProjectName, Title: payloadTitle(p), Updated: p.UpdatedAt, ContentHash: p.ContentHash, Changed: true, Conflict: true})
 				continue
 			}
 			// New or changed content. In a project that is not auto-approved
@@ -391,13 +411,9 @@ func (s *Syncer) Plan(ctx context.Context, o RunOpts) (Batch, Report, error) {
 				if waiting && o.Approve {
 					rep.Approving++
 				} else if waiting {
-					title := p.TitleOnly
-					if p.Summary != nil {
-						title = p.Summary.Title
-					}
 					rep.Pending++
 					rep.PendingItems = append(rep.PendingItems, PendingItem{Source: ref.Source, SessionID: ref.ID, Project: ref.ProjectKey,
-						ProjectName: p.ProjectName, Title: title, Updated: p.UpdatedAt, ContentHash: p.ContentHash, Changed: seen || decided})
+						ProjectName: p.ProjectName, Title: payloadTitle(p), Updated: p.UpdatedAt, ContentHash: p.ContentHash, Changed: seen || decided})
 					continue
 				}
 			}
@@ -413,6 +429,23 @@ func (s *Syncer) Plan(ctx context.Context, o RunOpts) (Batch, Report, error) {
 		}
 	}
 	return b, rep, nil
+}
+
+func payloadTitle(p *model.SessionPayload) string {
+	if p.Summary != nil {
+		return p.Summary.Title
+	}
+	return p.TitleOnly
+}
+
+// editedPayload reports whether a stored payload carries a user-edited summary.
+func editedPayload(payload []byte) bool {
+	var p struct {
+		Summary *struct {
+			Edited bool `json:"edited"`
+		} `json:"summary"`
+	}
+	return json.Unmarshal(payload, &p) == nil && p.Summary != nil && p.Summary.Edited
 }
 
 // staleSummary reports whether a pushed payload's summary was written by
@@ -433,6 +466,9 @@ func staleSummary(payload []byte, by, length string) bool {
 	}
 	if p.Summary == nil {
 		return false // titles-only level: there is no summary to upgrade
+	}
+	if editedPayload(payload) {
+		return false // the user's own text is never offered for re-summarizing
 	}
 	if p.Summary.SummarizedBy != by {
 		return true
