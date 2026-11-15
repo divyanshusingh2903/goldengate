@@ -11,8 +11,8 @@ This file lets any Claude Code session (or person) pick up the Product v2 work w
 
 _Last updated 2026-11-14. Update this section whenever a row in the queue changes._
 
-**Progress:** 13 of 31 scheduled issues done (plus 2 stretch). Phases 1 (Foundations), 2 (Per-agent access) and 3 (Inbox and curation) are complete.
-**In progress:** #21 Threads from work items and branch names, size M, planned Nov 21 (first issue of phase 4). **Next up:** #35 GitLab issues and merge requests.
+**Progress:** 14 of 31 scheduled issues done (plus 2 stretch). Phases 1 (Foundations), 2 (Per-agent access) and 3 (Inbox and curation) are complete.
+**Next up:** #35 GitLab issues and merge requests, size S, planned Nov 21. It has no dependencies. Phase 4 has started: #21 is done.
 
 ### Done
 
@@ -31,6 +31,7 @@ _Last updated 2026-11-14. Update this section whenever a row in the queue change
 | #20 | Local inbox: per-session decisions, `auto_approve` per project, sync sends only approved sessions for projects under review, `goldengate inbox`, `sync --approve` | #70 | 2026-11-14 |
 | #29 | `goldengate sessions list|include|exclude|retract`, TUI inbox screen (`i`), retract deletes on the server first; waiting sessions no longer reach the model | #71 | 2026-11-14 |
 | #30 | Editable summaries: `goldengate sessions edit` and `e` in the TUI inbox; the edit is used instead of any summarizer, redacted, never overwritten; a session that changes after an edit is held until the user decides | #72 | 2026-11-14 |
+| #21 | Issue keys read from branch names (evidence `branch`, status `mentioned`); `internal/utils/threads` groups sessions across sources by shared issues and pull requests | #74 | 2026-11-14 |
 
 Supporting changes (not queue issues):
 
@@ -40,7 +41,7 @@ Supporting changes (not queue issues):
 | First `pr-template` check (unblocked the `main` ruleset); later replaced | #52 | 2026-11-14 |
 | The user's stricter `pr-template` check (Checklist with every item ticked; skips Dependabot) | #9 | 2026-11-14 |
 | This ledger, then its checklist rule, status section and roadmap sync | #54, #56, #57, #58 | 2026-11-14 |
-| Ledger status updates between issues (#49 done; phase 2 complete; refresh; phase 3 complete) | #61, #68, #69, #73 | 2026-11-14 |
+| Ledger status updates between issues (#49 done; phase 2 complete; refresh; phase 3 complete; #21 done) | #61, #68, #69, #73, #75 | 2026-11-14 |
 
 ### Open loose ends
 
@@ -114,7 +115,7 @@ Status values: `todo`, `in progress`, `in review`, `blocked`, `done`. Size: S ab
 | 11 | #20 Local inbox: pending, approved, excluded | L | #17 | Nov 19 | done | #70 |
 | 12 | #29 Session include, exclude, retract | S | #20 | Nov 20 | done | #71 |
 | 13 | #30 Editable summaries that stay edited | M | #20 | Nov 20 | done | #72 |
-| 14 | #21 Threads from work items and branch names | M | | Nov 21 | in progress | |
+| 14 | #21 Threads from work items and branch names | M | | Nov 21 | done | #74 |
 | 15 | #35 GitLab issues and merge requests | S | | Nov 21 | todo | |
 | 16 | #36 MCP context built around work items | M | #21 | Nov 22 | todo | |
 | 17 | #45 Design and security model for `goldengate ui` | S | #17 | Nov 22 | todo | |
@@ -168,3 +169,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-14: #29 done (#71). #30 implemented: `goldengate sessions edit` and `e` in the TUI inbox open the summary in the user's editor; the edit is stored per session and content hash, used instead of any summarizer, redacted, and never overwritten; a session that changes after an edit is held until the user edits again, keeps or discards the edit.
 - 2026-11-14: #30 done (#72). Phase 3 (inbox and curation) is complete: #20, #29, #30. Roadmap page updated. Next: #21.
 - 2026-11-14: #21 implemented: issue keys are read from branch names with the known-prefix rule (evidence `branch`, status `mentioned`), and `internal/utils/threads` groups sessions across sources into threads by shared issues and pull requests, joining an issue to a pull request only through the branch or the pull request title. Golden test in `testdata/threads`.
+- 2026-11-14: #21 done (#74). Roadmap page updated. Next: #35.
