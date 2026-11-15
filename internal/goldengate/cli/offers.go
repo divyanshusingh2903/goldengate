@@ -62,6 +62,32 @@ func (o ruleOffer) Effect() []string {
 	return out
 }
 
+// offer is the rule offer in the general form the inbox shows.
+func (o ruleOffer) offer(a *app) offer {
+	return offer{
+		ID: o.ID, Key: o.Key, Kind: "rule", Question: o.Question(), Effect: o.Effect(), Examples: o.Examples,
+		Because: fmt.Sprintf("You sent %d sessions from there by hand in the last 30 days.", o.Count),
+		accept: func(cfg *config.Config) (string, error) {
+			i := cfg.ProjectIndex(o.ProjectID)
+			if i < 0 {
+				return "", fmt.Errorf("project %q no longer exists", o.ProjectName)
+			}
+			r := o.Rule
+			r.ID = rules.NewID()
+			if err := r.Validate(); err != nil {
+				return "", err
+			}
+			cfg.Projects[i].Rules = append(cfg.Projects[i].Rules, r)
+			msg := fmt.Sprintf("%q: added rule %s: %s", o.ProjectName, r.ID, r)
+			if o.SetTrust != "" {
+				cfg.Projects[i].Trust = o.SetTrust
+				msg += "; trust level is now " + o.SetTrust
+			}
+			return msg, nil
+		},
+	}
+}
+
 func offerID(key string) string {
 	h := sha256.Sum256([]byte(key))
 	return "o_" + hex.EncodeToString(h[:4])
@@ -147,42 +173,33 @@ func (a *app) ruleOffers(ctx context.Context, cfg config.Config, st *gsync.State
 	return out, nil
 }
 
-// acceptOffer writes the offered rule (and trust level) into the config.
-func (a *app) acceptOffer(cfg config.Config, o ruleOffer) (rules.Rule, error) {
-	i := cfg.ProjectIndex(o.ProjectID)
-	if i < 0 {
-		return rules.Rule{}, fmt.Errorf("project %q no longer exists", o.ProjectName)
-	}
-	r := o.Rule
-	r.ID = rules.NewID()
-	if err := r.Validate(); err != nil {
-		return rules.Rule{}, err
-	}
-	// a project that was automatic as a whole keeps its other sessions
-	// waiting once it has an approve rule; say so through trustWords
-	cfg.Projects[i].Rules = append(cfg.Projects[i].Rules, r)
-	if o.SetTrust != "" {
-		cfg.Projects[i].Trust = o.SetTrust
-	}
-	return r, config.Save(a.cfgPath(), cfg)
-}
-
-func (a *app) printOffers(offers []ruleOffer) {
+// printOffers prints the offers of one kind ("" for all).
+func (a *app) printOffers(offers []offer, kind string) {
 	for _, o := range offers {
-		fmt.Fprintf(a.Stdout, "\noffer %s: %s\n", o.ID, o.Question())
-		fmt.Fprintf(a.Stdout, "  You sent %d sessions from there by hand in the last 30 days, such as:\n", o.Count)
-		for _, t := range o.Examples {
-			fmt.Fprintf(a.Stdout, "    %s\n", t)
+		if kind != "" && o.Kind != kind {
+			continue
+		}
+		word := "offer"
+		if o.Kind == "project" {
+			word = "suggestion"
+		}
+		fmt.Fprintf(a.Stdout, "\n%s %s: %s\n  %s\n", word, o.ID, o.Question, o.Because)
+		if len(o.Examples) > 0 {
+			fmt.Fprintln(a.Stdout, "  Such as:")
+			for _, t := range o.Examples {
+				fmt.Fprintf(a.Stdout, "    %s\n", t)
+			}
 		}
 		fmt.Fprintln(a.Stdout, "  Saying yes:")
-		for _, e := range o.Effect() {
+		for _, e := range o.Effect {
 			fmt.Fprintf(a.Stdout, "    %s\n", e)
 		}
-		fmt.Fprintf(a.Stdout, "  yes:      goldengate rules accept %s\n  not now:  goldengate rules dismiss %s\n", o.ID, o.ID)
+		yes, notNow := o.commands()
+		fmt.Fprintf(a.Stdout, "  yes:      %s\n  not now:  %s\n", yes, notNow)
 	}
 }
 
-func (a *app) withOffers(ctx context.Context, fn func(cfg config.Config, st *gsync.State, offers []ruleOffer) error) error {
+func (a *app) withOffers(ctx context.Context, fn func(cfg config.Config, st *gsync.State, offers []offer) error) error {
 	cfg, err := a.load()
 	if err != nil {
 		return err
@@ -192,7 +209,7 @@ func (a *app) withOffers(ctx context.Context, fn func(cfg config.Config, st *gsy
 		return err
 	}
 	defer func() { _ = st.Close() }()
-	offers, err := a.ruleOffers(ctx, cfg, st)
+	offers, err := a.allOffers(ctx, cfg, st)
 	if err != nil {
 		return err
 	}
@@ -203,26 +220,28 @@ func (a *app) withOffers(ctx context.Context, fn func(cfg config.Config, st *gsy
 // happened.
 func (a *app) decideOffer(ctx context.Context, id string, accept bool) (string, error) {
 	var msg string
-	err := a.withOffers(ctx, func(cfg config.Config, st *gsync.State, offers []ruleOffer) error {
+	err := a.withOffers(ctx, func(cfg config.Config, st *gsync.State, offers []offer) error {
 		for _, o := range offers {
 			if o.ID != id {
 				continue
 			}
 			if !accept {
-				msg = fmt.Sprintf("not now: the offer for %s will not be made again", o.Rule.Folder)
+				msg = "not now: this will not be offered again (" + o.Question + ")"
 				return st.DismissOffer(ctx, o.Key, a.Now())
 			}
-			r, err := a.acceptOffer(cfg, o)
-			if err != nil {
+			var err error
+			if msg, err = o.accept(&cfg); err != nil {
 				return err
 			}
-			msg = fmt.Sprintf("%q: added rule %s: %s", o.ProjectName, r.ID, r)
-			if o.SetTrust != "" {
-				msg += "; trust level is now " + o.SetTrust
+			if err := config.Save(a.cfgPath(), cfg); err != nil {
+				return err
+			}
+			if o.after != nil {
+				return o.after(ctx, st)
 			}
 			return nil
 		}
-		return fmt.Errorf("no offer %s (see `goldengate rules offers`)", id)
+		return fmt.Errorf("nothing is offered under %s (see `goldengate inbox`)", id)
 	})
 	return msg, err
 }
@@ -230,13 +249,19 @@ func (a *app) decideOffer(ctx context.Context, id string, accept bool) (string, 
 func (a *app) offerCmds() []*cobra.Command {
 	offers := &cobra.Command{Use: "offers", Short: "Rules Golden Gate offers because you keep making the same choice by hand", Args: cobra.NoArgs,
 		RunE: func(c *cobra.Command, _ []string) error {
-			return a.withOffers(c.Context(), func(_ config.Config, _ *gsync.State, offers []ruleOffer) error {
+			return a.withOffers(c.Context(), func(_ config.Config, _ *gsync.State, all []offer) error {
+				var offers []offer
+				for _, o := range all {
+					if o.Kind == "rule" {
+						offers = append(offers, o)
+					}
+				}
 				if len(offers) == 0 {
 					fmt.Fprintf(a.Stdout, "no offers: one appears after you send %d sessions from the same folder or chat by hand within 30 days\n", offerThreshold)
 					return nil
 				}
 				fmt.Fprintln(a.Stdout, strings.TrimSpace("Offers only: nothing changes unless you accept."))
-				a.printOffers(offers)
+				a.printOffers(offers, "rule")
 				return nil
 			})
 		}}

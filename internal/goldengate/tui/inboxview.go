@@ -195,7 +195,7 @@ func (m *Model) onKeyInbox(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.openReceipts()
 	case "o":
 		if len(ib.in.Offers) == 0 {
-			m.setStatus("No offers. One appears when you keep sending sessions from the same folder by hand.", false)
+			m.setStatus("No offers. One appears when you keep sending sessions from one folder by hand, or a folder looks like it belongs to a project.", false)
 			break
 		}
 		o := ib.in.Offers[0]

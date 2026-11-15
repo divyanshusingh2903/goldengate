@@ -123,11 +123,11 @@ func (a *app) inboxList(ctx context.Context) error {
 		}
 		fmt.Fprintln(a.Stdout, "undo with:   goldengate inbox reset <session-id>")
 	}
-	offers, err := a.ruleOffers(ctx, cfg, st)
+	offers, err := a.allOffers(ctx, cfg, st)
 	if err != nil {
 		return err
 	}
-	a.printOffers(offers)
+	a.printOffers(offers, "")
 	return nil
 }
 
@@ -286,10 +286,9 @@ func (b *tuiBackend) Inbox(ctx context.Context) (tui.Inbox, error) {
 	if err != nil {
 		return in, err
 	}
-	err = b.a.withOffers(ctx, func(_ config.Config, _ *gsync.State, offers []ruleOffer) error {
+	err = b.a.withOffers(ctx, func(_ config.Config, _ *gsync.State, offers []offer) error {
 		for _, o := range offers {
-			in.Offers = append(in.Offers, tui.RuleOffer{ID: o.ID, Question: o.Question(), Effect: o.Effect(),
-				Because: fmt.Sprintf("You sent %d sessions from there by hand in the last 30 days.", o.Count)})
+			in.Offers = append(in.Offers, tui.RuleOffer{ID: o.ID, Question: o.Question, Effect: o.Effect, Because: o.Because})
 		}
 		return nil
 	})

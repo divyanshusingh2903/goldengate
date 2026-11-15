@@ -66,6 +66,7 @@ func (a *app) projectsCmd() *cobra.Command {
 	trust := &cobra.Command{Use: "trust <project> ask|suggest|auto", Short: "How far a project's automation goes: ask (everything waits), suggest (rules mark sessions in the inbox), auto (rules send them)", Args: cobra.ExactArgs(2),
 		RunE: func(c *cobra.Command, args []string) error { return a.projectsTrust(args[0], args[1]) }}
 	cmd.AddCommand(list, create, rename, merge, add, remove, del, auto, trust)
+	cmd.AddCommand(a.projectOfferCmds()...)
 	return cmd
 }
 
