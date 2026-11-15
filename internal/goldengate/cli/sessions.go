@@ -41,6 +41,7 @@ type sessionRow struct {
 	Edited     bool   // its summary is the user's own version
 	Waits      bool   // a version of it waits for approval (pending, or changed and not auto-approved)
 	Hash       string // the content a decision would be made for
+	Note       string // what the project's rules say about a waiting session
 	Updated    time.Time
 }
 
@@ -64,11 +65,12 @@ func (a *app) sessionRows(ctx context.Context, cfg config.Config, st *gsync.Stat
 	if err != nil {
 		return nil, err
 	}
-	auto := map[string]bool{}
-	for _, p := range cfg.Projects {
-		auto[p.ID] = p.AutoApprove
-	}
 	type key struct{ source, id string }
+	waiting, notes := map[key]bool{}, map[key]string{}
+	for _, it := range rep.ApprovingItems {
+		waiting[key{it.Source, it.SessionID}] = true
+		notes[key{it.Source, it.SessionID}] = waitNote(it)
+	}
 	rows := map[key]*sessionRow{}
 	var order []key
 	put := func(r sessionRow) *sessionRow {
@@ -94,18 +96,12 @@ func (a *app) sessionRows(ctx context.Context, cfg config.Config, st *gsync.Stat
 		put(r)
 	}
 	for _, p := range batch.Payloads() {
-		waits := false
-		if isAuto, named := auto[p.ProjectID]; named && !isAuto {
-			d, ok, err := st.Decision(ctx, p.Source, p.SessionID)
-			if err != nil {
-				return nil, err
-			}
-			waits = !ok || d.State != gsync.DecisionApproved || d.ContentHash != p.ContentHash
-		}
 		k := key{p.Source, p.SessionID}
+		waits := waiting[k]
 		if cur, ok := rows[k]; ok {
 			if cur.Hash != p.ContentHash { // a re-filed or re-summarized session is not a change of content
 				cur.State, cur.Waits, cur.Hash, cur.Title, cur.Updated = sessChanged, waits, p.ContentHash, payloadTitle(p), p.UpdatedAt
+				cur.Note = notes[k]
 			}
 			cur.Edited = p.Summary != nil && p.Summary.Edited
 			continue
@@ -114,7 +110,7 @@ func (a *app) sessionRows(ctx context.Context, cfg config.Config, st *gsync.Stat
 		if waits {
 			state = sessPending
 		}
-		put(sessionRow{Source: p.Source, ID: p.SessionID, Project: p.ProjectLabel(), Title: payloadTitle(p), State: state, Waits: waits, Hash: p.ContentHash, Updated: p.UpdatedAt,
+		put(sessionRow{Source: p.Source, ID: p.SessionID, Project: p.ProjectLabel(), Title: payloadTitle(p), State: state, Waits: waits, Hash: p.ContentHash, Updated: p.UpdatedAt, Note: notes[k],
 			Edited: p.Summary != nil && p.Summary.Edited})
 	}
 	// sessions held because the user edited an earlier version

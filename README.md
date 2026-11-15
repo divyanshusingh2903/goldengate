@@ -52,7 +52,7 @@ Status: pre-release (M4). Sources: Claude Code, Codex, OpenCode, and claude.ai /
    goldengate sync --approve              # approve what you just looked at, and send it
    ```
 
-   Sessions of a project you share wait for your approval; `--approve` approves and sends what is waiting. Later sessions wait again (see the inbox below), unless you share with `--auto-approve`.
+   Sessions of a project you share wait for your approval; `--approve` approves and sends what is waiting. Later sessions wait again (see the inbox below), unless the project's trust level is auto (share with `--auto-approve`, or see rules and trust levels below).
 
 4. **Connect the assistant.**
    - If its connector lets you set a header: use `https://bridge.example.com/mcp` and send the read token as `Authorization: Bearer <token>`.
@@ -151,7 +151,23 @@ goldengate sessions retract <session-id>  # delete a sent session from the serve
 
 **Editing a summary.** `goldengate sessions edit <session-id>` (or `e` in the inbox) opens the session's summary in your editor: change the text, delete a line to strike it, delete a work-item line to unlink it. Your version is what is sent. It is redacted like everything else, the preview shows it exactly, and no summarizer replaces it, `sync --resummarize` included. If the session continues afterwards, the new summary is not sent in place of yours and your edit is not applied blindly: the session is held until you edit it again (the form shows the new summary next to your earlier version), keep your version (`--keep`, or `K`), or drop the edit (`--discard`, or `D`).
 
-A session that continues after you approved or sent it comes back to the inbox. To skip the inbox for a project you trust, turn on auto-approve: `goldengate projects auto <project> on`, or share with `goldengate share add <folder> --auto-approve`. Projects you were already sharing before this existed keep sending as they did.
+A session that continues after you approved or sent it comes back to the inbox. Projects you were already sharing before this existed keep sending as they did.
+
+**Rules and trust levels.** Each project has a trust level, and you can write rules for it:
+
+```bash
+goldengate projects trust "My app" auto            # ask (default) | suggest | auto
+goldengate rules add "My app" --branch 'release/*' # approve sessions on release branches
+goldengate rules add "My app" --exclude --source codex
+goldengate rules list
+goldengate inbox approve --suggested               # at "suggest": approve what your rules marked
+```
+
+- **ask**: everything waits in the inbox.
+- **suggest**: sessions your rules approve are marked in the inbox; one command approves them. Nothing is sent before that.
+- **auto**: sessions your rules approve are sent on the next sync. With no approve rule, that is every session of the project (`goldengate share add <folder> --auto-approve` sets this up in one step).
+
+A rule matches on facts your tools recorded: the tool, the folder or chat grouping, the repository remote, the branch, and issue or pull request keys (`--work-item linear:ENG`). It acts only inside the project: it cannot share anything you did not share, and a deny rule always wins. An exclude rule keeps its matches on your machine. Even at auto, the first session from a folder or chat you did not name yourself (one reached through a parent folder or a pattern such as `chatgpt:*`) waits for you; after you send one, the rest follow automatically.
 
 **Which assistant sees what.** Each assistant you connect is an *agent* with its own read token and its own list of projects. The assistant you set up first sees every project you share; any other starts with nothing. These commands ask for the admin secret (or read `GOLDENGATE_ADMIN_TOKEN`) and never store it:
 

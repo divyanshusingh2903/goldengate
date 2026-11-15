@@ -9,6 +9,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/divyanshusingh2903/goldengate/internal/goldengate/rules"
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/selection"
 	"github.com/divyanshusingh2903/goldengate/internal/utils/pathutil"
 )
@@ -31,11 +32,51 @@ type Project struct {
 	// WorkItems are work-item key prefixes that belong to this project, such
 	// as "linear:ENG". Rules (a later issue) use them; matching ignores them.
 	WorkItems []string `toml:"work_items,omitempty"`
-	// AutoApprove sends every new and changed session of the project on the
-	// next sync. Without it they wait in the inbox until the user approves
-	// them. Off for a project the user shares; on for projects that were
-	// shared before the inbox existed.
+	// Trust is how far the project's automation goes: "ask" (the default:
+	// everything waits in the inbox), "suggest" (what the rules approve is
+	// marked in the inbox) or "auto" (what the rules approve is sent). See
+	// the rules package.
+	Trust string `toml:"trust,omitempty"`
+	// Rules approve or exclude the project's sessions by deterministic
+	// facts. With no approve rule, the trust level covers every session.
+	Rules []rules.Rule `toml:"rules,omitempty"`
+	// AutoApprove is how files written before trust levels said "auto". It
+	// is read, turned into Trust, and not written again.
 	AutoApprove bool `toml:"auto_approve,omitempty"`
+}
+
+// TrustLevel is the project's trust level, never empty.
+func (p Project) TrustLevel() string {
+	if p.Trust == "" {
+		return rules.TrustAsk
+	}
+	return p.Trust
+}
+
+// Auto reports whether the project sends what its rules approve without
+// asking.
+func (p Project) Auto() bool { return p.Trust == rules.TrustAuto }
+
+// SetAuto switches between "auto" and "ask".
+func (p *Project) SetAuto(on bool) {
+	p.Trust = ""
+	if on {
+		p.Trust = rules.TrustAuto
+	}
+}
+
+// normalizeTrust folds the older auto_approve switch into Trust.
+func (c *Config) normalizeTrust() {
+	for i := range c.Projects {
+		p := &c.Projects[i]
+		if p.AutoApprove && p.Trust == "" {
+			p.Trust = rules.TrustAuto
+		}
+		p.AutoApprove = false
+		if p.Trust == rules.TrustAsk {
+			p.Trust = "" // the default is not written
+		}
+	}
 }
 
 // Member is one thing a project is made of.
@@ -321,6 +362,7 @@ func CloneProjects(ps []Project) []Project {
 			p.Members[j].ExcludeSources = slices.Clone(p.Members[j].ExcludeSources)
 		}
 		p.WorkItems = slices.Clone(p.WorkItems)
+		p.Rules = slices.Clone(p.Rules)
 		out[i] = p
 	}
 	return out
@@ -344,6 +386,19 @@ func (c Config) validateProjects() error {
 			return fmt.Errorf("config: two projects are named %q (%s and %s)", p.Name, other, p.ID)
 		}
 		names[low] = p.ID
+		if !rules.ValidTrust(p.Trust) {
+			return fmt.Errorf("config: project %q: trust must be ask, suggest or auto, got %q", p.Name, p.Trust)
+		}
+		ruleIDs := map[string]bool{}
+		for _, r := range p.Rules {
+			if err := r.Validate(); err != nil {
+				return fmt.Errorf("config: project %q: %w", p.Name, err)
+			}
+			if ruleIDs[r.ID] {
+				return fmt.Errorf("config: project %q has two rules with the id %q", p.Name, r.ID)
+			}
+			ruleIDs[r.ID] = true
+		}
 		for _, m := range p.Members {
 			k := cleanMember(m.Path)
 			if k == "" {

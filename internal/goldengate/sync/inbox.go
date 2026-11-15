@@ -120,6 +120,28 @@ type PendingItem struct {
 	// Conflict is set when the user edited an earlier version's summary:
 	// the session is held until they decide what happens to that edit.
 	Conflict bool
+	// Suggested is set when the project's rules approve the session and its
+	// trust level is "suggest": it waits, marked for approval.
+	Suggested bool
+	// NewGrouping is set in an "auto" project when the rules approve the
+	// session but nothing was ever sent from its folder or chat grouping,
+	// which the project reaches only through a broader member: automation
+	// starts there once the user has approved and sent something from it.
+	NewGrouping bool
+	// RuleID is the rule behind Suggested or NewGrouping; empty when the
+	// project has no approve rule and the trust level covers all of it.
+	RuleID string
+}
+
+// KnownGrouping reports whether anything was ever sent from a folder or
+// chat grouping.
+func (s *State) KnownGrouping(ctx context.Context, project string) (bool, error) {
+	var n int
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM (SELECT 1 FROM sessions WHERE project=? LIMIT 1)`, project).Scan(&n)
+	if err != nil {
+		return false, fmt.Errorf("state: known grouping: %w", err)
+	}
+	return n > 0, nil
 }
 
 // The user's edits of session summaries live next to the record of what was

@@ -113,7 +113,7 @@ func New(d Deps) *cobra.Command {
 	root.SetOut(d.Stdout)
 	root.SetErr(d.Stderr)
 	root.PersistentFlags().StringVar(&a.configPath, "config", "", "config file (default: XDG config dir)")
-	root.AddCommand(a.syncCmd(), a.shareCmd(), a.projectsCmd(), a.agentsCmd(), a.inboxCmd(), a.sessionsCmd(), a.doctorCmd(), a.summarizerCmd(), a.initCmd(), a.tokenCmd(), a.purgeCmd(), a.importsCmd(), &cobra.Command{
+	root.AddCommand(a.syncCmd(), a.shareCmd(), a.projectsCmd(), a.rulesCmd(), a.agentsCmd(), a.inboxCmd(), a.sessionsCmd(), a.doctorCmd(), a.summarizerCmd(), a.initCmd(), a.tokenCmd(), a.purgeCmd(), a.importsCmd(), &cobra.Command{
 		Use: "version", Short: "Print the version",
 		Run: func(*cobra.Command, []string) {
 			fmt.Fprintln(a.Stdout, "goldengate", Version, runtime.GOOS+"/"+runtime.GOARCH)
@@ -216,6 +216,15 @@ func (a *app) syncCmd() *cobra.Command {
 					}
 					sort.Strings(kinds)
 					fmt.Fprintf(a.Stderr, "redactions: %s\n", strings.Join(kinds, " "))
+				}
+				if n := len(rep.Auto); n > 0 && !dry {
+					fmt.Fprintf(a.Stderr, "%d of them were sent by your projects' trust level and rules, without asking\n", n)
+				}
+				if rep.RuleExcluded > 0 {
+					fmt.Fprintf(a.Stderr, "%d sessions are kept back by an exclude rule (see `goldengate rules list`)\n", rep.RuleExcluded)
+				}
+				if rep.Suggested+rep.NewGroupings > 0 {
+					fmt.Fprintf(a.Stderr, "%d waiting sessions are approved by your rules: `goldengate inbox approve --suggested`\n", rep.Suggested+rep.NewGroupings)
 				}
 				if rep.Pending > 0 {
 					fmt.Fprintf(a.Stderr, "%d sessions wait in the inbox and were not sent: see them with `goldengate inbox`, approve with `goldengate inbox approve --all`, or send them now with `goldengate sync --approve`\n", rep.Pending)
@@ -337,7 +346,7 @@ func (a *app) shareAdd(ctx context.Context, p string, auto bool) error {
 	if auto {
 		cfg.Fold() // the folder gets its project now, so the switch can be set on it
 		if i := cfg.ProjectOfMember(rule); i >= 0 {
-			cfg.Projects[i].AutoApprove = true
+			cfg.Projects[i].SetAuto(true)
 		}
 	}
 	if err := config.Save(a.cfgPath(), cfg); err != nil {

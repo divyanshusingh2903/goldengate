@@ -297,7 +297,31 @@ max_input_chars = 0              # conversation sent per session; 0 = 24000 (abo
 length = "standard"              # narrative a model writes per session: short | standard | detailed
 ```
 
-**Inbox (per-session approval).** Sharing a project selects it; it does not send its sessions. Each named project has `auto_approve`. Without it, a new or changed session waits as *pending* and is sent only once the user approved exactly that content (the decision stores the session's content hash). A session that changes after it was approved or sent is pending again. An *excluded* session is never read or sent again, in any project, until the user resets the decision. Decisions live in the local state DB (`decisions`: session, state, content hash, time, and the redacted title for listing); the states are approved, excluded and (from #29) retracted, while sent is the existing record of what was pushed. `RunOpts.Approve` plans pending sessions too: the TUI sets it because its Sync screen shows every session as it would be sent and sends only on the user's command, so sending is the approval (`PlanInfo.Approving` says how many); the CLI sets it only with `sync --approve`. Unattended sync (hooks, timers) never sets it. Configurations written before the inbox (`version` absent) load with `auto_approve` on for every existing project, once, so nothing changes for them; projects shared afterwards wait. A folder shared without any named project (a default-allow configuration) is treated as auto-approved.
+**Inbox (per-session approval).** Sharing a project selects it; it does not send its sessions. Each named project has a trust level (`trust`: ask, suggest or auto; see "Rules and trust levels" below). Unless trust and rules send it, a new or changed session waits as *pending* and is sent only once the user approved exactly that content (the decision stores the session's content hash). A session that changes after it was approved or sent is pending again. An *excluded* session is never read or sent again, in any project, until the user resets the decision. Decisions live in the local state DB (`decisions`: session, state, content hash, time, and the redacted title for listing); the states are approved, excluded and (from #29) retracted, while sent is the existing record of what was pushed. `RunOpts.Approve` plans pending sessions too: the TUI sets it because its Sync screen shows every session as it would be sent and sends only on the user's command, so sending is the approval (`PlanInfo.Approving` says how many); the CLI sets it only with `sync --approve`. Unattended sync (hooks, timers) never sets it. Configurations written before the inbox (`version` absent) load with trust `auto` for every existing project, once, so nothing changes for them; projects shared afterwards wait. The older `auto_approve = true` is read as `trust = "auto"` and not written again. A folder shared without any named project (a default-allow configuration) sends everything, as it always did.
+
+**Rules and trust levels.** Automation is rules the user wrote (principle 2). A rule belongs to a project and acts only on sessions that are already in it: whether a folder or chat is shared at all is decided before a session is read, by the selection rules above, where deny always wins. A rule cannot pull in anything from outside the project's members, and folders outside projects are still never read.
+
+```toml
+[[projects]]
+name = "App"
+trust = "auto"                    # ask (default) | suggest | auto
+[[projects.rules]]
+id = "r_1a2b3c4d"
+action = "approve"                # approve | exclude
+branch = "release/*"              # every condition given must hold
+[[projects.rules]]
+id = "r_5e6f7a8b"
+action = "exclude"
+source = "codex"
+```
+
+- **Conditions are deterministic facts only** (`rules.Facts`): `source` (the tool), `folder` (a folder and what is under it, a glob, or a chat grouping such as `chatgpt:Work` or `chatgpt:*`), `remote` (the repository remote as host/path, `*` matches any run of characters), `branch`, and `work_item` (a key prefix: `linear:ENG` or `ENG` matches `linear:ENG-12`, `acme/app` matches `acme/app#7`). The facts come from the tool's own record and the local rules' work-item extraction. Nothing a model wrote (title, summary, narrative) is part of them, so model output never feeds a rule. A fact the session lacks never matches.
+- **Trust level** says what an approve rule does. *ask*: nothing, everything waits. *suggest*: matching sessions wait but are marked in the inbox with the rule, and `goldengate inbox approve --suggested` approves them together. *auto*: matching sessions are sent on the next sync, by anything that syncs, and are listed in `Report.Auto` with the rule that sent them (the receipt, #33, is written from that list). With no approve rule, the trust level covers every session of the project; adding the first approve rule narrows it to what the rules match.
+- **Exclude rules** keep matching sessions on the machine at every trust level, win over approve rules, and are not overridden by `sync --approve`. They are counted, not listed.
+- **Order of decisions** for a session's new or changed content (`Syncer.gate`): a held edit conflict; the user's own decision for exactly this content (an explicit approval is sent even if an exclude rule matches; an explicit exclude or retract is checked before the session is read); an exclude rule; then the trust level applied to what the approve rules match.
+- **A broad pattern asks first.** Automation acts without asking only in a folder or chat grouping the user named as a member, or one from which something was already sent. When a project reaches a grouping only through something broader (a parent folder, `~/work/*`, `chatgpt:*`) and nothing was ever sent from it, the rule-approved session waits, marked as the first from that grouping. Once the user has approved and sent one session from it, the rules take over there. A worktree counts as its repository.
+- **The model.** A session that waits or is excluded by a rule is built with the local rules only and never reaches the model summarizer; one that the rules send is summarized like any approved session.
+- Commands: `goldengate rules list|add|remove`, `goldengate projects trust <project> ask|suggest|auto`. `projects auto on|off` and `--auto-approve` remain as shortcuts for auto and ask.
 
 **Per-session decisions.** `goldengate sessions list|include|exclude|retract`, and the TUI inbox (`i`), work on single sessions whatever their project's mode. States shown: pending (waits), queued (the next sync sends it), sent, changed (sent; a newer version waits or is queued), excluded, retracted. Include approves the session's current content and first removes an exclude or retract. Exclude blocks a session in any project, auto-approved ones included; if it already reached the server it stays there and the command says to retract. Retract calls `DELETE /v1/sessions/{id}` (which also removes the session's work-item links and, when it was the last one, its project), then records a retracted decision and drops the local record of the push, in that order, so a failed delete changes nothing locally. A retracted or excluded session is skipped before it is read, so it reaches no payload, no dry run and no model. A session that waits for approval is not sent to the model summarizer either: it is built with the local rules until it is approved, and listings never call a model.
 
@@ -490,7 +514,10 @@ goldengate inbox [list|approve|exclude|reset]                      # sessions wa
 goldengate sessions edit <id> [--keep|--discard]                   # your own version of a summary; never overwritten
 goldengate sessions list|include|exclude|retract                   # decide single sessions; retract deletes a sent one from the server
 goldengate sync --approve                                          # approve and send what waits (with --dry-run: look first)
-goldengate projects auto <project> on|off                          # skip the inbox for a project
+goldengate projects trust <project> ask|suggest|auto               # how far a project's automation goes
+goldengate rules list|add|remove                                   # rules that approve or exclude a project's sessions by facts
+goldengate inbox approve --suggested                               # approve what the rules marked
+goldengate projects auto <project> on|off                          # shortcut: trust auto or ask
 goldengate agents list|add|rename|limit|remove                    # one agent per assistant; needs the admin token
 goldengate agents grant|revoke <agent> <project>... | --all       # which projects an agent sees
 goldengate agents token <agent>                                   # a read token for that agent, shown once

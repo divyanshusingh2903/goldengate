@@ -231,7 +231,15 @@ func TestChatExportsNeedAnExplicitAllow(t *testing.T) {
 	if err := m.run("share", "add", "chatgpt:*", "--auto-approve"); err != nil {
 		t.Fatal(err)
 	}
+	// a pattern that reaches chat groupings nobody named asks about each
+	// the first time, even in an automatic project
 	_ = m.run("sync", "--dry-run")
+	for _, p := range m.payloads() {
+		if p.Source == "chatgpt" {
+			t.Errorf("chatgpt:* sent %s without asking about its grouping", p.Project)
+		}
+	}
+	_ = m.run("sync", "--dry-run", "--approve")
 	n := 0
 	for _, p := range m.payloads() {
 		if p.Source == "chatgpt" {

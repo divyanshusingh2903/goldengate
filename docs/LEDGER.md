@@ -12,7 +12,7 @@ This file lets any Claude Code session (or person) pick up the Product v2 work w
 _Last updated 2026-11-15. Update this section whenever a row in the queue changes._
 
 **Progress:** 17 of 31 scheduled issues done (plus 2 stretch). Phases 1 (Foundations), 2 (Per-agent access) and 3 (Inbox and curation) are complete.
-**Next up:** #31 Rules and per-project trust levels, size L, planned Nov 23. Its dependencies #20 and #18 are done. Phase 4 so far: #21, #35, #36 and #45 done.
+**In progress:** #31 Rules and per-project trust levels, size L, planned Nov 23. **Next up:** #33 Receipts for automatic sends.
 
 ### Done
 
@@ -56,7 +56,9 @@ Supporting changes (not queue issues):
 - **Web UI design (#45)**: DESIGN.md 6.1 is the spec for #46 to #48. Decisions made there: no build step and no third-party JavaScript (hand-written HTML, CSS and ES modules, embedded with `embed`); launch token in the URL fragment; a session cookie plus a request-token header on every call; exact Host and Origin checks; write-only secrets. #46 must include the security tests listed at the end of 6.1, and needs web forms of three Backend methods (`DeleteRemote`, `EditBegin`/`EditFinish`, `Init`). The SECURITY.md section is marked planned and must be rewritten as fact when the UI ships.
 - **Upgrade order (#19)**: upgrade the server before the client. A server with #19 accepts old clients, but an older server rejects payloads from a newer client (unknown fields). In the server tables the `project` column holds a project id (for data stored before ids, the old key).
 - **Per-agent access, as it stands after phase 2**: grants are enforced in every MCP tool (#25). On an upgraded server `Default` keeps the projects it could see at upgrade time and is not granted later ones; on a fresh install `goldengate init` sets `Default` to see every shared project. Not built yet: creating, renaming or removing agents and minting tokens from the TUI (CLI only), and deleting an OAuth application from the client side. "View as agent" is computed on the laptop from what that computer synced, so it does not list sessions synced from another computer. The web UI (#48) should reuse the four agents methods on `tui.Backend`.
-- **Decision made by the user for #20 (2026-11-14)**: a project shared from now on waits in the inbox (manual first). Reviewing and pressing Send on the TUI Sync screen is the approval; `goldengate sync`, hooks and timers send only approved sessions. Auto-approve is a per-project switch. The TUI inbox list (`i`) came with #29. Still to build: showing or toggling a project's auto-approve in the TUI (belongs with #31).
+- **Decision made by the user for #20 (2026-11-14)**: a project shared from now on waits in the inbox (manual first). Reviewing and pressing Send on the TUI Sync screen is the approval; `goldengate sync`, hooks and timers send only approved sessions. Auto-approve is a per-project switch. The TUI inbox list (`i`) came with #29. Since #31 this is the project's trust level (`trust`: ask, suggest, auto); `auto_approve` is read from old files and not written.
+- **Rules and trust (#31)**: `[[projects.rules]]` and `trust` in the config; `goldengate rules`, `projects trust`, `inbox approve --suggested`. `Report.Auto` lists every session sent by trust and rules with its rule id: #33 writes receipts from it, and #34's `sync --auto` needs no new gate (a plain sync already sends only approved or rule-approved sessions). With no approve rule, the trust level covers the whole project. At auto, a grouping reached only through a broader member waits until something was sent from it (`State.KnownGrouping`). Not built: trust and rules in the TUI (the inbox shows the rule note; changing trust or rules is CLI only) and in the web UI (#48); #32 offers rules.
+- **Decision made by the user for #31 (2026-11-15)**: a rule acts only on sessions inside folders and chats the user already shares. It belongs to a project and approves or excludes that project's sessions; folders outside projects are still never read. Placing unassigned sessions stays a suggestion the user accepts (#22).
 - **Decisions made by the user for #26 (2026-11-14)**: (1) only the admin secret may manage agents, grants and agent tokens; the TUI (#28) should ask for it once per run and keep it in memory only. (2) On a server with no agents yet, `goldengate init` makes the first assistant (`Default`) see every shared project through the per-agent `all_projects` switch; agents added later start with nothing.
 
 ## The loop
@@ -124,7 +126,7 @@ Status values: `todo`, `in progress`, `in review`, `blocked`, `done`. Size: S ab
 | 15 | #35 GitLab issues and merge requests | S | | Nov 21 | done | #76 |
 | 16 | #36 MCP context built around work items | M | #21 | Nov 22 | done | #78 |
 | 17 | #45 Design and security model for `goldengate ui` | S | #17 | Nov 22 | done | #80 |
-| 18 | #31 Rules and per-project trust levels | L | #20, #18 | Nov 23 | todo | |
+| 18 | #31 Rules and per-project trust levels | L | #20, #18 | Nov 23 | in progress | |
 | 19 | #33 Receipts for automatic sends | S | #31, #29 | Nov 24 | todo | |
 | 20 | #34 Background sync, rule-approved only | M | #31, #33 | Nov 24 | todo | |
 | 21 | #32 Suggest rules from manual choices | S | #31 | Nov 25 | todo | |
@@ -181,3 +183,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-15: #36 done (#78). Roadmap page updated. Next: #45.
 - 2026-11-15: #45 written: DESIGN.md 6.1 (process and lifetime, launch token and session, request checks, write-only secrets, untrusted text, API shape, frontend stack and embedding) with a review against SECURITY.md, and a planned-feature section in SECURITY.md. No code.
 - 2026-11-15: #45 done (#80). Roadmap page updated. Next: #31.
+- 2026-11-15: #31 implemented: per-project trust levels (ask, suggest, auto) and user-written rules on deterministic facts (source, folder or chat grouping, remote, branch, work-item prefix) that approve or exclude sessions inside a project; exclude wins; a grouping reached only through a broader member is asked about first; property tests for deny beats rules, a rule never matches outside its pattern, and the new-match confirmation. User decision recorded: rules act only inside what is shared.

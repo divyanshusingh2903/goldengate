@@ -217,7 +217,7 @@ path = "~/code/old"
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(c.Projects) != 2 || !c.Projects[0].AutoApprove || !c.Projects[1].AutoApprove || c.Version != CurrentVersion {
+	if len(c.Projects) != 2 || !c.Projects[0].Auto() || !c.Projects[1].Auto() || c.Version != CurrentVersion {
 		t.Fatalf("existing projects are auto-approved: %+v v%d", c.Projects, c.Version)
 	}
 	// A project shared from now on waits for approval.
@@ -229,7 +229,7 @@ path = "~/code/old"
 		t.Fatal(err)
 	}
 	raw, _ := os.ReadFile(p)
-	if !strings.Contains(string(raw), "version = 3") || strings.Count(string(raw), "auto_approve = true") != 2 {
+	if !strings.Contains(string(raw), "version = 3") || strings.Count(string(raw), "trust = 'auto'") != 2 || strings.Contains(string(raw), "auto_approve") {
 		t.Fatalf("the file records its version and the switch:\n%s", raw)
 	}
 	back, err := Load(p)
@@ -238,17 +238,17 @@ path = "~/code/old"
 	}
 	got := map[string]bool{}
 	for _, pr := range back.Projects {
-		got[pr.Name] = pr.AutoApprove
+		got[pr.Name] = pr.Auto()
 	}
 	if want := map[string]bool{"Old": true, "legacy": true, "New": false, "viaallow": false}; !reflect.DeepEqual(got, want) {
 		t.Fatalf("after a save and reload: %v", got)
 	}
 	// Turning the switch off sticks: a second load must not turn it on again.
-	back.Projects[0].AutoApprove = false
+	back.Projects[0].SetAuto(false)
 	if err := Save(p, back); err != nil {
 		t.Fatal(err)
 	}
-	if again, _ := Load(p); again.Projects[0].AutoApprove {
+	if again, _ := Load(p); again.Projects[0].Auto() {
 		t.Fatal("the migration runs once: a switch the user turned off stays off")
 	}
 	// A fresh install has no file: nothing is auto-approved by default.
@@ -258,7 +258,7 @@ path = "~/code/old"
 	if _, err := Load(write(t, "version = 99\n")); err == nil || !strings.Contains(err.Error(), "newer goldengate") {
 		t.Fatalf("a file from a newer build is refused: %v", err)
 	}
-	if cp := CloneProjects(back.Projects); cp[1].AutoApprove != back.Projects[1].AutoApprove {
+	if cp := CloneProjects(back.Projects); cp[1].Auto() != back.Projects[1].Auto() {
 		t.Error("clone keeps the switch")
 	}
 }

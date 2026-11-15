@@ -23,7 +23,7 @@ func inboxEnv(t *testing.T) *env {
 	)
 	e.s.Config.Projects = []config.Project{
 		{ID: "p_review1", Name: "Review me", Members: []config.Member{{Path: "~/code/review"}}},
-		{ID: "p_auto01", Name: "Auto", Members: []config.Member{{Path: "~/code/auto"}}, AutoApprove: true},
+		{ID: "p_auto01", Name: "Auto", Members: []config.Member{{Path: "~/code/auto"}}, Trust: "auto"},
 	}
 	return e
 }
