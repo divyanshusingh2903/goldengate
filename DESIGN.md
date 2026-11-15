@@ -232,7 +232,7 @@ A **thread** is one piece of work: its issues and pull requests, and every sessi
 - Tracker keys (`linear:LIN-412`) and full GitHub keys (`owner/repo#7`) mean the same thing in every project. A GitHub key without an owner (`app#7`, from a session that never saw the URL) is matched to the full key only when exactly one full key of that kind and number exists in the same project; otherwise it stays inside its project.
 - A thread is named after its primary item: a tracker issue before a GitHub issue before a pull request, the earliest seen first. Each session in it lists what it touched, with the status as of that session and whether it was on the issue's branch.
 
-`get_project_context` and `get_work_item` are built on this in M7 (issue #36).
+`get_project_context` and `get_work_item` are built on this (see "MCP tools").
 
 ## 5. Selection model (what is shared)
 
@@ -500,13 +500,14 @@ Run in **stateless mode with plain JSON responses** (no server-held sessions, no
 |---|---|
 | `recent_activity(days=5, since?, until?, project?, source?)` | What was worked on, grouped by project, newest first |
 | `list_projects(source?)` | Shared projects with last activity and session counts |
-| `get_project_context(project)` | Rolling summary: goals, recent sessions, files, open threads |
+| `get_project_context(project)` | Where a project stands: active threads first, then recent sessions and files |
+| `get_work_item(key, project?)` | One issue or pull request as a thread: related items, linked sessions across sources, status history with evidence |
 | `search_work(query, project?, limit=10)` | Keyword search over titles, summaries and narratives |
 | `get_session(id)` | One session in full: facts, work items and the whole narrative |
 | `list_commits(project?, days=5, since?, until?, status?)` | Commits created or mentioned, with evidence and verification state |
 | `list_pull_requests(project?, state?, days=5, since?, until?)` | PRs opened, merged, closed, plus "mentioned but not confirmed" |
 | `list_artifacts(project?, source?, days=5, since?, until?)` | Files and artifacts created in coding and chat sessions (metadata only) |
-| `list_issues(project?, provider?, state?, days=5, since?, until?)` | Linear, Jira and GitHub issues created, updated, completed or mentioned, with state as of the session |
+| `list_issues(project?, provider?, state?, days=5, since?, until?)` | Linear, Jira, GitHub and GitLab issues created, updated, completed or mentioned, with state as of the session |
 
 Time window (all time-bounded tools above)
 - Default: the last 5 days. Agents see recent work by default and more only when they ask (principle 5 in 1.1).
@@ -514,9 +515,14 @@ Time window (all time-bounded tools above)
 - Every result states its window (a `Window:` line and a structured `window` field), and an empty result says how to look further back.
 - This is separate from the client's upload look-back (`[share] since`), which decides what reaches the server at all.
 
-Two tiers keep list responses small: `recent_activity`, `get_project_context` and `search_work` return each session's `abstract` (the model's, or the first sentence of the narrative) and never the narrative; only `get_session` returns `narrative`, with `narrative_by`.
+Two tiers keep list responses small: `recent_activity`, `get_project_context` and `search_work` return each session's `abstract` (the model's, or the first sentence of the narrative) and never the narrative; only `get_session` and `get_work_item` return `narrative`, with `narrative_by`.
 
-`get_project_context` should also surface unfinished threads, such as PRs that were opened or mentioned but never confirmed merged.
+Context is organized around work items, so an assistant reads "LIN-412: approach decided in a chat, implemented in Claude Code, pull request open" rather than a list of sessions.
+
+- `get_project_context` leads with the project's **active threads** (4.1), most recent first, at most 10 (the rest are counted). Each shows the item it is named after (key, title, URL, status as of the last session that touched it, and whether that status is confirmed by evidence), related items, a one or two line summary from the latest session (its abstract, else its recorded outcomes), which tools touched it, how many sessions, and the latest session. Recent sessions follow in short form, then frequent files and commands.
+- A thread is active unless the sessions give evidence that it is finished: an issue that a session moved to a done state, or, when the thread has pull requests, every one of them merged or closed. A mention proves nothing either way, so a thread that was only ever mentioned stays active.
+- `get_work_item` takes a key from another tool (`linear:LIN-412`, `owner/repo#7`), the bare tracker key (`LIN-412`), a URL, or a short `#7`, optionally narrowed to a project. It returns the thread: its items, every linked session newest first with what that session did to each item (status, and whether it was on the issue's branch), and the status history oldest first, one line per session and item with the evidence behind it. Full narratives are included newest first up to 8000 characters in total; older sessions carry their abstract and the result says so. A key that matches several items is refused with a count and no names; an unknown key and one outside the agent's grants answer alike.
+- Both are built from the sessions the calling agent may see (grants and history window apply inside the store), so a thread never includes a session from a project the agent was not granted.
 
 Guidance
 - Return structured content plus a short text rendering; cap result size; support pagination cursors.

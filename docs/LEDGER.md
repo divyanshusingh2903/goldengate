@@ -12,7 +12,7 @@ This file lets any Claude Code session (or person) pick up the Product v2 work w
 _Last updated 2026-11-14. Update this section whenever a row in the queue changes._
 
 **Progress:** 15 of 31 scheduled issues done (plus 2 stretch). Phases 1 (Foundations), 2 (Per-agent access) and 3 (Inbox and curation) are complete.
-**Next up:** #36 MCP context built around work items, size M, planned Nov 22. Its dependency #21 is done. Phase 4 so far: #21 and #35 done.
+**In progress:** #36 MCP context built around work items, size M, planned Nov 22. **Next up:** #45 Design and security model for `goldengate ui`.
 
 ### Done
 
@@ -48,11 +48,11 @@ Supporting changes (not queue issues):
 
 - **User's stash** `list-tools wip (user)` (branch `fix/list-tools-empty-hint`): not touched by the loop. Popping it will conflict with #37 in `listWork` (`bridgemcp/tools.go`).
 - **Dependabot #53**: shows a `pr-template` failure from before #9 merged. It clears once the PR is rebased or updated (the user's call).
-- **#49 follow-ups**: model summaries pushed before #49 (bullets in `description`) are not counted as stale; they gain a narrative when their session changes or the length setting is changed and the user re-summarizes. `get_work_item` (#36) should return the full narrative like `get_session`. (User narratives are stored and edited through #30's summary edits; `summarize.Options.UserNarrative` is no longer the way in.)
-- **Threads (#21)**: `internal/utils/threads` groups sessions by shared issues and pull requests; nothing calls it yet. #36 builds `get_project_context` and `get_work_item` on it (feed it the scoped result of `Sessions` through `threads.FromPayload`), and #22 can use it for project suggestions. A branch on an issue yields an issue mention with evidence `via: "branch"`, which servers from before #21 reject, so the upgrade order below still applies. Plain numbers in branch names (`feat/21-x`) are deliberately not read as GitHub issues.
+- **#49 follow-ups**: model summaries pushed before #49 (bullets in `description`) are not counted as stale; they gain a narrative when their session changes or the length setting is changed and the user re-summarizes. (User narratives are stored and edited through #30's summary edits; `summarize.Options.UserNarrative` is no longer the way in.)
+- **Threads (#21)**: `internal/utils/threads` groups sessions by shared issues and pull requests. The server's `get_project_context` and `get_work_item` are built on it (#36), from the newest 500 sessions the agent may see; #22 can use it for project suggestions. `get_project_context` no longer returns `unfinished_threads`: it returns `active_threads`. A branch on an issue yields an issue mention with evidence `via: "branch"`, which servers from before #21 reject, so the upgrade order below still applies. Plain numbers in branch names (`feat/21-x`) are deliberately not read as GitHub issues.
 - **GitLab (#35)**: provider `gitlab` is new in payloads, so a server from before #35 rejects sessions that carry a GitLab item (upgrade order below). The config is now `version = 3`: a file holding the old default provider list gains `gitlab` once; a list the user changed is left alone. Self-hosted hosts go in `issues.gitlab_hosts` (config file only, no command or TUI setting). The `glab` output shapes in the tests are assumed, not captured from a real run; only URLs and explicit numbers identify items, so a different wording cannot produce a wrong item.
 - **Upgrade order (#19)**: upgrade the server before the client. A server with #19 accepts old clients, but an older server rejects payloads from a newer client (unknown fields). In the server tables the `project` column holds a project id (for data stored before ids, the old key).
-- **Per-agent access, as it stands after phase 2**: grants are enforced in every MCP tool (#25). On an upgraded server `Default` keeps the projects it could see at upgrade time and is not granted later ones; on a fresh install `goldengate init` sets `Default` to see every shared project. Not built yet: creating, renaming or removing agents and minting tokens from the TUI (CLI only), deleting an OAuth application from the client side, and `get_work_item` (#36), which should return the full narrative like `get_session`. "View as agent" is computed on the laptop from what that computer synced, so it does not list sessions synced from another computer. The web UI (#48) should reuse the four agents methods on `tui.Backend`.
+- **Per-agent access, as it stands after phase 2**: grants are enforced in every MCP tool (#25). On an upgraded server `Default` keeps the projects it could see at upgrade time and is not granted later ones; on a fresh install `goldengate init` sets `Default` to see every shared project. Not built yet: creating, renaming or removing agents and minting tokens from the TUI (CLI only), and deleting an OAuth application from the client side. "View as agent" is computed on the laptop from what that computer synced, so it does not list sessions synced from another computer. The web UI (#48) should reuse the four agents methods on `tui.Backend`.
 - **Decision made by the user for #20 (2026-11-14)**: a project shared from now on waits in the inbox (manual first). Reviewing and pressing Send on the TUI Sync screen is the approval; `goldengate sync`, hooks and timers send only approved sessions. Auto-approve is a per-project switch. The TUI inbox list (`i`) came with #29. Still to build: showing or toggling a project's auto-approve in the TUI (belongs with #31).
 - **Decisions made by the user for #26 (2026-11-14)**: (1) only the admin secret may manage agents, grants and agent tokens; the TUI (#28) should ask for it once per run and keep it in memory only. (2) On a server with no agents yet, `goldengate init` makes the first assistant (`Default`) see every shared project through the per-agent `all_projects` switch; agents added later start with nothing.
 
@@ -119,7 +119,7 @@ Status values: `todo`, `in progress`, `in review`, `blocked`, `done`. Size: S ab
 | 13 | #30 Editable summaries that stay edited | M | #20 | Nov 20 | done | #72 |
 | 14 | #21 Threads from work items and branch names | M | | Nov 21 | done | #74 |
 | 15 | #35 GitLab issues and merge requests | S | | Nov 21 | done | #76 |
-| 16 | #36 MCP context built around work items | M | #21 | Nov 22 | todo | |
+| 16 | #36 MCP context built around work items | M | #21 | Nov 22 | in progress | |
 | 17 | #45 Design and security model for `goldengate ui` | S | #17 | Nov 22 | todo | |
 | 18 | #31 Rules and per-project trust levels | L | #20, #18 | Nov 23 | todo | |
 | 19 | #33 Receipts for automatic sends | S | #31, #29 | Nov 24 | todo | |
@@ -174,3 +174,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-14: #21 done (#74). Roadmap page updated. Next: #35.
 - 2026-11-14: #35 implemented: GitLab issue and merge request URLs (gitlab.com and hosts in `issues.gitlab_hosts`), `glab mr` and `glab issue` results as evidence, provider `gitlab` with merge requests as `pull_request`; threads match short GitLab keys like GitHub ones. Config version 3.
 - 2026-11-14: #35 done (#76). Roadmap page updated. Next: #36.
+- 2026-11-15: #36 implemented: `get_project_context` leads with active threads (item, status as of the session, short summary, tools, latest session); new MCP tool `get_work_item` returns one thread with linked sessions across sources and the status history with evidence; tool descriptions say when to use each.
