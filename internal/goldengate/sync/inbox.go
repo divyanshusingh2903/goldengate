@@ -198,7 +198,7 @@ var ErrNoSession = errors.New("sync: no such session in the shared projects")
 // answers are used). With generated set, the user's edit is left out, so the
 // result is what the summarizer alone produces.
 func (s *Syncer) BuildOne(ctx context.Context, source, id string, generated bool) (*model.SessionPayload, error) {
-	wo := workitems.Options{Providers: s.Config.Issues.Providers}
+	wo := workitems.Options{Providers: s.Config.Issues.Providers, GitLabHosts: s.Config.Issues.GitLabHosts}
 	wo.KnownPrefixes = append(append([]string{}, s.Config.Issues.LinearTeams...), s.Config.Issues.JiraProjects...)
 	for _, a := range s.Registry.All() {
 		if source != "" && a.Name() != source {

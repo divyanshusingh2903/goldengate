@@ -27,13 +27,17 @@ const maxEvidence = 10
 
 // Options configures extraction.
 type Options struct {
-	// Providers lists enabled issue trackers ("linear", "jira", "github").
+	// Providers lists enabled issue trackers ("linear", "jira", "github",
+	// "gitlab"). Pull and merge requests are extracted either way.
 	// nil enables all; an empty non-nil slice disables issue extraction.
 	Providers []string
 	// KnownPrefixes are tracker key prefixes (e.g. "ENG") accepted as bare
 	// keys in text. Prefixes learned from URLs or tool results in the same
 	// session are accepted too.
 	KnownPrefixes []string
+	// GitLabHosts are self-hosted GitLab hosts ("gitlab.example.com") whose
+	// URLs are read like gitlab.com's.
+	GitLabHosts []string
 }
 
 func (o Options) enabled(p string) bool {
@@ -59,6 +63,7 @@ var (
 	rePRRef      = regexp.MustCompile(`(?i)\b(?:pr|pull request|pull)\s*#(\d+)`)
 	reIssueRef   = regexp.MustCompile(`(?i)\bissue\s*#(\d+)`)
 	reSHACtx     = regexp.MustCompile("(?i)(?:commit|sha|cherry-pick|revert|reverted|amend)\\w*\\s*[:`(]?\\s*`?([0-9a-f]{7,40})\\b|`([0-9a-f]{7,40})`")
+	reGLRef      = regexp.MustCompile(`(?i)\b(?:mr|merge request)\s*!(\d+)`)
 	reMergedOut  = regexp.MustCompile(`(?i)pull request\s+(?:([\w.\-]+/[\w.\-]+))?#(\d+)`)
 	reKeyPrefix  = regexp.MustCompile(`^[A-Z][A-Z0-9]{1,9}$`)
 	reDigits     = regexp.MustCompile(`^\d+$`)
@@ -71,7 +76,10 @@ type extractor struct {
 	order  []string
 	repo   string // owner/repo seen in session, or project basename
 	known  map[string]bool
-	lastPR string // key of most recent PR touched by evidence
+	reGL   *regexp.Regexp // GitLab issue and merge request URLs on the accepted hosts
+	glRepo string         // group/project seen in GitLab URLs, or repo
+	lastMR string         // key of most recent merge request touched by evidence
+	lastPR string         // key of most recent PR touched by evidence
 }
 
 // Extract returns the session's work items, deduplicated within the session.
@@ -81,6 +89,8 @@ func Extract(s *model.RawSession, o Options) []model.WorkItem {
 		e.known[strings.ToUpper(p)] = true
 	}
 	e.repo = e.inferRepo()
+	e.reGL = gitlabURL(o.GitLabHosts)
+	e.glRepo = e.inferGitLabRepo()
 	e.learnPrefixes()
 
 	e.fromBranch() // first, so its evidence survives the caps on later mentions
@@ -235,10 +245,17 @@ func (e *extractor) fromShell(ti int, c model.ToolCall, at time.Time) {
 			}
 			continue
 		}
-		if inv.Name() != "gh" || len(inv.Words) < 3 {
+		if len(inv.Words) < 3 {
 			continue
 		}
 		noun, verb, args := inv.Words[1], inv.Words[2], inv.Words[3:]
+		if inv.Name() == "glab" {
+			e.glab(ti, noun, verb, args, out, at)
+			continue
+		}
+		if inv.Name() != "gh" {
+			continue
+		}
 		switch {
 		case noun == "pr":
 			e.ghPR(ti, verb, args, out, at)
@@ -337,6 +354,134 @@ func (e *extractor) target(args []string, out string, urlRe *regexp.Regexp) (rep
 		return m[1], m[2]
 	}
 	return "", ""
+}
+
+// gitlabURL matches issue and merge request URLs on gitlab.com and the given
+// self-hosted hosts: https://<host>/<group>[/<subgroup>]/<project>/-/issues/<n>.
+func gitlabURL(hosts []string) *regexp.Regexp {
+	alt := []string{`gitlab\.com`}
+	for _, h := range hosts {
+		if h = strings.ToLower(strings.TrimSpace(h)); h != "" && h != "gitlab.com" {
+			alt = append(alt, regexp.QuoteMeta(h))
+		}
+	}
+	return regexp.MustCompile(`https://(` + strings.Join(alt, "|") + `)/([\w.\-]+(?:/[\w.\-]+)+)/-/(issues|merge_requests)/(\d+)`)
+}
+
+// gitlabRef is one GitLab URL: a merge request or an issue.
+type gitlabRef struct {
+	repo, num, url string
+	mr             bool
+}
+
+// key is "<repo>!<n>" for a merge request (GitLab's own spelling) and
+// "gitlab:<repo>#<n>" for an issue.
+func (g gitlabRef) key() string {
+	if g.mr {
+		return g.repo + "!" + g.num
+	}
+	return "gitlab:" + g.repo + "#" + g.num
+}
+
+func (e *extractor) gitlabRefs(txt string) []gitlabRef {
+	var out []gitlabRef
+	for _, m := range e.reGL.FindAllStringSubmatch(txt, -1) {
+		repo := m[2]
+		if m[1] != "gitlab.com" {
+			repo = m[1] + "/" + repo // a self-hosted project is named with its host
+		}
+		out = append(out, gitlabRef{repo: repo, num: m[4], url: m[0], mr: m[3] == "merge_requests"})
+	}
+	return out
+}
+
+// inferGitLabRepo is the project most GitLab URLs in the session point at.
+func (e *extractor) inferGitLabRepo() string {
+	count := map[string]int{}
+	scan := func(txt string) {
+		for _, g := range e.gitlabRefs(txt) {
+			count[g.repo]++
+		}
+	}
+	for _, t := range e.s.Turns {
+		scan(t.Text)
+		for _, c := range t.Tools {
+			scan(c.Result.Text)
+		}
+	}
+	best, n := "", 0
+	for r, c := range count {
+		if c > n || (c == n && r < best) {
+			best, n = r, c
+		}
+	}
+	if best == "" {
+		return e.repo
+	}
+	return best
+}
+
+var reGLNumberArg = regexp.MustCompile(`^[#!]?(\d+)$`)
+
+// glab handles the GitLab CLI: `glab mr create|merge|close|...` and
+// `glab issue create|close|...`, under the same rules as gh. A create counts
+// only when the result holds the new URL.
+func (e *extractor) glab(ti int, noun, verb string, args []string, out string, at time.Time) {
+	mr := noun == "mr"
+	if !mr && (noun != "issue" || !e.o.enabled("gitlab")) {
+		return
+	}
+	statuses := map[string]string{
+		"create": model.StatusCreated, "close": model.StatusCompleted, "reopen": model.StatusUpdated,
+		"update": model.StatusUpdated, "note": model.StatusUpdated,
+	}
+	if mr {
+		statuses["close"], statuses["merge"], statuses["accept"] = model.StatusClosed, model.StatusMerged, model.StatusMerged
+	}
+	status := statuses[verb]
+	if status == "" {
+		return
+	}
+	pick := func(refs []gitlabRef) *gitlabRef {
+		for i := range refs {
+			if refs[i].mr == mr {
+				return &refs[i]
+			}
+		}
+		return nil
+	}
+	target := pick(e.gitlabRefs(strings.Join(args, " "))) // a URL argument
+	if target == nil && verb != "create" {
+		for _, a := range args {
+			if m := reGLNumberArg.FindStringSubmatch(a); m != nil {
+				target = &gitlabRef{repo: e.glRepo, num: m[1], mr: mr}
+				break
+			}
+		}
+	}
+	created := ""
+	if target == nil {
+		if target = pick(e.gitlabRefs(out)); target != nil && verb == "create" {
+			created = target.url
+		}
+	}
+	kind := model.KindIssue
+	if mr {
+		kind = model.KindPR
+	}
+	if target == nil {
+		// `glab mr merge` without a number acts on the branch's merge
+		// request: the most recent one proven in this session, if any.
+		if it := e.items[e.lastMR]; it != nil && mr && verb != "create" {
+			e.touch(kind, "gitlab", it.Key, "", it.URL, status, "", ti, model.ViaToolResult, at)
+		}
+		return // created without a URL in the result: no evidence of which one
+	}
+	title, _ := shellcmd.Flag(args, "title", "t")
+	e.touch(kind, "gitlab", target.key(), title, created, status, "", ti, model.ViaToolResult, at)
+	if mr {
+		e.lastMR = itemKey(kind, "gitlab", target.key())
+	}
 }
 
 type linearResult struct {
@@ -503,6 +648,16 @@ func (e *extractor) fromText(ti int, t model.Turn) {
 		for _, m := range reIssueRef.FindAllStringSubmatch(txt, -1) {
 			mention(model.KindIssue, "github", "github:"+e.repo+"#"+m[1], "")
 		}
+	}
+	for _, g := range e.gitlabRefs(txt) {
+		if g.mr {
+			mention(model.KindPR, "gitlab", g.key(), g.url)
+		} else if e.o.enabled("gitlab") {
+			mention(model.KindIssue, "gitlab", g.key(), g.url)
+		}
+	}
+	for _, m := range reGLRef.FindAllStringSubmatch(txt, -1) {
+		mention(model.KindPR, "gitlab", e.glRepo+"!"+m[1], "")
 	}
 	if e.o.enabled("linear") {
 		for _, m := range reLinearURL.FindAllStringSubmatch(txt, -1) {

@@ -1,0 +1,114 @@
+[
+  {
+    "Kind": "issue",
+    "Provider": "gitlab",
+    "Key": "gitlab:acme/platform/api#3",
+    "Title": "",
+    "URL": "https://gitlab.com/acme/platform/api/-/issues/3",
+    "Status": "mentioned",
+    "RawState": "",
+    "Evidence": [
+      "text"
+    ]
+  },
+  {
+    "Kind": "issue",
+    "Provider": "gitlab",
+    "Key": "gitlab:acme/platform/api#4",
+    "Title": "Flaky test",
+    "URL": "https://gitlab.com/acme/platform/api/-/issues/4",
+    "Status": "updated",
+    "RawState": "",
+    "Evidence": [
+      "tool_result",
+      "tool_result",
+      "tool_result"
+    ]
+  },
+  {
+    "Kind": "issue",
+    "Provider": "gitlab",
+    "Key": "gitlab:acme/platform/api#5",
+    "Title": "",
+    "URL": "",
+    "Status": "completed",
+    "RawState": "",
+    "Evidence": [
+      "tool_result"
+    ]
+  },
+  {
+    "Kind": "issue",
+    "Provider": "gitlab",
+    "Key": "gitlab:gitlab.example.com/team/app#1",
+    "Title": "",
+    "URL": "https://gitlab.example.com/team/app/-/issues/1",
+    "Status": "mentioned",
+    "RawState": "",
+    "Evidence": [
+      "text"
+    ]
+  },
+  {
+    "Kind": "pull_request",
+    "Provider": "gitlab",
+    "Key": "acme/platform/api!10",
+    "Title": "",
+    "URL": "",
+    "Status": "closed",
+    "RawState": "",
+    "Evidence": [
+      "tool_result"
+    ]
+  },
+  {
+    "Kind": "pull_request",
+    "Provider": "gitlab",
+    "Key": "acme/platform/api!12",
+    "Title": "",
+    "URL": "",
+    "Status": "mentioned",
+    "RawState": "",
+    "Evidence": [
+      "text"
+    ]
+  },
+  {
+    "Kind": "pull_request",
+    "Provider": "gitlab",
+    "Key": "acme/platform/api!7",
+    "Title": "Add rate limit",
+    "URL": "https://gitlab.com/acme/platform/api/-/merge_requests/7",
+    "Status": "merged",
+    "RawState": "",
+    "Evidence": [
+      "tool_result",
+      "tool_result",
+      "text"
+    ]
+  },
+  {
+    "Kind": "pull_request",
+    "Provider": "gitlab",
+    "Key": "acme/platform/api!8",
+    "Title": "",
+    "URL": "https://gitlab.com/acme/platform/api/-/merge_requests/8",
+    "Status": "mentioned",
+    "RawState": "",
+    "Evidence": [
+      "text"
+    ]
+  },
+  {
+    "Kind": "pull_request",
+    "Provider": "gitlab",
+    "Key": "gitlab.example.com/team/app!2",
+    "Title": "",
+    "URL": "https://gitlab.example.com/team/app/-/merge_requests/2",
+    "Status": "mentioned",
+    "RawState": "",
+    "Evidence": [
+      "text"
+    ]
+  }
+]

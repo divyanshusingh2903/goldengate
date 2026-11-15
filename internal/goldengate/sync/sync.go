@@ -276,7 +276,7 @@ func (s *Syncer) Plan(ctx context.Context, o RunOpts) (Batch, Report, error) {
 			wantProject = pathutil.Normalize(pathutil.ExpandHome(o.Project, s.Home))
 		}
 	}
-	wo := workitems.Options{Providers: s.Config.Issues.Providers}
+	wo := workitems.Options{Providers: s.Config.Issues.Providers, GitLabHosts: s.Config.Issues.GitLabHosts}
 	wo.KnownPrefixes = append(append([]string{}, s.Config.Issues.LinearTeams...), s.Config.Issues.JiraProjects...)
 	pool := s.newPool(ctx, wo, o.OnPlanned)
 	pool.offline, pool.approve = o.Offline, o.Approve
