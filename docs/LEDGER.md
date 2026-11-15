@@ -11,8 +11,8 @@ This file lets any Claude Code session (or person) pick up the Product v2 work w
 
 _Last updated 2026-11-14. Update this section whenever a row in the queue changes._
 
-**Progress:** 12 of 31 scheduled issues done (plus 2 stretch). Phases 1 (Foundations) and 2 (Per-agent access) are complete.
-**In progress:** #30 Editable summaries that stay edited, size M, planned Nov 20 (last issue of phase 3). **Next after it:** #21 Threads from work items and branch names.
+**Progress:** 13 of 31 scheduled issues done (plus 2 stretch). Phases 1 (Foundations), 2 (Per-agent access) and 3 (Inbox and curation) are complete.
+**Next up:** #21 Threads from work items and branch names, size M, planned Nov 21 (first issue of phase 4). It has no dependencies.
 
 ### Done
 
@@ -30,6 +30,7 @@ _Last updated 2026-11-14. Update this section whenever a row in the queue change
 | #28 | TUI Agents screen: projects by agents grid, review before apply, view as agent, agent details and token revoke; four new `tui.Backend` methods | #67 | 2026-11-14 |
 | #20 | Local inbox: per-session decisions, `auto_approve` per project, sync sends only approved sessions for projects under review, `goldengate inbox`, `sync --approve` | #70 | 2026-11-14 |
 | #29 | `goldengate sessions list|include|exclude|retract`, TUI inbox screen (`i`), retract deletes on the server first; waiting sessions no longer reach the model | #71 | 2026-11-14 |
+| #30 | Editable summaries: `goldengate sessions edit` and `e` in the TUI inbox; the edit is used instead of any summarizer, redacted, never overwritten; a session that changes after an edit is held until the user decides | #72 | 2026-11-14 |
 
 Supporting changes (not queue issues):
 
@@ -39,7 +40,7 @@ Supporting changes (not queue issues):
 | First `pr-template` check (unblocked the `main` ruleset); later replaced | #52 | 2026-11-14 |
 | The user's stricter `pr-template` check (Checklist with every item ticked; skips Dependabot) | #9 | 2026-11-14 |
 | This ledger, then its checklist rule, status section and roadmap sync | #54, #56, #57, #58 | 2026-11-14 |
-| Ledger status updates between issues (#49 done; phase 2 complete; this refresh) | #61, #68, #69 | 2026-11-14 |
+| Ledger status updates between issues (#49 done; phase 2 complete; refresh; phase 3 complete) | #61, #68, #69, #73 | 2026-11-14 |
 
 ### Open loose ends
 
@@ -111,7 +112,7 @@ Status values: `todo`, `in progress`, `in review`, `blocked`, `done`. Size: S ab
 | 10 | #28 TUI Agents screen, view as agent | M | #26 | Nov 18 | done | #67 |
 | 11 | #20 Local inbox: pending, approved, excluded | L | #17 | Nov 19 | done | #70 |
 | 12 | #29 Session include, exclude, retract | S | #20 | Nov 20 | done | #71 |
-| 13 | #30 Editable summaries that stay edited | M | #20 | Nov 20 | in progress | |
+| 13 | #30 Editable summaries that stay edited | M | #20 | Nov 20 | done | #72 |
 | 14 | #21 Threads from work items and branch names | M | | Nov 21 | todo | |
 | 15 | #35 GitLab issues and merge requests | S | | Nov 21 | todo | |
 | 16 | #36 MCP context built around work items | M | #21 | Nov 22 | todo | |
@@ -164,3 +165,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-14: #20 implemented: per-session decisions in the state DB, `auto_approve` per project, sync sends only approved sessions for projects under review, `goldengate inbox`, `sync --approve`, `projects auto`, `share add --auto-approve`; configurations from before the inbox keep auto-approve on. Existing tests that share and then sync now share with `--auto-approve`.
 - 2026-11-14: #20 done (#70). #29 implemented: `goldengate sessions list|include|exclude|retract`, a TUI inbox screen (`i`) with approve, exclude, undo and retract, retract deleting the session on the server before recording it locally. Also fixed in this PR: a session waiting for approval was summarized by the model during a plain sync; it is now built with the local rules until approved, and listings never call a model.
 - 2026-11-14: #29 done (#71). #30 implemented: `goldengate sessions edit` and `e` in the TUI inbox open the summary in the user's editor; the edit is stored per session and content hash, used instead of any summarizer, redacted, and never overwritten; a session that changes after an edit is held until the user edits again, keeps or discards the edit.
+- 2026-11-14: #30 done (#72). Phase 3 (inbox and curation) is complete: #20, #29, #30. Roadmap page updated. Next: #21.
