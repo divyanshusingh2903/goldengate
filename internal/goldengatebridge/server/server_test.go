@@ -555,7 +555,7 @@ func TestMCPToolsOverStatelessJSON(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := map[string]bool{"recent_activity": true, "list_projects": true, "get_project_context": true, "search_work": true, "get_session": true,
+	want := map[string]bool{"recent_activity": true, "list_projects": true, "get_project_context": true, "search_work": true, "get_session": true, "get_work_item": true,
 		"list_commits": true, "list_pull_requests": true, "list_artifacts": true, "list_issues": true}
 	for _, tl := range tools.Tools {
 		if !want[tl.Name] {
@@ -618,8 +618,8 @@ func TestMCPToolsOverStatelessJSON(t *testing.T) {
 		t.Errorf("issues:\n%s", txt)
 	}
 	_, txt = call(t, cs, "get_project_context", map[string]any{"project": "~/code/app"})
-	if !strings.Contains(txt, "Unfinished threads") || !strings.Contains(txt, "o/r#9") || strings.Contains(txt, "o/r#7 [merged]") {
-		t.Errorf("project context must list unfinished items only:\n%s", txt)
+	if !strings.Contains(txt, "Active work") || !strings.Contains(txt, "o/r#9") || strings.Contains(txt, "o/r#7 [merged]") || strings.Contains(txt, "ENG-5") {
+		t.Errorf("project context must list active work only:\n%s", txt)
 	}
 	if r, err := cs.CallTool(context.Background(), &mcp.CallToolParams{Name: "get_project_context", Arguments: map[string]any{"project": "~/nope"}}); err == nil && !r.IsError {
 		t.Error("unknown project must be an error")
@@ -1184,6 +1184,7 @@ var everyTool = map[string]map[string]any{
 	"list_issues":         {"days": 30},
 	"get_project_context": {"project": "PLACEHOLDER"},
 	"get_session":         {"id": "PLACEHOLDER"},
+	"get_work_item":       {"key": "o/shared#1"},
 }
 
 func TestAgentsSeeOnlyTheProjectsGrantedToThem(t *testing.T) {
@@ -1285,6 +1286,8 @@ func TestAgentsSeeOnlyTheProjectsGrantedToThem(t *testing.T) {
 		same("search_work", map[string]any{"query": "sharedword", "project": ref}, map[string]any{"query": "sharedword", "project": "zz-nothing"}, "zz-nothing", ref)
 	}
 	same("get_session", map[string]any{"id": "2"}, map[string]any{"id": "zz-nothing"}, "zz-nothing", "2")
+	same("get_work_item", map[string]any{"key": "ENG-2"}, map[string]any{"key": "zz-nothing"}, "zz-nothing", "ENG-2")
+	same("get_work_item", map[string]any{"key": "o/shared#1", "project": "p_beta"}, map[string]any{"key": "o/shared#1", "project": "zz-nothing"}, "zz-nothing", "p_beta")
 	same("search_work", map[string]any{"query": "BETASECRET"}, map[string]any{"query": "zzznomatch"}, "zzznomatch", "BETASECRET")
 
 	// An agent with no grants, and the Default agent on a server where nothing
@@ -1375,6 +1378,12 @@ func TestAgentHistoryWindowLimitsEveryTool(t *testing.T) {
 	}
 	if r, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "get_session", Arguments: map[string]any{"id": "old"}}); err != nil || !r.IsError {
 		t.Errorf("a session older than the window is not there: %v %v", r, err)
+	}
+	if r, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: "get_work_item", Arguments: map[string]any{"key": "o/r#old"}}); err != nil || !r.IsError {
+		t.Errorf("a work item older than the window is not there: %v %v", r, err)
+	}
+	if _, txt := call(t, cs, "get_work_item", map[string]any{"key": "o/r#new"}); !strings.Contains(txt, "Recent thing") {
+		t.Errorf("a work item inside the window:\n%s", txt)
 	}
 }
 

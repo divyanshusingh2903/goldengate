@@ -320,7 +320,7 @@ func TestOAuthFullFlowAndRotation(t *testing.T) {
 		t.Fatalf("MCP with an OAuth token: %v", err)
 	}
 	defer cs.Close()
-	if tools, err := cs.ListTools(context.Background(), nil); err != nil || len(tools.Tools) != 9 {
+	if tools, err := cs.ListTools(context.Background(), nil); err != nil || len(tools.Tools) != 10 {
 		t.Fatalf("tools: %v %v", tools, err)
 	}
 	// it is only a read token

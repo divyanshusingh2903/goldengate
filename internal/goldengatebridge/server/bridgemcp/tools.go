@@ -66,11 +66,13 @@ func New(d Deps) *mcp.Server {
 	mcp.AddTool(m, &mcp.Tool{Name: "list_projects", Annotations: ro,
 		Description: "Use to see which projects the user shares, with last activity and session counts."}, scoped(s.listProjects))
 	mcp.AddTool(m, &mcp.Tool{Name: "get_project_context", Annotations: ro,
-		Description: "Use for a rolling summary of one project: recent sessions, frequently touched files, and unfinished threads such as pull requests opened but not confirmed merged."}, scoped(s.projectContext))
+		Description: "Use first when the user asks where a project stands or what to pick up. Leads with the active pieces of work: each issue or pull request with its status as of the last session that touched it, a short summary, which tools worked on it and the latest session. Then recent sessions and frequently touched files. Call get_work_item with a thread's key for its full history."}, scoped(s.projectContext))
+	mcp.AddTool(m, &mcp.Tool{Name: "get_work_item", Annotations: ro,
+		Description: "Use when the user asks about one issue or pull request (for example LIN-412 or owner/repo#7), or after get_project_context to go deeper on one piece of work. Returns everything linked to it across tools: related issues and pull requests, every session that touched it with its summary, and the status history with the evidence for each change. Statuses are as of the sessions, not live; use the URL to check the tracker. For one session's full detail use get_session; for lists use list_issues or list_pull_requests."}, scoped(s.getWorkItem))
 	mcp.AddTool(m, &mcp.Tool{Name: "search_work", Annotations: ro,
 		Description: "Use to find past sessions by keyword across titles, goals, summaries and narratives. Results carry a short abstract; get_session has the full narrative."}, scoped(s.searchWork))
 	mcp.AddTool(m, &mcp.Tool{Name: "get_session", Annotations: ro,
-		Description: "Use to read one session in full, given an id from another tool: its facts (goals, outcomes, files), its work items, and the full narrative when one was written (by a model or by the user). Other tools return only a short abstract."}, scoped(s.getSession))
+		Description: "Use to read one session in full, given an id from another tool: its facts (goals, outcomes, files), its work items, and the full narrative when one was written (by a model or by the user). List tools return only a short abstract. To follow one issue or pull request across sessions, use get_work_item instead."}, scoped(s.getSession))
 	mcp.AddTool(m, &mcp.Tool{Name: "list_commits", Annotations: ro,
 		Description: "Use when the user asks what was committed. Status 'created' is backed by a successful git commit in a session; 'mentioned' only appeared in conversation text. Covers the last 5 days unless you pass days or since/until."}, scoped(s.listCommits))
 	mcp.AddTool(m, &mcp.Tool{Name: "list_pull_requests", Annotations: ro,
@@ -78,7 +80,7 @@ func New(d Deps) *mcp.Server {
 	mcp.AddTool(m, &mcp.Tool{Name: "list_artifacts", Annotations: ro,
 		Description: "Use to see files created or modified in coding sessions. Metadata only: file contents are never stored. Covers the last 5 days unless you pass days or since/until."}, scoped(s.listArtifacts))
 	mcp.AddTool(m, &mcp.Tool{Name: "list_issues", Annotations: ro,
-		Description: "Use when the user asks about issues (GitHub, Linear, Jira). State is as of the session, not live; use the key or URL to check current state in the tracker. Covers the last 5 days unless you pass days or since/until."}, scoped(s.listIssues))
+		Description: "Use when the user asks about issues (GitHub, GitLab, Linear, Jira). State is as of the session, not live; use the key or URL to check current state in the tracker. Covers the last 5 days unless you pass days or since/until."}, scoped(s.listIssues))
 	return m
 }
 
@@ -575,15 +577,18 @@ type ProjectContextIn struct {
 
 // ProjectContextOut is the output of get_project_context.
 type ProjectContextOut struct {
-	Notice          string         `json:"notice"`
-	Project         string         `json:"project"`
-	ProjectID       string         `json:"project_id"`
-	Sessions        int            `json:"sessions"`
-	LastActivity    string         `json:"last_activity,omitempty"`
-	RecentSessions  []SessionView  `json:"recent_sessions"`
-	FrequentFiles   []string       `json:"frequent_files"`
-	CommonCommands  []string       `json:"common_commands"`
-	UnfinishedItems []WorkItemView `json:"unfinished_threads"`
+	Notice       string `json:"notice"`
+	Project      string `json:"project"`
+	ProjectID    string `json:"project_id"`
+	Sessions     int    `json:"sessions"`
+	LastActivity string `json:"last_activity,omitempty"`
+	// ActiveThreads are the pieces of work still open, most recent first.
+	ActiveThreads []ThreadView `json:"active_threads"`
+	// MoreThreads counts active threads beyond those listed.
+	MoreThreads    int           `json:"more_active_threads,omitempty"`
+	RecentSessions []SessionView `json:"recent_sessions"`
+	FrequentFiles  []string      `json:"frequent_files"`
+	CommonCommands []string      `json:"common_commands"`
 }
 
 func (s *srv) projectContext(ctx context.Context, req *mcp.CallToolRequest, in ProjectContextIn) (*mcp.CallToolResult, ProjectContextOut, error) {
@@ -592,7 +597,7 @@ func (s *srv) projectContext(ctx context.Context, req *mcp.CallToolRequest, in P
 	if in.Project == "" {
 		return nil, ProjectContextOut{}, fmt.Errorf("project is required")
 	}
-	all, err := s.Store.Sessions(ctx, store.SessionQuery{Project: pid, Limit: 200})
+	all, err := s.Store.Sessions(ctx, store.SessionQuery{Project: pid, Limit: maxThreadSessions})
 	if err != nil {
 		return nil, ProjectContextOut{}, fmt.Errorf("could not read sessions")
 	}
@@ -601,7 +606,7 @@ func (s *srv) projectContext(ctx context.Context, req *mcp.CallToolRequest, in P
 	}
 	name := projectName(all[0])
 	out := ProjectContextOut{Notice: notice, Project: name, ProjectID: pid, Sessions: len(all), LastActivity: ts(all[0].Payload.UpdatedAt),
-		RecentSessions: []SessionView{}, FrequentFiles: []string{}, CommonCommands: []string{}, UnfinishedItems: []WorkItemView{}}
+		RecentSessions: []SessionView{}, FrequentFiles: []string{}, CommonCommands: []string{}, ActiveThreads: []ThreadView{}}
 	files, cmds := map[string]int{}, map[string]int{}
 	for i, r := range all {
 		if i < 5 {
@@ -618,19 +623,32 @@ func (s *srv) projectContext(ctx context.Context, req *mcp.CallToolRequest, in P
 	}
 	out.FrequentFiles, out.CommonCommands = topKeys(files, 10), topKeys(cmds, 8)
 
-	items, err := s.Store.WorkItems(ctx, store.WorkItemQuery{Project: pid, Limit: 200})
-	if err != nil {
-		return nil, out, fmt.Errorf("could not read work items")
-	}
-	for _, it := range items {
-		if unfinished(it.Item) {
-			out.UnfinishedItems = append(out.UnfinishedItems, workView(it))
+	ths, by := buildThreads(all)
+	for _, th := range ths {
+		if !threadActive(th) {
+			continue
 		}
+		if len(out.ActiveThreads) == maxActiveThreads {
+			out.MoreThreads++
+			continue
+		}
+		out.ActiveThreads = append(out.ActiveThreads, threadView(th, by))
 	}
 	now := s.Now()
-	lines := []string{fmt.Sprintf("Project %s: %d shared sessions, last activity %s", clean(name), out.Sessions, ago(now, all[0].Payload.UpdatedAt)), "", "Recent sessions:"}
+	lines := []string{fmt.Sprintf("Project %s: %d shared sessions, last activity %s", clean(name), out.Sessions, ago(now, all[0].Payload.UpdatedAt)), "",
+		"Active work (issues and pull requests not confirmed done; get_work_item <key> has the full history):"}
+	if len(out.ActiveThreads) == 0 {
+		lines = append(lines, "(none)")
+	}
+	for _, v := range out.ActiveThreads {
+		lines = append(lines, threadLines(now, v)...)
+	}
+	if out.MoreThreads > 0 {
+		lines = append(lines, fmt.Sprintf("(and %d more; list_issues and list_pull_requests show all)", out.MoreThreads))
+	}
+	lines = append(lines, "", "Recent sessions:")
 	for _, v := range out.RecentSessions {
-		lines = append(lines, sessionLines(now, v, true)...)
+		lines = append(lines, sessionLines(now, v, false)...)
 	}
 	if len(out.FrequentFiles) > 0 {
 		lines = append(lines, "", "Frequently touched files: "+clean(strings.Join(out.FrequentFiles, ", ")))
@@ -638,8 +656,6 @@ func (s *srv) projectContext(ctx context.Context, req *mcp.CallToolRequest, in P
 	if len(out.CommonCommands) > 0 {
 		lines = append(lines, "Common commands: "+clean(strings.Join(out.CommonCommands, ", ")))
 	}
-	lines = append(lines, "", "Unfinished threads (PRs not confirmed merged, issues not completed):")
-	lines = append(lines, workLines(now, out.UnfinishedItems)...)
 	return result(lines), out, nil
 }
 
