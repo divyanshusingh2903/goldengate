@@ -84,6 +84,7 @@ internal/
     adapters/             # one package per source tool (+ Adapter interface, registry)
       claudecode/ codex/ opencode/ claudeai/ chatgpt/
     cli/ tui/             # cobra commands; Bubble Tea models, views, styles
+    webui/                # (planned, see 6.1) local web UI: loopback server, request checks, embedded assets
     client/ config/       # bridge HTTP client; TOML config, XDG paths
     discover/ project/    # find projects across adapters, group by folder
     selection/            # allow/deny rules, persistence, matching
@@ -373,10 +374,114 @@ Legend: `[x]` shared, `[ ]` not shared, `[~]` some sources shared, `[-]` denied.
 - Themes: named presets (Golden Gate Light, the default, and Dark; GitHub, Gruvbox, Catppuccin, Solarized in light and dark; Dracula, Monokai, Nord, Tokyo Night), each one palette from which every style is derived. The terminal background is set to the theme's while the UI runs (OSC 11) and restored on exit. Chosen in Settings, saved as `[ui] theme`, overridable with `GOLDENGATE_THEME`. No layout jank on resize.
 - Non-interactive parity: everything the TUI does has a CLI equivalent so hooks/cron can use it.
 
+### 6.1 Local web UI (`goldengate ui`): design and security model
+
+Status: designed here (issue #45), not built yet. The API comes with #46, the screens with #47 and #48. Nothing below exists in a release until those land.
+
+`goldengate ui` runs the same product in a browser, for people who do not live in a terminal. It is a second front end on `tui.Backend`, not a second implementation: every selection, preview, redaction, validation and send goes through the code the TUI and the commands already use, and through the single push path (`sync.Push`). It adds no capability. What it does add is a browser-facing surface on the laptop, so this section is mostly about keeping that surface closed.
+
+**What it is not.** It is not a hosted app and not a remote admin console. It never listens on a network interface, has no accounts and serves one person: whoever started it. `goldengatebridge` keeps having no browser-facing surface apart from the OAuth consent pages.
+
+#### Process and lifetime
+
+- `goldengate ui` starts an HTTP server inside the `goldengate` process, prints one line saying where it listens, opens the default browser and runs until Ctrl-C. No daemon, nothing installed, nothing left running. `--no-open` only prints the link (for SSH port forwarding).
+- It binds `127.0.0.1` on a port the OS picks (`:0`). There is no flag for the address: binding anything but loopback is not possible. `--port` may pin the port, for forwarding.
+- Plain HTTP on loopback. TLS would need a locally trusted certificate, which is a larger risk and a worse first run than what it protects against here.
+- One process serves one browser session. Closing the terminal ends it; an idle session expires after 30 minutes without a request and the page says so.
+
+#### Getting in: launch token, then a session cookie
+
+1. At start the process creates a **launch token**: 32 random bytes, single use, valid for 2 minutes. It opens `http://127.0.0.1:<port>/launch#<token>`. The token sits in the URL fragment, so it is not sent in a request line, not written to any log and not passed on as a referrer.
+2. The launch page (static, no data) reads the fragment, removes it from the address bar and history (`history.replaceState`), and posts it to `/api/session`.
+3. The server compares it in constant time, burns it, and answers with the **session cookie** and, in the body, a **request token**.
+   - Cookie: 32 random bytes, `HttpOnly`, `SameSite=Strict`, `Path=/`, no `Domain`, no expiry (gone when the browser closes), and a name that carries the port (`gg_ui_<port>`). It is not marked `Secure` because the page is plain HTTP on loopback, where not every browser accepts `Secure`.
+   - Request token: 32 random bytes held only in the page's memory and sent as the `X-GoldenGate-Request` header on **every** API call, reads included.
+4. Wrong, used or expired launch tokens get the same plain 403, and five failures stop the server from accepting launch tokens until the user asks for a new link (Enter in the terminal prints one).
+5. Both secrets live only in this process's memory. They are never written to disk, and they die with the process. A second `goldengate ui` has its own port, cookie name and secrets.
+
+Why two secrets: browsers send cookies to every port of a host, so another web server on `127.0.0.1` would receive our cookie if the user opened it. The cookie alone therefore opens nothing: the request token is never sent by the browser on its own, and a page from any other origin cannot read it.
+
+#### Request checks (every request, before any handler)
+
+In this order; a failure is a bare 403 or 400 with no detail and no CORS headers.
+
+1. **Host**: the `Host` header must be exactly `127.0.0.1:<port>` or `localhost:<port>`. This is the DNS-rebinding defence: a hostile site whose name is re-pointed to 127.0.0.1 still sends its own name as Host.
+2. **Method and shape**: only `GET` and `POST`. `GET` never changes anything. `OPTIONS` is refused, so no cross-origin preflight can ever succeed. `POST` bodies must be `Content-Type: application/json` (a type an HTML form cannot send), at most 1 MB, with unknown fields rejected.
+3. **Origin**: on every `POST`, `Origin` must equal `http://127.0.0.1:<port>` or `http://localhost:<port>` (the same host the request came in on). A missing `Origin` on a `POST` is refused. Where the browser sends `Sec-Fetch-Site`, it must be `same-origin` on API calls, and `none` or `same-origin` on page loads.
+4. **Session**: the cookie and the `X-GoldenGate-Request` header must both match, compared in constant time. This is the CSRF protection: a cross-site request cannot carry the header, and `SameSite=Strict` keeps the cookie off it as well. The only paths served without a session are `/launch`, the static assets it needs and `POST /api/session`.
+
+There is no CORS: the server never sends an `Access-Control-*` header.
+
+Every response carries: `Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`, `Cross-Origin-Opener-Policy: same-origin`, `Cross-Origin-Resource-Policy: same-origin`, and on API responses `Cache-Control: no-store`. The page loads nothing from any other origin: no CDN, no web fonts, no analytics. That keeps "no telemetry" true for the browser too.
+
+#### Secrets go in and never come back
+
+The page can set a secret but can never read one. This holds for the ingest token, the admin secret, pairing codes and summarizer API keys.
+
+- Secret fields are write-only in the API: a request may carry a new value; responses carry only whether one is set and where it is kept (`"set": true, "store": "keyring"`). No endpoint returns a stored secret, in whole or masked, and none is ever placed in a URL.
+- The admin secret (agents and grants) is posted once, held in the UI process's memory for the run, as the TUI does, and never stored. The page does not keep it; "Forget admin secret" drops it at once.
+- One exception, stated on screen: a value the user must copy somewhere else is shown once, at the moment it is created. That is the read token (or connector URL) at the end of setup, exactly as the TUI and `goldengate init` show it. It is returned by the call that creates it and cannot be fetched again.
+- Secrets are never logged. The UI's request log, off by default, records method, path and status only.
+
+#### Session text is untrusted here too
+
+Summaries, titles, work-item keys and file names come from transcripts and can contain markup written by a web page or a README. The page treats every such string as text: it is inserted with `textContent`, never as HTML, and the CSP above forbids inline script, inline style and `eval`, so a string that slips through still cannot run. Links built from stored URLs are shown as text with an explicit "open" control, open with `rel="noopener noreferrer"`, and only `https:` is linkable.
+
+#### API shape (built in #46)
+
+- One endpoint per `tui.Backend` method under `/api/`, `GET` for reads and `POST` for anything that changes state or contacts the server. The JSON types are the `tui` types, so the TUI's fake backend drives the contract tests.
+- Sync progress: `POST /api/sync` starts a run and returns its id; `GET /api/sync/<id>/events` streams `SyncEvent`s as server-sent events over the same checks. One run at a time, cancelled when the stream's owner asks or the process ends.
+- Three Backend methods do not map directly and need a web form of the same behaviour: `DeleteRemote` takes an opaque handle (the API will use the project id); `EditBegin`/`EditFinish` hand a private file to a terminal editor (the API returns the form's text and accepts it back, the file stays private to the process and is deleted as today); `Init` returns the show-once read token (see above).
+- Errors are JSON with a message meant for the user. They never include a secret, a path outside the user's projects or a session from an unshared project (the Backend already guarantees the last two).
+
+#### Frontend stack and embedding
+
+- Hand-written HTML, CSS and JavaScript (ES modules), with **no build step and no third-party JavaScript**: no npm, no bundler, no framework. The screens are forms, tables and one event stream, which the platform handles. In return there is no Node toolchain in CI, no JavaScript supply chain to audit, and the strict CSP above works without exceptions.
+- Assets live in `internal/goldengate/webui/assets/` and are compiled into the binary with `//go:embed`. `goldengate` stays a single static binary that works offline. Assets are served from memory with a content hash in the path and `Cache-Control: immutable`; HTML is `no-store`.
+- Styling uses the brand tokens in `docs/brand/BRAND.md` as CSS custom properties, light and dark (following the system setting, with the same override as the TUI theme), system fonts only. Every state pairs colour with a glyph or label. Everything is reachable by keyboard, and layouts work at phone width.
+- Each screen says in words what leaves the machine and when (principle 8), using the same wording as the TUI.
+- Code layout: `internal/goldengate/webui` holds the server, the checks above as one middleware, and the embedded assets; `cli` adds the `ui` command. The package depends on `tui` for the Backend interface and types only.
+
+#### Reviewed against SECURITY.md
+
+| Promise in SECURITY.md | How the web UI keeps it |
+|---|---|
+| Default deny; a deny rule wins | Selection goes through `Backend.Apply`, the code the TUI uses. The API has no other way to change what is shared. |
+| One door (`sync.Push`) | The UI calls `Backend.Sync`. It has no upload code and no access to the bridge client. |
+| Previews are exact | Preview and the Review step return the payloads the send would use; the page renders them without rewording. |
+| Nothing new leaves without approval | Approval is the same inbox decision; the page's Send is the reviewed batch, as in the TUI. |
+| Retract, exclude, edits | Same Backend methods; edited text is redacted by `summarize.Build`, not by the page. |
+| Tokens in the OS keyring, never displayed | Write-only secret fields; the show-once exception is the one the TUI already has. |
+| No telemetry | No third-party origin is ever contacted by the page; the CSP enforces it. |
+| No browser-facing surface on the server | Unchanged: this is the laptop binary, loopback only. |
+| Stored text is untrusted | Rendered as text under a CSP without inline script. |
+
+What it adds to the threat model, and what answers it:
+
+| Threat | Defence |
+|---|---|
+| A website the user visits calls the local API (CSRF) | Request token header on every call, `SameSite=Strict`, Origin check, JSON-only bodies, no CORS, preflights refused |
+| DNS rebinding | Exact Host allow-list |
+| Another device on the network | Loopback bind only, no option to change it |
+| The launch link leaks (history, logs, referrer, shoulder) | Token in the fragment, single use, 2 minutes, removed from history, `Referrer-Policy: no-referrer` |
+| Another local web server receives the cookie | Cookie alone is not enough; per-port cookie name; per-run secrets |
+| Script injected through session text (XSS) | Text-only rendering, strict CSP, no inline script or style |
+| Clickjacking | `frame-ancestors 'none'`, `X-Frame-Options: DENY` |
+| A secret read back through the page | No endpoint returns one |
+
+Residual risks, to be listed in SECURITY.md when the UI ships:
+- Another program running as the same user can already read the config, the state database and, on most systems, the keyring. The web UI does not make that worse, and does not defend against it.
+- Another user on a shared machine can connect to the loopback port. Without the launch token they get nothing, but they can see that the port is open.
+- A browser extension with access to all sites can read the page, like any other page.
+- The show-once read token is on screen and in the page's memory until the user leaves that step.
+
+Tests that #46 must include (the "security checks" its issue refers to): a wrong `Host`; a `POST` with a missing, foreign or `null` `Origin`; a missing or wrong cookie; a missing or wrong request token; a reused, expired and guessed launch token; `OPTIONS`; a form-encoded body; an oversized body; every response's headers; that no response to any endpoint contains a stored secret; and that the listener's address is loopback.
+
 ## 7. CLI surface
 
 ```
 goldengate                      # open TUI
+goldengate ui [--no-open] [--port N]   # (planned, see 6.1) the same product in a browser, on loopback only
 goldengate init [--server URL] [--pair-code CODE]   # first-run wizard; headless via flags/env (see 7.1)
 goldengate sync [--dry-run] [--project PATH] [--since 7d] [--source codex]
 goldengate share add|remove|list
