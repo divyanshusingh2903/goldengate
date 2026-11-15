@@ -291,6 +291,13 @@ type Backend interface {
 	// decision (InboxReset) so the session waits again.
 	Inbox(ctx context.Context) (Inbox, error)
 	InboxDecide(ctx context.Context, items []InboxItem, decision string) error
+	// EditBegin writes the edit form for a session's summary to a private
+	// file and returns its path; the UI opens it in the user's editor.
+	// EditFinish reads the file back, stores the user's version (or removes
+	// the edit when the text is the generated summary), deletes the file and
+	// says what happened.
+	EditBegin(ctx context.Context, item InboxItem) (path string, err error)
+	EditFinish(ctx context.Context, item InboxItem, path string) (string, error)
 
 	// The agents methods manage which assistant sees which project. Each
 	// takes the admin secret, which the UI holds in memory for the run and
@@ -315,7 +322,15 @@ const (
 	// InboxRetract deletes a sent session from the server and never sends
 	// it again.
 	InboxRetract = "retract"
+	// InboxKeepEdit carries the user's edit over to a session that changed;
+	// InboxDropEdit removes the edit so the generated summary is used.
+	InboxKeepEdit = "keep-edit"
+	InboxDropEdit = "drop-edit"
 )
+
+// InboxStateConflict is the State of a session whose summary the user edited
+// and which changed afterwards: it is held until they decide about the edit.
+const InboxStateConflict = "edit needs review"
 
 // Inbox is every session of the shared projects by where it stands: waiting
 // for approval, excluded, sent (or about to be), and retracted.
@@ -334,9 +349,11 @@ type InboxItem struct {
 	Updated    time.Time
 	// Changed is set when an earlier version was approved or sent.
 	Changed bool
-	// State says where it stands: pending, queued, sent, changed, excluded
-	// or retracted.
+	// State says where it stands: pending, queued, sent, changed, excluded,
+	// retracted, or InboxStateConflict.
 	State string
+	// Edited is set when its summary is the user's own version.
+	Edited bool
 	// Hash is the content a decision is made for; pass it back unchanged.
 	Hash string
 }

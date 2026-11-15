@@ -39,6 +39,10 @@ type Options struct {
 	StaticCursor bool
 	// ThemeName is the configured color preset; GOLDENGATE_THEME overrides it.
 	ThemeName string
+	// EditFile opens path in the user's editor and delivers done(err) when
+	// they close it. Nil uses $VISUAL, then $EDITOR, then vi, with the
+	// screen handed over to the editor meanwhile.
+	EditFile func(path string, done func(error) tea.Msg) tea.Cmd
 	// SetColors paints the terminal's default colors (empty: restore them).
 	SetColors func(fg, bg string)
 }
@@ -254,6 +258,10 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case inboxDoneMsg:
 		return m, m.onInboxDone(msg)
+	case editBeganMsg:
+		return m, m.onEditBegan(msg)
+	case editClosedMsg:
+		return m, m.onEditClosed(msg)
 	case agentsMsg:
 		return m, m.onAgents(msg)
 	case agentsAppliedMsg:

@@ -170,6 +170,12 @@ func (f *fakeBackend) InboxDecide(_ context.Context, items []InboxItem, decision
 		case InboxReset:
 			it.State = "pending"
 			in.Pending = append(in.Pending, it)
+		case InboxKeepEdit:
+			it.State, it.Edited = "pending", true
+			in.Pending = append(in.Pending, it)
+		case InboxDropEdit:
+			it.State, it.Edited = "pending", false
+			in.Pending = append(in.Pending, it)
 		}
 	}
 	return nil
@@ -189,4 +195,29 @@ func sampleInbox() Inbox {
 		},
 		Retracted: []InboxItem{{Source: "claude-code", ID: "s-retr-1", Project: "Forge", Title: "Customer data migration", Updated: ago(50 * time.Hour), State: "retracted", Hash: "h6"}},
 	}
+}
+
+func (f *fakeBackend) EditBegin(_ context.Context, it InboxItem) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.inboxErr != nil {
+		return "", f.inboxErr
+	}
+	f.editBegun = append(f.editBegun, it.ID)
+	return "/fake/edit/" + it.ID + ".txt", nil
+}
+
+func (f *fakeBackend) EditFinish(_ context.Context, it InboxItem, path string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.editFinished = append(f.editFinished, it.ID+"@"+path)
+	if path == "" {
+		return "", nil
+	}
+	for i := range f.inbox.Pending {
+		if f.inbox.Pending[i].ID == it.ID {
+			f.inbox.Pending[i].Edited, f.inbox.Pending[i].Title = true, "My edited title"
+		}
+	}
+	return "saved your version; it is what will be sent for this session", nil
 }

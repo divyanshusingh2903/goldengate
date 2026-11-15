@@ -50,6 +50,9 @@ type Deps struct {
 	SecretStore func(stateDir string, warn func(string)) secrets.Store
 	HTTP        *http.Client
 	Hostname    func() string
+	// EditFile opens a file in the user's editor and returns when they are
+	// done (goldengate sessions edit).
+	EditFile func(path string) error
 }
 
 // DefaultDeps wires the real process environment.
@@ -67,6 +70,7 @@ func DefaultDeps() Deps {
 		},
 		SecretStore: secrets.Open,
 		Hostname:    func() string { h, _ := os.Hostname(); return h },
+		EditFile:    defaultEditFile(os.Getenv),
 	}
 }
 

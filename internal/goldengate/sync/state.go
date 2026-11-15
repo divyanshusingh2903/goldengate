@@ -40,6 +40,9 @@ CREATE TABLE IF NOT EXISTS decisions(
   source TEXT NOT NULL, session_id TEXT NOT NULL, state TEXT NOT NULL, content_hash TEXT NOT NULL,
   decided_at INTEGER NOT NULL, project TEXT NOT NULL DEFAULT '', title TEXT NOT NULL DEFAULT '',
   PRIMARY KEY(source, session_id));
+CREATE TABLE IF NOT EXISTS edits(
+  source TEXT NOT NULL, session_id TEXT NOT NULL, content_hash TEXT NOT NULL, edit TEXT NOT NULL, edited_at INTEGER NOT NULL,
+  PRIMARY KEY(source, session_id));
 CREATE TABLE IF NOT EXISTS imports(
   id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT NOT NULL, path TEXT NOT NULL, added_at INTEGER NOT NULL, UNIQUE(source, path));
 `

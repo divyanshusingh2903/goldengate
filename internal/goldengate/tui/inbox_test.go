@@ -4,6 +4,9 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 func openInboxScreen(t *testing.T, w, hh int) *harness {
@@ -148,4 +151,68 @@ func TestInboxEmptyAndFailed(t *testing.T) {
 	h.key("i")
 	h.contains("No sessions yet", "wait here for your approval")
 	h.checkGeometry(100, 30)
+}
+
+func TestInboxEditsASummaryInTheUsersEditor(t *testing.T) {
+	h := openInboxScreen(t, 120, 40)
+	var opened []string
+	h.m.opts.EditFile = func(path string, done func(error) tea.Msg) tea.Cmd {
+		opened = append(opened, path)
+		return func() tea.Msg { return done(nil) }
+	}
+	h.key("e")
+	if len(opened) != 1 || opened[0] != "/fake/edit/s-pend-1.txt" || len(h.be.editBegun) != 1 {
+		t.Fatalf("e writes the form and opens the editor on it: %v %v", opened, h.be.editBegun)
+	}
+	if len(h.be.editFinished) != 1 || h.be.editFinished[0] != "s-pend-1@/fake/edit/s-pend-1.txt" {
+		t.Fatalf("closing the editor reads the form back: %v", h.be.editFinished)
+	}
+	h.contains("saved your version; it is what will be sent for this session", "My edited title", "pending, edited")
+
+	// an editor that fails saves nothing, and the form is still cleaned up
+	h.m.opts.EditFile = func(_ string, done func(error) tea.Msg) tea.Cmd {
+		return func() tea.Msg { return done(errors.New("exit status 1")) }
+	}
+	h.key("e")
+	h.contains("the editor did not finish cleanly: exit status 1")
+	if last := h.be.editFinished[len(h.be.editFinished)-1]; last != "s-pend-1@" {
+		t.Fatalf("a failed editor only cleans up: %v", h.be.editFinished)
+	}
+	// D removes the edit; on a session without one it says so
+	h.key("D")
+	h.contains("removed your edit of \"My edited title\"")
+	h.key("D")
+	h.contains("This session's summary is not edited.")
+	h.key("K")
+	h.contains("this one has no such edit")
+	// an excluded session is not edited
+	for {
+		it, _ := h.m.ib.current()
+		if it.State == "excluded" {
+			break
+		}
+		h.key("down")
+	}
+	n := len(h.be.editBegun)
+	h.key("e")
+	h.contains("press u first")
+	if len(h.be.editBegun) != n {
+		t.Fatal("no form for an excluded session")
+	}
+}
+
+func TestInboxHoldsASessionWhoseEditNeedsReview(t *testing.T) {
+	be := newFake()
+	be.inbox = Inbox{Pending: []InboxItem{{Source: "claude-code", ID: "s-conf", Project: "Pharmfindr", Title: "New generated title", Updated: ago(1 * time.Hour),
+		State: InboxStateConflict, Edited: true, Changed: true, Hash: "h9"}}}
+	h := newHarnessWith(t, be, 120, 30)
+	h.key("i")
+	h.contains("edit needs review", "This session changed after you edited its summary. e: edit again · K: keep your version · D: use the new one")
+	h.checkGeometry(120, 30)
+	h.golden("inbox_conflict")
+	h.key("K")
+	if len(be.inboxDecs) != 1 || be.inboxDecs[0] != "keep-edit:s-conf" {
+		t.Fatalf("K keeps the edit: %v", be.inboxDecs)
+	}
+	h.contains("kept your version of \"New generated title\"")
 }

@@ -47,19 +47,20 @@ type fakeBackend struct {
 	syncOpts   []SyncOpts
 
 	// behavior switches
-	applyErr   error
-	syncFail   map[string]string // project label -> error
-	syncBlock  chan struct{}     // when set, Sync waits for it (or ctx)
-	remote     *RemotePrompt
-	initErr    error
-	saveErr    error
-	snapshotFn func() (Snapshot, error)
-	approving  int // planned sessions that were waiting in the inbox
-	excluded   int
-	inbox      Inbox
-	inboxDecs  []string // "decision:id" in order
-	inboxErr   error
-	stale      int      // synced sessions with heuristic summaries (a model is configured when > 0)
+	applyErr                error
+	syncFail                map[string]string // project label -> error
+	syncBlock               chan struct{}     // when set, Sync waits for it (or ctx)
+	remote                  *RemotePrompt
+	initErr                 error
+	saveErr                 error
+	snapshotFn              func() (Snapshot, error)
+	approving               int // planned sessions that were waiting in the inbox
+	excluded                int
+	inbox                   Inbox
+	inboxDecs               []string // "decision:id" in order
+	inboxErr                error
+	editBegun, editFinished []string
+	stale                   int // synced sessions with heuristic summaries (a model is configured when > 0)
 }
 
 func ago(d time.Duration) time.Time { return clock.Add(-d) }

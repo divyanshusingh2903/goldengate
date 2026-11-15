@@ -45,6 +45,9 @@ type Summary struct {
 	// NarrativeLength is the length setting a model wrote under: "short",
 	// "standard" or "detailed". Empty for a user's narrative.
 	NarrativeLength string `json:"narrative_length,omitempty"`
+	// Edited marks a summary whose text the user edited. A summarizer never
+	// replaces it.
+	Edited bool `json:"edited,omitempty"`
 
 	// Deprecated: sent by older clients and kept so stored records still read.
 	// New payloads carry Goals, Outcomes and LastMessage instead.
@@ -102,6 +105,12 @@ type SessionPayload struct {
 	WorkItems   []WorkItem `json:"work_items,omitempty"`
 	ContentHash string     `json:"content_hash"`
 	Redactions  Redactions `json:"redactions"`
+
+	// EditConflict is set on the client when the user edited an earlier
+	// version of this session and it has changed since: the payload then
+	// holds the newly generated summary and must not be sent until the user
+	// has decided what happens to their edit. It never leaves the client.
+	EditConflict bool `json:"-"`
 }
 
 // PayloadV2 is the payload version that names a project by id.
