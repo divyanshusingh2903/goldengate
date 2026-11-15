@@ -38,6 +38,9 @@ type Sink interface {
 type planned struct {
 	payload *model.SessionPayload
 	entry   Entry
+	// auto is set when the session is sent by trust and rules rather than
+	// by the user's own approval: Push writes it into the receipt.
+	auto *AutoItem
 }
 
 // Batch is an opaque, already-approved set of payloads. Only Plan creates one.
@@ -138,6 +141,12 @@ func Push(ctx context.Context, sink Sink, state *State, b Batch, now time.Time) 
 		e.SyncedAt = now
 		if err := state.Put(ctx, e); err != nil {
 			return err
+		}
+		// an automatic send leaves a receipt: what, where to, and why
+		if it.auto != nil {
+			if err := state.addReceiptItem(ctx, *it.auto, now); err != nil {
+				return err
+			}
 		}
 	}
 	return nil
@@ -242,8 +251,10 @@ type Report struct {
 	ApprovingItems []PendingItem
 	// Auto lists planned sessions that are sent without the user having
 	// approved them one by one: the project's trust level is "auto" and its
-	// rules approve them. A receipt is written from this.
-	Auto []AutoItem
+	// rules approve them. Push writes each one that is sent into the
+	// receipt named by Receipt.
+	Auto    []AutoItem
+	Receipt string
 	// Suggested counts waiting sessions the rules approve in a "suggest"
 	// project; NewGroupings counts those held in an "auto" project because
 	// their folder or chat grouping is new. Both are part of Pending.
@@ -267,8 +278,11 @@ type AutoItem struct {
 	ProjectName       string
 	Title             string // redacted, as sent
 	// RuleID is the approve rule that matched; empty when the project has
-	// none and sends everything.
+	// none and sends everything. Why says it in words, as of the send.
 	RuleID string
+	Why    string
+	// Receipt is the id of the receipt this send is listed in: one per plan.
+	Receipt string
 }
 
 func (s *Syncer) log() *slog.Logger {
@@ -430,6 +444,7 @@ func (s *Syncer) Plan(ctx context.Context, o RunOpts) (Batch, Report, error) {
 			// New or changed content: sent if the user approved exactly this
 			// content, or if the project's trust level and rules send it.
 			g := j.gate
+			var auto *AutoItem
 			switch {
 			case g.excluded:
 				rep.Excluded++
@@ -454,14 +469,18 @@ func (s *Syncer) Plan(ctx context.Context, o RunOpts) (Batch, Report, error) {
 				rep.PendingItems = append(rep.PendingItems, item)
 				continue
 			case g.auto:
-				rep.Auto = append(rep.Auto, AutoItem{Source: ref.Source, SessionID: ref.ID, Project: ref.ProjectKey,
-					ProjectID: p.ProjectID, ProjectName: p.ProjectName, Title: payloadTitle(p), RuleID: g.ruleID})
+				if rep.Receipt == "" {
+					rep.Receipt = newReceiptID()
+				}
+				auto = &AutoItem{Source: ref.Source, SessionID: ref.ID, Project: ref.ProjectKey,
+					ProjectID: p.ProjectID, ProjectName: p.ProjectName, Title: payloadTitle(p), RuleID: g.ruleID, Why: g.why, Receipt: rep.Receipt}
+				rep.Auto = append(rep.Auto, *auto)
 			}
 			for k, n := range p.Redactions {
 				rep.Redactions[k] += n
 			}
 			s.log().Debug("planned", "adapter", ref.Source, "session", ref.ID, "redactions", p.Redactions)
-			b.items = append(b.items, planned{payload: p, entry: Entry{
+			b.items = append(b.items, planned{payload: p, auto: auto, entry: Entry{
 				Source: ref.Source, SessionID: ref.ID, Project: ref.ProjectKey, ContentHash: p.ContentHash,
 				Size: ref.SizeBytes, MTimeNS: mtime, Payload: body,
 			}})
@@ -672,6 +691,7 @@ type gate struct {
 	// Why it waits, when the rules approve it: see PendingItem.
 	suggested, newGrouping bool
 	ruleID                 string
+	why                    string // the rule in words, or that the whole project is automatic
 }
 
 // Facts are the deterministic properties of a session that rules may see.
@@ -733,6 +753,10 @@ func (s *Syncer) gate(ctx context.Context, ref model.SessionRef, raw *model.RawS
 		}
 		if known {
 			g.send, g.auto = true, true
+			g.why = "trust auto: every session of the project"
+			if v.Approve != nil {
+				g.why = "rule " + v.Approve.ID + ": " + v.Approve.String()
+			}
 		} else {
 			g.newGrouping = true
 		}

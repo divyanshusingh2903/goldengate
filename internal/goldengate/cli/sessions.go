@@ -364,6 +364,9 @@ func (a *app) retractSession(ctx context.Context, cfg config.Config, st *gsync.S
 	if err := st.Decide(ctx, gsync.Decision{Source: r.Source, SessionID: r.ID, State: gsync.DecisionRetracted, ContentHash: r.Hash, At: a.Now(), Project: r.Project, Title: r.Title}); err != nil {
 		return err
 	}
+	if err := st.MarkRetracted(ctx, r.Source, r.ID, a.Now()); err != nil {
+		return err
+	}
 	return st.Forget(ctx, r.Source, r.ID)
 }
 

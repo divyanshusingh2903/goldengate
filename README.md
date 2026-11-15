@@ -167,6 +167,8 @@ goldengate inbox approve --suggested               # at "suggest": approve what 
 - **suggest**: sessions your rules approve are marked in the inbox; one command approves them. Nothing is sent before that.
 - **auto**: sessions your rules approve are sent on the next sync. With no approve rule, that is every session of the project (`goldengate share add <folder> --auto-approve` sets this up in one step).
 
+Whatever auto sends is listed in a receipt, with the rule that sent it. `goldengate receipts` lists them, `goldengate receipts show` prints the latest (add `--agents` to see which assistants can read each project), and `goldengate receipts retract <receipt-id> --all` deletes those sessions from the server again. In the TUI, press `c` in the inbox.
+
 A rule matches on facts your tools recorded: the tool, the folder or chat grouping, the repository remote, the branch, and issue or pull request keys (`--work-item linear:ENG`). It acts only inside the project: it cannot share anything you did not share, and a deny rule always wins. An exclude rule keeps its matches on your machine. Even at auto, the first session from a folder or chat you did not name yourself (one reached through a parent folder or a pattern such as `chatgpt:*`) waits for you; after you send one, the rest follow automatically.
 
 **Which assistant sees what.** Each assistant you connect is an *agent* with its own read token and its own list of projects. The assistant you set up first sees every project you share; any other starts with nothing. These commands ask for the admin secret (or read `GOLDENGATE_ADMIN_TOKEN`) and never store it:

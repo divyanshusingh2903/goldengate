@@ -141,6 +141,28 @@ func waitNote(it gsync.PendingItem) string {
 	return ""
 }
 
+// Receipts implements tui.Backend.
+func (b *tuiBackend) Receipts(ctx context.Context) ([]tui.Receipt, error) {
+	st, err := b.a.openState()
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = st.Close() }()
+	rs, err := st.Receipts(ctx, 50)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]tui.Receipt, 0, len(rs))
+	for _, r := range rs {
+		tr := tui.Receipt{ID: r.ID, At: r.At}
+		for _, it := range r.Items {
+			tr.Items = append(tr.Items, tui.ReceiptItem{Source: it.Source, ID: it.SessionID, Project: it.ProjectLabel(), Title: it.Title, Why: it.Why, Retracted: !it.RetractedAt.IsZero()})
+		}
+		out = append(out, tr)
+	}
+	return out, nil
+}
+
 func projectLabel(it gsync.PendingItem) string {
 	if it.ProjectName != "" {
 		return it.ProjectName

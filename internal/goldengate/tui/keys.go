@@ -90,7 +90,7 @@ func (m *Model) onKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 			}
 		case "tab":
 			if m.scr != scrWizard && m.scr != scrPreview {
-				next := map[screen]int{scrProjects: 2, scrSync: 3, scrServer: 4, scrSettings: 5, scrAgents: 1, scrInbox: 2}[m.scr]
+				next := map[screen]int{scrProjects: 2, scrSync: 3, scrServer: 4, scrSettings: 5, scrAgents: 1, scrInbox: 2, scrReceipts: 2}[m.scr]
 				return m, m.goTo(next)
 			}
 		case "s":
@@ -116,6 +116,8 @@ func (m *Model) onKey(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.onKeyAgents(k)
 	case scrInbox:
 		return m.onKeyInbox(k)
+	case scrReceipts:
+		return m.onKeyReceipts(k)
 	case scrWizard:
 		return m.onKeyWizard(k)
 	}

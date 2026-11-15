@@ -53,6 +53,9 @@ type Deps struct {
 	// EditFile opens a file in the user's editor and returns when they are
 	// done (goldengate sessions edit).
 	EditFile func(path string) error
+	// Notify shows a desktop notification. Used only when the user turned
+	// receipt notifications on.
+	Notify func(title, body string) error
 }
 
 // DefaultDeps wires the real process environment.
@@ -71,6 +74,7 @@ func DefaultDeps() Deps {
 		SecretStore: secrets.Open,
 		Hostname:    func() string { h, _ := os.Hostname(); return h },
 		EditFile:    defaultEditFile(os.Getenv),
+		Notify:      desktopNotify,
 	}
 }
 
@@ -113,7 +117,7 @@ func New(d Deps) *cobra.Command {
 	root.SetOut(d.Stdout)
 	root.SetErr(d.Stderr)
 	root.PersistentFlags().StringVar(&a.configPath, "config", "", "config file (default: XDG config dir)")
-	root.AddCommand(a.syncCmd(), a.shareCmd(), a.projectsCmd(), a.rulesCmd(), a.agentsCmd(), a.inboxCmd(), a.sessionsCmd(), a.doctorCmd(), a.summarizerCmd(), a.initCmd(), a.tokenCmd(), a.purgeCmd(), a.importsCmd(), &cobra.Command{
+	root.AddCommand(a.syncCmd(), a.shareCmd(), a.projectsCmd(), a.rulesCmd(), a.receiptsCmd(), a.agentsCmd(), a.inboxCmd(), a.sessionsCmd(), a.doctorCmd(), a.summarizerCmd(), a.initCmd(), a.tokenCmd(), a.purgeCmd(), a.importsCmd(), &cobra.Command{
 		Use: "version", Short: "Print the version",
 		Run: func(*cobra.Command, []string) {
 			fmt.Fprintln(a.Stdout, "goldengate", Version, runtime.GOOS+"/"+runtime.GOARCH)
@@ -202,6 +206,9 @@ func (a *app) syncCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if !dry {
+				a.notifyReceipt(cfg, rep)
+			}
 			if !quiet {
 				verb := "sent"
 				if dry {
@@ -218,7 +225,7 @@ func (a *app) syncCmd() *cobra.Command {
 					fmt.Fprintf(a.Stderr, "redactions: %s\n", strings.Join(kinds, " "))
 				}
 				if n := len(rep.Auto); n > 0 && !dry {
-					fmt.Fprintf(a.Stderr, "%d of them were sent by your projects' trust level and rules, without asking\n", n)
+					fmt.Fprintf(a.Stderr, "%d of them were sent by your projects' trust level and rules, without asking: receipt %s (`goldengate receipts show %s`)\n", n, rep.Receipt, rep.Receipt)
 				}
 				if rep.RuleExcluded > 0 {
 					fmt.Fprintf(a.Stderr, "%d sessions are kept back by an exclude rule (see `goldengate rules list`)\n", rep.RuleExcluded)

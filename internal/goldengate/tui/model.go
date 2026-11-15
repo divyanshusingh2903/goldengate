@@ -25,6 +25,7 @@ const (
 	scrWizard
 	scrAgents
 	scrInbox
+	scrReceipts
 )
 
 // Options configures New.
@@ -83,6 +84,7 @@ type Model struct {
 	wz wizardState
 	ag agentsState
 	ib inboxState
+	rc receiptsState
 }
 
 // New builds the UI around a backend.
@@ -258,6 +260,9 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case inboxDoneMsg:
 		return m, m.onInboxDone(msg)
+	case receiptsMsg:
+		m.onReceipts(msg)
+		return m, nil
 	case editBeganMsg:
 		return m, m.onEditBegan(msg)
 	case editClosedMsg:
@@ -344,6 +349,8 @@ func (m *Model) View() string {
 		out = m.viewAgents()
 	case scrInbox:
 		out = m.viewInbox()
+	case scrReceipts:
+		out = m.viewReceipts()
 	case scrWizard:
 		out = m.viewWizard()
 	default:

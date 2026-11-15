@@ -59,6 +59,7 @@ type fakeBackend struct {
 	inbox                   Inbox
 	inboxDecs               []string // "decision:id" in order
 	inboxErr                error
+	receipts                []Receipt
 	editBegun, editFinished []string
 	stale                   int // synced sessions with heuristic summaries (a model is configured when > 0)
 }

@@ -71,6 +71,9 @@ type UI struct {
 	// Theme is a color preset name ("goldengate-light", "gruvbox-dark", ...);
 	// empty means the default, Golden Gate Light.
 	Theme string `toml:"theme,omitempty"`
+	// NotifyReceipts shows a desktop notification after a sync that sent
+	// sessions automatically: counts only, never titles. Off by default.
+	NotifyReceipts bool `toml:"notify_receipts,omitempty"`
 }
 
 // Server is the bridge endpoint. The token is never stored here.
