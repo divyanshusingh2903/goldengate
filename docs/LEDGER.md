@@ -9,10 +9,10 @@ This file lets any Claude Code session (or person) pick up the Product v2 work w
 
 ## Status
 
-_Last updated 2026-11-14. Update this section whenever a row in the queue changes._
+_Last updated 2026-11-15. Update this section whenever a row in the queue changes._
 
-**Progress:** 15 of 31 scheduled issues done (plus 2 stretch). Phases 1 (Foundations), 2 (Per-agent access) and 3 (Inbox and curation) are complete.
-**In progress:** #36 MCP context built around work items, size M, planned Nov 22. **Next up:** #45 Design and security model for `goldengate ui`.
+**Progress:** 16 of 31 scheduled issues done (plus 2 stretch). Phases 1 (Foundations), 2 (Per-agent access) and 3 (Inbox and curation) are complete.
+**Next up:** #45 Design and security model for `goldengate ui`, size S, planned Nov 22. Its dependency #17 is done. Phase 4 so far: #21, #35 and #36 done.
 
 ### Done
 
@@ -33,6 +33,7 @@ _Last updated 2026-11-14. Update this section whenever a row in the queue change
 | #30 | Editable summaries: `goldengate sessions edit` and `e` in the TUI inbox; the edit is used instead of any summarizer, redacted, never overwritten; a session that changes after an edit is held until the user decides | #72 | 2026-11-14 |
 | #21 | Issue keys read from branch names (evidence `branch`, status `mentioned`); `internal/utils/threads` groups sessions across sources by shared issues and pull requests | #74 | 2026-11-14 |
 | #35 | GitLab issues and merge requests: URLs on gitlab.com and listed self-hosted hosts, `glab` results as evidence, provider `gitlab`; config version 3 | #76 | 2026-11-14 |
+| #36 | `get_project_context` leads with active threads; new MCP tool `get_work_item` returns one thread with linked sessions and status history; tool descriptions say when to use each | #78 | 2026-11-15 |
 
 Supporting changes (not queue issues):
 
@@ -42,7 +43,7 @@ Supporting changes (not queue issues):
 | First `pr-template` check (unblocked the `main` ruleset); later replaced | #52 | 2026-11-14 |
 | The user's stricter `pr-template` check (Checklist with every item ticked; skips Dependabot) | #9 | 2026-11-14 |
 | This ledger, then its checklist rule, status section and roadmap sync | #54, #56, #57, #58 | 2026-11-14 |
-| Ledger status updates between issues (#49 done; phase 2 complete; refresh; phase 3 complete; #21 done; #35 done) | #61, #68, #69, #73, #75, #77 | 2026-11-14 |
+| Ledger status updates between issues (#49 done; phase 2 complete; refresh; phase 3 complete; #21 done; #35 done; #36 done) | #61, #68, #69, #73, #75, #77, #79 | 2026-11-15 |
 
 ### Open loose ends
 
@@ -119,7 +120,7 @@ Status values: `todo`, `in progress`, `in review`, `blocked`, `done`. Size: S ab
 | 13 | #30 Editable summaries that stay edited | M | #20 | Nov 20 | done | #72 |
 | 14 | #21 Threads from work items and branch names | M | | Nov 21 | done | #74 |
 | 15 | #35 GitLab issues and merge requests | S | | Nov 21 | done | #76 |
-| 16 | #36 MCP context built around work items | M | #21 | Nov 22 | in progress | |
+| 16 | #36 MCP context built around work items | M | #21 | Nov 22 | done | #78 |
 | 17 | #45 Design and security model for `goldengate ui` | S | #17 | Nov 22 | todo | |
 | 18 | #31 Rules and per-project trust levels | L | #20, #18 | Nov 23 | todo | |
 | 19 | #33 Receipts for automatic sends | S | #31, #29 | Nov 24 | todo | |
@@ -175,3 +176,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-14: #35 implemented: GitLab issue and merge request URLs (gitlab.com and hosts in `issues.gitlab_hosts`), `glab mr` and `glab issue` results as evidence, provider `gitlab` with merge requests as `pull_request`; threads match short GitLab keys like GitHub ones. Config version 3.
 - 2026-11-14: #35 done (#76). Roadmap page updated. Next: #36.
 - 2026-11-15: #36 implemented: `get_project_context` leads with active threads (item, status as of the session, short summary, tools, latest session); new MCP tool `get_work_item` returns one thread with linked sessions across sources and the status history with evidence; tool descriptions say when to use each.
+- 2026-11-15: #36 done (#78). Roadmap page updated. Next: #45.
