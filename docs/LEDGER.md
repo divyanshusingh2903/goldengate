@@ -12,7 +12,7 @@ This file lets any Claude Code session (or person) pick up the Product v2 work w
 _Last updated 2026-11-15. Update this section whenever a row in the queue changes._
 
 **Progress:** 19 of 31 scheduled issues done (plus 2 stretch). Phases 1 (Foundations), 2 (Per-agent access) and 3 (Inbox and curation) are complete.
-**Next up:** #34 Background sync, rule-approved only, size M, planned Nov 24. Its dependencies #31 and #33 are done. Phase 4 so far: #21, #35, #36, #45, #31 and #33 done.
+**In progress:** #34 Background sync, rule-approved only, size M, planned Nov 24. **Next up:** #32 Suggest rules from manual choices.
 
 ### Done
 
@@ -59,6 +59,7 @@ Supporting changes (not queue issues):
 - **Upgrade order (#19)**: upgrade the server before the client. A server with #19 accepts old clients, but an older server rejects payloads from a newer client (unknown fields). In the server tables the `project` column holds a project id (for data stored before ids, the old key).
 - **Per-agent access, as it stands after phase 2**: grants are enforced in every MCP tool (#25). On an upgraded server `Default` keeps the projects it could see at upgrade time and is not granted later ones; on a fresh install `goldengate init` sets `Default` to see every shared project. Not built yet: creating, renaming or removing agents and minting tokens from the TUI (CLI only), and deleting an OAuth application from the client side. "View as agent" is computed on the laptop from what that computer synced, so it does not list sessions synced from another computer. The web UI (#48) should reuse the four agents methods on `tui.Backend`.
 - **Decision made by the user for #20 (2026-11-14)**: a project shared from now on waits in the inbox (manual first). Reviewing and pressing Send on the TUI Sync screen is the approval; `goldengate sync`, hooks and timers send only approved sessions. Auto-approve is a per-project switch. The TUI inbox list (`i`) came with #29. Since #31 this is the project's trust level (`trust`: ask, suggest, auto); `auto_approve` is read from old files and not written.
+- **Background sync (#34)**: `goldengate sync --auto` (`RunOpts.Unattended`) plus `install-schedule`, `install-hook claude-code` and their uninstall commands. The installers were tested with injected commands and temporary directories only: no timer or hook was installed on a real system, so `systemctl --user`, `launchctl load` and `schtasks` are unverified in practice, as is reading the token from the OS keyring inside a systemd user service or launchd agent (if the keyring is not reachable there, the run fails with an error in the journal or log). The Claude Code hook uses the documented `hooks.SessionEnd` settings shape and was not tried with a live Claude Code.
 - **Receipts (#33)**: one receipt per sync that sent something automatically, written by `sync.Push` from the plan's marks (state tables `receipts`, `receipt_items`); `goldengate receipts`, TUI `c` in the inbox, `tui.Backend.Receipts`. #34's `sync --auto` gets its receipt for free: any sync writes one. The web UI (#48) should reuse `Backend.Receipts` plus `InboxDecide` with retract. The desktop notification (`[ui] notify_receipts`) uses `notify-send` on Linux and `osascript` on macOS and was not tried on a real desktop; Windows has none.
 - **Rules and trust (#31)**: `[[projects.rules]]` and `trust` in the config; `goldengate rules`, `projects trust`, `inbox approve --suggested`. `Report.Auto` lists every session sent by trust and rules with its rule id: #33 writes receipts from it, and #34's `sync --auto` needs no new gate (a plain sync already sends only approved or rule-approved sessions). With no approve rule, the trust level covers the whole project. At auto, a grouping reached only through a broader member waits until something was sent from it (`State.KnownGrouping`). Not built: trust and rules in the TUI (the inbox shows the rule note; changing trust or rules is CLI only) and in the web UI (#48); #32 offers rules.
 - **Decision made by the user for #31 (2026-11-15)**: a rule acts only on sessions inside folders and chats the user already shares. It belongs to a project and approves or excludes that project's sessions; folders outside projects are still never read. Placing unassigned sessions stays a suggestion the user accepts (#22).
@@ -131,7 +132,7 @@ Status values: `todo`, `in progress`, `in review`, `blocked`, `done`. Size: S ab
 | 17 | #45 Design and security model for `goldengate ui` | S | #17 | Nov 22 | done | #80 |
 | 18 | #31 Rules and per-project trust levels | L | #20, #18 | Nov 23 | done | #82 |
 | 19 | #33 Receipts for automatic sends | S | #31, #29 | Nov 24 | done | #84 |
-| 20 | #34 Background sync, rule-approved only | M | #31, #33 | Nov 24 | todo | |
+| 20 | #34 Background sync, rule-approved only | M | #31, #33 | Nov 24 | in progress | |
 | 21 | #32 Suggest rules from manual choices | S | #31 | Nov 25 | todo | |
 | 22 | #22 Suggest projects (inbox only) | M | #18, #20, #21 | Nov 25 | todo | |
 | 23 | #44 Cursor adapter: spike, then build | L | | Nov 26 | todo | |
@@ -190,3 +191,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-15: #31 done (#82). Roadmap page updated. Next: #33.
 - 2026-11-15: #33 implemented: every automatic send is written into exactly one receipt with the rule that sent it; `goldengate receipts` (list, show with `--agents`, retract), a TUI receipts screen, retractions marked in receipts, and an opt-in desktop notification with counts only.
 - 2026-11-15: #33 done (#84). Roadmap page updated. Next: #34.
+- 2026-11-15: #34 implemented: `goldengate sync --auto` for unattended runs (only approved or rule-approved sessions, one-line report, everything sent listed in the receipt), `install-schedule` (systemd user timer, launchd agent, Task Scheduler) and `install-hook claude-code`, each with `--print` and an uninstall command.

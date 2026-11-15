@@ -236,14 +236,15 @@ func (a *app) receiptsRetract(ctx context.Context, id string, ids []string, all 
 // centers keep history, so no title or project name goes into it. A failure
 // to notify is not a failure to sync.
 func (a *app) notifyReceipt(cfg config.Config, rep gsync.Report) {
-	if !cfg.UI.NotifyReceipts || a.Notify == nil || len(rep.Auto) == 0 {
+	items := append(append([]gsync.AutoItem{}, rep.Auto...), rep.Unattended...)
+	if !cfg.UI.NotifyReceipts || a.Notify == nil || len(items) == 0 {
 		return
 	}
 	projects := map[string]bool{}
-	for _, it := range rep.Auto {
+	for _, it := range items {
 		projects[it.ProjectID+"\x00"+it.Project] = true
 	}
-	body := fmt.Sprintf("%d session(s) sent automatically to %d project(s). Details: goldengate receipts show %s", len(rep.Auto), len(projects), rep.Receipt)
+	body := fmt.Sprintf("%d session(s) sent automatically to %d project(s). Details: goldengate receipts show %s", len(items), len(projects), rep.Receipt)
 	if err := a.Notify("Golden Gate", body); err != nil {
 		fmt.Fprintf(a.Stderr, "could not show the receipt notification: %v\n", err)
 	}

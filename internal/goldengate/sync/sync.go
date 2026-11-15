@@ -215,6 +215,11 @@ type RunOpts struct {
 	// Offline never calls the model summarizer: summaries come from the
 	// rules, or from answers already cached. For listings.
 	Offline bool
+	// Unattended marks a run nobody is watching (a timer or a hook). It
+	// sends exactly what any sync sends, and lists all of it in the receipt:
+	// also the sessions the user approved by hand earlier, since they too
+	// leave while the user is away.
+	Unattended bool
 }
 
 // Report summarizes a run. Counts only: no project names or content.
@@ -255,6 +260,9 @@ type Report struct {
 	// receipt named by Receipt.
 	Auto    []AutoItem
 	Receipt string
+	// Unattended lists the other sessions an unattended run sends (approved
+	// by hand earlier); they are in the same receipt. Empty otherwise.
+	Unattended []AutoItem
 	// Suggested counts waiting sessions the rules approve in a "suggest"
 	// project; NewGroupings counts those held in an "auto" project because
 	// their folder or chat grouping is new. Both are part of Pending.
@@ -468,13 +476,25 @@ func (s *Syncer) Plan(ctx context.Context, o RunOpts) (Batch, Report, error) {
 				}
 				rep.PendingItems = append(rep.PendingItems, item)
 				continue
-			case g.auto:
+			case g.auto || o.Unattended:
 				if rep.Receipt == "" {
 					rep.Receipt = newReceiptID()
 				}
+				why := g.why
+				switch {
+				case g.auto:
+				case g.manual:
+					why = "you approved it in the inbox"
+				default:
+					why = "its folder is shared outside any project, which sends everything"
+				}
 				auto = &AutoItem{Source: ref.Source, SessionID: ref.ID, Project: ref.ProjectKey,
-					ProjectID: p.ProjectID, ProjectName: p.ProjectName, Title: payloadTitle(p), RuleID: g.ruleID, Why: g.why, Receipt: rep.Receipt}
-				rep.Auto = append(rep.Auto, *auto)
+					ProjectID: p.ProjectID, ProjectName: p.ProjectName, Title: payloadTitle(p), RuleID: g.ruleID, Why: why, Receipt: rep.Receipt}
+				if g.auto {
+					rep.Auto = append(rep.Auto, *auto)
+				} else {
+					rep.Unattended = append(rep.Unattended, *auto)
+				}
 			}
 			for k, n := range p.Redactions {
 				rep.Redactions[k] += n
@@ -685,6 +705,7 @@ func (s *Syncer) projectOf(ref model.SessionRef) (id, name string) {
 type gate struct {
 	send     bool // it goes into the plan without being asked about
 	auto     bool // send because of the project's trust level and rules, not a decision of the user's
+	manual   bool // send because the user approved exactly this content
 	excluded bool // an exclude rule keeps it back
 	// decided is set when the user decided about an earlier version.
 	decided bool
@@ -734,7 +755,7 @@ func (s *Syncer) gate(ctx context.Context, ref model.SessionRef, raw *model.RawS
 	}
 	g := gate{decided: decided}
 	if decided && dec.State == DecisionApproved && dec.ContentHash == p.ContentHash {
-		g.send = true
+		g.send, g.manual = true, true
 		return g, nil
 	}
 	v := rules.Evaluate(proj.Rules, Facts(ref, raw, p), s.Home)
