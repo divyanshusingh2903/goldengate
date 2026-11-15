@@ -32,7 +32,7 @@
 │               │ ▲ n to sync   ✓ synced, up to date   not shared: stays local    │                │
 │               │                                                                 │                │
 │               │ Where sessions come from                                        │                │
-│               │ code  CC Claude Code  CX Codex  OC OpenCode                     │                │
+│               │ code  CC Claude Code  CX Codex  OC OpenCode  CU Cursor          │                │
 │               │ chat  AI claude.ai  GPT ChatGPT                                 │                │
 │               │                                                                 │                │
 ├───────────────│ Nothing is sent until you sync, and previews are exact.         │────────────────┤

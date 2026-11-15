@@ -229,7 +229,7 @@ path = "~/code/old"
 		t.Fatal(err)
 	}
 	raw, _ := os.ReadFile(p)
-	if !strings.Contains(string(raw), "version = 3") || strings.Count(string(raw), "trust = 'auto'") != 2 || strings.Contains(string(raw), "auto_approve") {
+	if !strings.Contains(string(raw), "version = 4") || strings.Count(string(raw), "trust = 'auto'") != 2 || strings.Contains(string(raw), "auto_approve") {
 		t.Fatalf("the file records its version and the switch:\n%s", raw)
 	}
 	back, err := Load(p)

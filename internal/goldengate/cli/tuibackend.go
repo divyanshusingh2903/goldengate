@@ -320,6 +320,8 @@ func pretty(source string) string {
 		return "Claude Code"
 	case "opencode":
 		return "OpenCode"
+	case "cursor":
+		return "Cursor"
 	case "claude-ai":
 		return "claude.ai"
 	case "chatgpt":
