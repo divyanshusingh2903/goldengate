@@ -12,7 +12,7 @@ This file lets any Claude Code session (or person) pick up the Product v2 work w
 _Last updated 2026-11-15. Update this section whenever a row in the queue changes._
 
 **Progress:** 16 of 31 scheduled issues done (plus 2 stretch). Phases 1 (Foundations), 2 (Per-agent access) and 3 (Inbox and curation) are complete.
-**Next up:** #45 Design and security model for `goldengate ui`, size S, planned Nov 22. Its dependency #17 is done. Phase 4 so far: #21, #35 and #36 done.
+**In progress:** #45 Design and security model for `goldengate ui`, size S, planned Nov 22. **Next up:** #31 Rules and per-project trust levels.
 
 ### Done
 
@@ -121,7 +121,7 @@ Status values: `todo`, `in progress`, `in review`, `blocked`, `done`. Size: S ab
 | 14 | #21 Threads from work items and branch names | M | | Nov 21 | done | #74 |
 | 15 | #35 GitLab issues and merge requests | S | | Nov 21 | done | #76 |
 | 16 | #36 MCP context built around work items | M | #21 | Nov 22 | done | #78 |
-| 17 | #45 Design and security model for `goldengate ui` | S | #17 | Nov 22 | todo | |
+| 17 | #45 Design and security model for `goldengate ui` | S | #17 | Nov 22 | in progress | |
 | 18 | #31 Rules and per-project trust levels | L | #20, #18 | Nov 23 | todo | |
 | 19 | #33 Receipts for automatic sends | S | #31, #29 | Nov 24 | todo | |
 | 20 | #34 Background sync, rule-approved only | M | #31, #33 | Nov 24 | todo | |
