@@ -12,7 +12,7 @@ This file lets any Claude Code session (or person) pick up the Product v2 work w
 _Last updated 2026-11-15. Update this section whenever a row in the queue changes._
 
 **Progress:** 16 of 31 scheduled issues done (plus 2 stretch). Phases 1 (Foundations), 2 (Per-agent access) and 3 (Inbox and curation) are complete.
-**Next up:** #45 Design and security model for `goldengate ui`, size S, planned Nov 22. Its dependency #17 is done. Phase 4 so far: #21, #35 and #36 done.
+**In progress:** #45 Design and security model for `goldengate ui`, size S, planned Nov 22. **Next up:** #31 Rules and per-project trust levels.
 
 ### Done
 
@@ -52,6 +52,7 @@ Supporting changes (not queue issues):
 - **#49 follow-ups**: model summaries pushed before #49 (bullets in `description`) are not counted as stale; they gain a narrative when their session changes or the length setting is changed and the user re-summarizes. (User narratives are stored and edited through #30's summary edits; `summarize.Options.UserNarrative` is no longer the way in.)
 - **Threads (#21)**: `internal/utils/threads` groups sessions by shared issues and pull requests. The server's `get_project_context` and `get_work_item` are built on it (#36), from the newest 500 sessions the agent may see; #22 can use it for project suggestions. `get_project_context` no longer returns `unfinished_threads`: it returns `active_threads`. A branch on an issue yields an issue mention with evidence `via: "branch"`, which servers from before #21 reject, so the upgrade order below still applies. Plain numbers in branch names (`feat/21-x`) are deliberately not read as GitHub issues.
 - **GitLab (#35)**: provider `gitlab` is new in payloads, so a server from before #35 rejects sessions that carry a GitLab item (upgrade order below). The config is now `version = 3`: a file holding the old default provider list gains `gitlab` once; a list the user changed is left alone. Self-hosted hosts go in `issues.gitlab_hosts` (config file only, no command or TUI setting). The `glab` output shapes in the tests are assumed, not captured from a real run; only URLs and explicit numbers identify items, so a different wording cannot produce a wrong item.
+- **Web UI design (#45)**: DESIGN.md 6.1 is the spec for #46 to #48. Decisions made there: no build step and no third-party JavaScript (hand-written HTML, CSS and ES modules, embedded with `embed`); launch token in the URL fragment; a session cookie plus a request-token header on every call; exact Host and Origin checks; write-only secrets. #46 must include the security tests listed at the end of 6.1, and needs web forms of three Backend methods (`DeleteRemote`, `EditBegin`/`EditFinish`, `Init`). The SECURITY.md section is marked planned and must be rewritten as fact when the UI ships.
 - **Upgrade order (#19)**: upgrade the server before the client. A server with #19 accepts old clients, but an older server rejects payloads from a newer client (unknown fields). In the server tables the `project` column holds a project id (for data stored before ids, the old key).
 - **Per-agent access, as it stands after phase 2**: grants are enforced in every MCP tool (#25). On an upgraded server `Default` keeps the projects it could see at upgrade time and is not granted later ones; on a fresh install `goldengate init` sets `Default` to see every shared project. Not built yet: creating, renaming or removing agents and minting tokens from the TUI (CLI only), and deleting an OAuth application from the client side. "View as agent" is computed on the laptop from what that computer synced, so it does not list sessions synced from another computer. The web UI (#48) should reuse the four agents methods on `tui.Backend`.
 - **Decision made by the user for #20 (2026-11-14)**: a project shared from now on waits in the inbox (manual first). Reviewing and pressing Send on the TUI Sync screen is the approval; `goldengate sync`, hooks and timers send only approved sessions. Auto-approve is a per-project switch. The TUI inbox list (`i`) came with #29. Still to build: showing or toggling a project's auto-approve in the TUI (belongs with #31).
@@ -121,7 +122,7 @@ Status values: `todo`, `in progress`, `in review`, `blocked`, `done`. Size: S ab
 | 14 | #21 Threads from work items and branch names | M | | Nov 21 | done | #74 |
 | 15 | #35 GitLab issues and merge requests | S | | Nov 21 | done | #76 |
 | 16 | #36 MCP context built around work items | M | #21 | Nov 22 | done | #78 |
-| 17 | #45 Design and security model for `goldengate ui` | S | #17 | Nov 22 | todo | |
+| 17 | #45 Design and security model for `goldengate ui` | S | #17 | Nov 22 | in progress | |
 | 18 | #31 Rules and per-project trust levels | L | #20, #18 | Nov 23 | todo | |
 | 19 | #33 Receipts for automatic sends | S | #31, #29 | Nov 24 | todo | |
 | 20 | #34 Background sync, rule-approved only | M | #31, #33 | Nov 24 | todo | |
@@ -177,3 +178,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-14: #35 done (#76). Roadmap page updated. Next: #36.
 - 2026-11-15: #36 implemented: `get_project_context` leads with active threads (item, status as of the session, short summary, tools, latest session); new MCP tool `get_work_item` returns one thread with linked sessions across sources and the status history with evidence; tool descriptions say when to use each.
 - 2026-11-15: #36 done (#78). Roadmap page updated. Next: #45.
+- 2026-11-15: #45 written: DESIGN.md 6.1 (process and lifetime, launch token and session, request checks, write-only secrets, untrusted text, API shape, frontend stack and embedding) with a review against SECURITY.md, and a planned-feature section in SECURITY.md. No code.

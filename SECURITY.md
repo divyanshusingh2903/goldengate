@@ -62,6 +62,15 @@ Some assistants only connect through OAuth. With `--oauth --public-url https://y
 ## The interactive UI
 The UI cannot do anything the commands cannot: it runs on the same code, so selection, redaction, validation and the single push path apply unchanged. Sync starts as a dry run, which goes through validation but sends and records nothing. The admin token typed into the setup is masked, used for the one connection, and wiped from memory-backed fields afterwards; it is never written down or displayed. Previewing reads and summarizes sessions locally and writes nothing. The state database keeps the last pushed payload of each session (the already-redacted text the server received) so the UI can show what changed; it lives next to the config with mode 0600.
 
+## The local web UI (`goldengate ui`, planned)
+Not built yet. Its security model is fixed first, in DESIGN.md section 6.1, and was reviewed against this file; this section will be rewritten as a statement of fact when the UI ships. The commitments:
+
+- It listens on loopback only, on a random port, and there is no option to listen anywhere else. It runs only while the command runs.
+- It opens with a single-use launch token that expires in two minutes and never appears in a request line or a log. After that, every request needs both a session cookie (`HttpOnly`, `SameSite=Strict`) and a request token held in the page's memory, and passes exact Host and Origin checks. There is no CORS.
+- It is a front end on the same code as the TUI and the commands: it cannot share, send or change anything they cannot, and everything still leaves through the one push path.
+- Secrets can be set from the page and are never sent back to it. The one exception is a value you must copy elsewhere, shown once when it is created (the read token at the end of setup), as in the terminal.
+- The page loads nothing from any other site, and shows session text as text, never as markup.
+
 ## Sources and imports
 - **Coding tools** (Claude Code, Codex, OpenCode) are read in place and read-only. Only session history is opened: for OpenCode that means four tables of its database (a test enforces the allow-list); its credential and account tables, `auth.json` and every other file next to it are never touched.
 - **Chat exports** (claude.ai, ChatGPT) are zips you supply. They are untrusted input: the whole archive is refused if any entry name could escape a directory (`..`, absolute paths, backslashes, drive letters, control characters), is a symlink or a duplicate, or if the archive or an entry is suspiciously large or compressible (zip bombs). Nothing is ever extracted to disk; decompression is bounded even if the archive lies about sizes. Only the conversation files are opened (`conversations.json`, `projects.json` for names, and ChatGPT's numbered shards): account files (`users.json`, `user.json`), `chat.html`, feedback and shared-link files are never read.
