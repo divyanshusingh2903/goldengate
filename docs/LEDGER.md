@@ -11,8 +11,8 @@ This file lets any Claude Code session (or person) pick up the Product v2 work w
 
 _Last updated 2026-11-15. Update this section whenever a row in the queue changes._
 
-**Progress:** 17 of 31 scheduled issues done (plus 2 stretch). Phases 1 (Foundations), 2 (Per-agent access) and 3 (Inbox and curation) are complete.
-**In progress:** #31 Rules and per-project trust levels, size L, planned Nov 23. **Next up:** #33 Receipts for automatic sends.
+**Progress:** 18 of 31 scheduled issues done (plus 2 stretch). Phases 1 (Foundations), 2 (Per-agent access) and 3 (Inbox and curation) are complete.
+**Next up:** #33 Receipts for automatic sends, size S, planned Nov 24. Its dependencies #31 and #29 are done. Phase 4 so far: #21, #35, #36, #45 and #31 done.
 
 ### Done
 
@@ -35,6 +35,7 @@ _Last updated 2026-11-15. Update this section whenever a row in the queue change
 | #35 | GitLab issues and merge requests: URLs on gitlab.com and listed self-hosted hosts, `glab` results as evidence, provider `gitlab`; config version 3 | #76 | 2026-11-14 |
 | #36 | `get_project_context` leads with active threads; new MCP tool `get_work_item` returns one thread with linked sessions and status history; tool descriptions say when to use each | #78 | 2026-11-15 |
 | #45 | DESIGN.md 6.1: design and security model for `goldengate ui` (loopback, launch token, cookie plus request token, Host and Origin checks, write-only secrets, embedded hand-written assets), reviewed against SECURITY.md | #80 | 2026-11-15 |
+| #31 | Per-project trust levels (ask, suggest, auto) and user-written rules on deterministic facts that approve or exclude a project's sessions; broad patterns ask before first sending from a new folder or chat; `goldengate rules`, `projects trust` | #82 | 2026-11-15 |
 
 Supporting changes (not queue issues):
 
@@ -44,7 +45,7 @@ Supporting changes (not queue issues):
 | First `pr-template` check (unblocked the `main` ruleset); later replaced | #52 | 2026-11-14 |
 | The user's stricter `pr-template` check (Checklist with every item ticked; skips Dependabot) | #9 | 2026-11-14 |
 | This ledger, then its checklist rule, status section and roadmap sync | #54, #56, #57, #58 | 2026-11-14 |
-| Ledger status updates between issues (#49 done; phase 2 complete; refresh; phase 3 complete; #21 done; #35 done; #36 done; #45 done) | #61, #68, #69, #73, #75, #77, #79, #81 | 2026-11-15 |
+| Ledger status updates between issues (#49 done; phase 2 complete; refresh; phase 3 complete; #21 done; #35 done; #36 done; #45 done; #31 done) | #61, #68, #69, #73, #75, #77, #79, #81, #83 | 2026-11-15 |
 
 ### Open loose ends
 
@@ -126,7 +127,7 @@ Status values: `todo`, `in progress`, `in review`, `blocked`, `done`. Size: S ab
 | 15 | #35 GitLab issues and merge requests | S | | Nov 21 | done | #76 |
 | 16 | #36 MCP context built around work items | M | #21 | Nov 22 | done | #78 |
 | 17 | #45 Design and security model for `goldengate ui` | S | #17 | Nov 22 | done | #80 |
-| 18 | #31 Rules and per-project trust levels | L | #20, #18 | Nov 23 | in progress | |
+| 18 | #31 Rules and per-project trust levels | L | #20, #18 | Nov 23 | done | #82 |
 | 19 | #33 Receipts for automatic sends | S | #31, #29 | Nov 24 | todo | |
 | 20 | #34 Background sync, rule-approved only | M | #31, #33 | Nov 24 | todo | |
 | 21 | #32 Suggest rules from manual choices | S | #31 | Nov 25 | todo | |
@@ -184,3 +185,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-15: #45 written: DESIGN.md 6.1 (process and lifetime, launch token and session, request checks, write-only secrets, untrusted text, API shape, frontend stack and embedding) with a review against SECURITY.md, and a planned-feature section in SECURITY.md. No code.
 - 2026-11-15: #45 done (#80). Roadmap page updated. Next: #31.
 - 2026-11-15: #31 implemented: per-project trust levels (ask, suggest, auto) and user-written rules on deterministic facts (source, folder or chat grouping, remote, branch, work-item prefix) that approve or exclude sessions inside a project; exclude wins; a grouping reached only through a broader member is asked about first; property tests for deny beats rules, a rule never matches outside its pattern, and the new-match confirmation. User decision recorded: rules act only inside what is shared.
+- 2026-11-15: #31 done (#82). Roadmap page updated. Next: #33.
