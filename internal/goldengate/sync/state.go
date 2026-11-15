@@ -43,6 +43,13 @@ CREATE TABLE IF NOT EXISTS decisions(
 CREATE TABLE IF NOT EXISTS edits(
   source TEXT NOT NULL, session_id TEXT NOT NULL, content_hash TEXT NOT NULL, edit TEXT NOT NULL, edited_at INTEGER NOT NULL,
   PRIMARY KEY(source, session_id));
+CREATE TABLE IF NOT EXISTS receipts(id TEXT PRIMARY KEY, created_at INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS receipt_items(
+  receipt_id TEXT NOT NULL, source TEXT NOT NULL, session_id TEXT NOT NULL, project TEXT NOT NULL,
+  project_id TEXT NOT NULL DEFAULT '', project_name TEXT NOT NULL DEFAULT '', title TEXT NOT NULL DEFAULT '',
+  rule_id TEXT NOT NULL DEFAULT '', why TEXT NOT NULL DEFAULT '', retracted_at INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY(receipt_id, source, session_id));
+CREATE INDEX IF NOT EXISTS receipt_items_session ON receipt_items(source, session_id);
 CREATE TABLE IF NOT EXISTS imports(
   id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT NOT NULL, path TEXT NOT NULL, added_at INTEGER NOT NULL, UNIQUE(source, path));
 `

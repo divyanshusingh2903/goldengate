@@ -23,6 +23,7 @@ func (m *Model) helpBox() []string {
 		k("1-5 tab", "projects / sync / server / settings / agents"),
 		k("s", "sync: review first, then send"),
 		k("i", "inbox: approve, exclude or retract single sessions"),
+		k("c", "in the inbox: receipts of what was sent automatically"),
 		k("r", "refresh"),
 		k("?", "this help"),
 		k("q ctrl+c", "quit"),

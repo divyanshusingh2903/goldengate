@@ -191,6 +191,8 @@ func (m *Model) onKeyInbox(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, m.loadSnapshot()
 	case "r":
 		return m, m.openInbox()
+	case "c":
+		return m, m.openReceipts()
 	case "up", "k":
 		ib.cursor--
 		ib.clamp(m, -1)
@@ -307,6 +309,6 @@ func (m *Model) viewInbox() string {
 	}
 	f := frame{th: m.th, w: m.w, h: m.h, title: m.header("inbox"), right: m.serverBadge(), top: " " + strings.TrimSpace(m.sourcesLine())}
 	f.left = lines(strings.Join(out, "\n"), w, bh)
-	f.hint = m.statusLine(m.hints(w, "a", "approve", "x", "exclude", "e", "edit summary", "u", "undo", "R", "retract", "esc", "back"))
+	f.hint = m.statusLine(m.hints(w, "a", "approve", "x", "exclude", "e", "edit summary", "u", "undo", "R", "retract", "c", "receipts", "esc", "back"))
 	return f.render()
 }

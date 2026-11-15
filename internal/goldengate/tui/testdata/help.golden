@@ -1,40 +1,40 @@
-┌ goldengate [1 Projects] 2 Sync  3 Server  4 Settings  5 Agents  ─ ● connected bridge.example.com ┐
-│ [All 8]  Shared ┌ Keys ────────────────────────────────────────────────────────┐                 │
-├─────────────────│ Projects                                                     │─────────────────┤
-│ / search project│ ↑ ↓ j k   move   (pgup/pgdn, g/G jump)                       │                 │
-│▌ [x] ~/code/phar│ space     share / un-share (marked rows, or this row)        │                 │
-│  [x] …ndr/.claud│ v         start/end range selection                          │                 │
-│  [x] ~/code/forg│ a  A      mark all visible / clear marks                     │                 │
-│  [ ] ~/code/viha│ d         deny (beats any allow rule)                        │anged since the  │
-│  [~] ~/code/webs│ u         undo the last change                               │                 │
-│  [-] ~/work/clie│ e         choose which sources are shared                    │                 │
-│  [ ] ~/scratch/t│ n         put in a project (type a new name to create one)   │ssions           │
-│  [ ] claude-ai:C│ N         rename the project (an existing name merges them)  │1, CX Codex 6    │
-│                 │ /         fuzzy search   (esc clears)                        │                 │
-│                 │ f         view: all / shared / to sync / not shared          │rver             │
-│                 │ t         folder tree: space on a folder shares all of it    │                 │
-│                 │ o         sort: recent / name / size                         │rmfindr          │
-│                 │ p enter   preview exactly what would be sent                 │                 │
-│                 │ P         paranoid: raw payloads, every string               │ Preview]        │
-│                 │ Everywhere                                                   │                 │
-│                 │ 1-5 tab   projects / sync / server / settings / agents       │                 │
-│                 │ s         sync: review first, then send                      │                 │
-│                 │ i         inbox: approve, exclude or retract single sessions │ · changed       │
-│                 │ r         refresh                                            │w                │
-│                 │ ?         this help                                          │                 │
-│                 │ q ctrl+c  quit                                               │ding             │
-│                 │ Mouse                                                        │                 │
-│                 │ click     select · on the box: share / un-share              │                 │
-│                 │ dbl-click preview   (ctrl+click marks)                       │                 │
-│                 │ wheel     scroll; tabs, chips, buttons and keys below click  │                 │
-│                 │                                                              │                 │
-│                 │ [x] shared  [ ] not  [~] some sources  [-] denied            │                 │
-│                 │ ▲ n to sync   ✓ synced, up to date   not shared: stays local │                 │
-│                 │                                                              │                 │
-│                 │ Where sessions come from                                     │                 │
-│                 │ code  CC Claude Code  CX Codex  OC OpenCode                  │                 │
-│                 │ chat  AI claude.ai  GPT ChatGPT                              │                 │
-│                 │                                                              │                 │
-├─────────────────│ Nothing is sent until you sync, and previews are exact.      │─────────────────┤
-│ space unshare  p└──────────────────────────────────────────────────────────────┘lp               │
+┌ goldengate [1 ┌ Keys ───────────────────────────────────────────────────────────┐dge.example.com ┐
+│ [All 8]  Share│ Projects                                                        │                │
+├───────────────│ ↑ ↓ j k   move   (pgup/pgdn, g/G jump)                          │────────────────┤
+│ / search proje│ space     share / un-share (marked rows, or this row)           │                │
+│▌ [x] ~/code/ph│ v         start/end range selection                             │                │
+│  [x] …ndr/.cla│ a  A      mark all visible / clear marks                        │                │
+│  [x] ~/code/fo│ d         deny (beats any allow rule)                           │                │
+│  [ ] ~/code/vi│ u         undo the last change                                  │nged since the  │
+│  [~] ~/code/we│ e         choose which sources are shared                       │                │
+│  [-] ~/work/cl│ n         put in a project (type a new name to create one)      │                │
+│  [ ] ~/scratch│ N         rename the project (an existing name merges them)     │sions           │
+│  [ ] claude-ai│ /         fuzzy search   (esc clears)                           │, CX Codex 6    │
+│               │ f         view: all / shared / to sync / not shared             │                │
+│               │ t         folder tree: space on a folder shares all of it       │ver             │
+│               │ o         sort: recent / name / size                            │                │
+│               │ p enter   preview exactly what would be sent                    │mfindr          │
+│               │ P         paranoid: raw payloads, every string                  │                │
+│               │ Everywhere                                                      │Preview]        │
+│               │ 1-5 tab   projects / sync / server / settings / agents          │                │
+│               │ s         sync: review first, then send                         │                │
+│               │ i         inbox: approve, exclude or retract single sessions    │                │
+│               │ c         in the inbox: receipts of what was sent automatically │· changed       │
+│               │ r         refresh                                               │                │
+│               │ ?         this help                                             │                │
+│               │ q ctrl+c  quit                                                  │ing             │
+│               │ Mouse                                                           │                │
+│               │ click     select · on the box: share / un-share                 │                │
+│               │ dbl-click preview   (ctrl+click marks)                          │                │
+│               │ wheel     scroll; tabs, chips, buttons and keys below click     │                │
+│               │                                                                 │                │
+│               │ [x] shared  [ ] not  [~] some sources  [-] denied               │                │
+│               │ ▲ n to sync   ✓ synced, up to date   not shared: stays local    │                │
+│               │                                                                 │                │
+│               │ Where sessions come from                                        │                │
+│               │ code  CC Claude Code  CX Codex  OC OpenCode                     │                │
+│               │ chat  AI claude.ai  GPT ChatGPT                                 │                │
+│               │                                                                 │                │
+├───────────────│ Nothing is sent until you sync, and previews are exact.         │────────────────┤
+│ space unshare └─────────────────────────────────────────────────────────────────┘p               │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘

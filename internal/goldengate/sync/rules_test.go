@@ -260,3 +260,103 @@ func TestFactsNeverComeFromTheSummary(t *testing.T) {
 		t.Fatalf("facts come from the tool's record and the extracted issues and pull requests only: %+v", f)
 	}
 }
+
+// Every session sent in automatic mode appears in exactly one receipt, with
+// the rule that sent it. Sessions the user approved are in none.
+func TestEveryAutomaticSendIsInExactlyOneReceipt(t *testing.T) {
+	e := rulesEnv(t, rules.TrustAuto, approveFix)
+	ctx := context.Background()
+
+	// a dry run writes no receipt
+	if _, err := e.s.Run(ctx, gsync.RunOpts{}, &capture{}, true); err != nil {
+		t.Fatal(err)
+	}
+	if rs, _ := e.st.Receipts(ctx, 0); len(rs) != 0 {
+		t.Fatalf("a dry run left a receipt: %+v", rs)
+	}
+
+	rep, err := e.s.Run(ctx, gsync.RunOpts{}, &capture{}, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rs, err := e.st.Receipts(ctx, 0)
+	if err != nil || len(rs) != 1 || rs[0].ID != rep.Receipt || len(rs[0].Items) != 2 {
+		t.Fatalf("one receipt for the run: %+v %v", rs, err)
+	}
+	for _, it := range rs[0].Items {
+		if !strings.HasPrefix(it.SessionID, "fix") || it.RuleID != "r_fix" || it.Why != "rule r_fix: approve sessions on branch fix/*" ||
+			it.ProjectName != "App" || it.ProjectID != "p_app001" || !strings.Contains(it.Title, "FIXWORK") || !it.RetractedAt.IsZero() {
+			t.Errorf("receipt item: %+v", it)
+		}
+	}
+
+	// what the user approves by hand is sent without a receipt
+	sink := &capture{}
+	rep, err = e.s.Run(ctx, gsync.RunOpts{Approve: true}, sink, false)
+	if err != nil || sorted(sink) != "main1,wip1" || rep.Receipt != "" {
+		t.Fatalf("%s %+v %v", sorted(sink), rep, err)
+	}
+	// a second sync sends nothing and writes nothing
+	if rep, err := e.s.Run(ctx, gsync.RunOpts{}, &capture{}, false); err != nil || rep.Planned != 0 {
+		t.Fatalf("%+v %v", rep, err)
+	}
+	// a new automatic send gets a receipt of its own
+	e.f.sessions = append(e.f.sessions, onBranch(sess("fix3", "/home/u/code/app", "FIXWORK three"), "fix/later", ""))
+	if _, err := e.s.Run(ctx, gsync.RunOpts{}, &capture{}, false); err != nil {
+		t.Fatal(err)
+	}
+	rs, _ = e.st.Receipts(ctx, 0)
+	seen := map[string]int{}
+	for _, r := range rs {
+		for _, it := range r.Items {
+			seen[it.SessionID]++
+		}
+	}
+	if len(rs) != 2 || len(seen) != 3 || seen["fix1"] != 1 || seen["fix2"] != 1 || seen["fix3"] != 1 {
+		t.Fatalf("each automatic send is in exactly one receipt: %v in %d receipts", seen, len(rs))
+	}
+	if got, _ := e.st.Receipts(ctx, 1); len(got) != 1 {
+		t.Fatalf("limit: %d", len(got))
+	}
+
+	// a retraction is noted in the receipt
+	if err := e.st.MarkRetracted(ctx, "claude-code", "fix1", t0); err != nil {
+		t.Fatal(err)
+	}
+	r, ok, err := e.st.Receipt(ctx, rs[len(rs)-1].ID)
+	if err != nil || !ok {
+		t.Fatal(ok, err)
+	}
+	for _, it := range r.Items {
+		if (it.SessionID == "fix1") == it.RetractedAt.IsZero() {
+			t.Errorf("only fix1 is marked retracted: %+v", it)
+		}
+	}
+	if _, ok, _ := e.st.Receipt(ctx, "rc_nothing"); ok {
+		t.Error("unknown receipt")
+	}
+}
+
+// A push that sends only part of a plan lists only what was sent.
+func TestAReceiptListsOnlyWhatWasPushed(t *testing.T) {
+	e := rulesEnv(t, rules.TrustAuto)
+	ctx := context.Background()
+	b, rep, err := e.s.Plan(ctx, gsync.RunOpts{})
+	if err != nil || b.Len() != 4 || len(rep.Auto) != 4 {
+		t.Fatalf("%d %+v %v", b.Len(), rep, err)
+	}
+	chunks := b.Chunks(3)
+	if err := gsync.Push(ctx, &capture{}, e.st, chunks[0], t0); err != nil {
+		t.Fatal(err)
+	}
+	rs, _ := e.st.Receipts(ctx, 0)
+	if len(rs) != 1 || len(rs[0].Items) != 3 {
+		t.Fatalf("three were pushed, three are listed: %+v", rs)
+	}
+	if err := gsync.Push(ctx, &capture{}, e.st, chunks[1], t0); err != nil {
+		t.Fatal(err)
+	}
+	if rs, _ := e.st.Receipts(ctx, 0); len(rs) != 1 || len(rs[0].Items) != 4 {
+		t.Fatalf("the rest joins the same receipt: %+v", rs)
+	}
+}

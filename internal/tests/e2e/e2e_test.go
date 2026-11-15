@@ -96,8 +96,10 @@ type laptop struct {
 	turns   int // messages appended by addClaudeTurn
 	// edit stands in for the user's editor: it gets the form and returns
 	// what the user saved. forms records every form that was opened.
-	edit   func(form string) string
-	forms  []string
+	edit  func(form string) string
+	forms []string
+	// notify receives desktop notifications; nil means none can be shown.
+	notify func(title, body string) error
 	out    *bytes.Buffer
 	errOut *bytes.Buffer
 	home   string
@@ -140,6 +142,7 @@ func (l *laptop) deps(env map[string]string) cli.Deps {
 		},
 		Now: func() time.Time { return fakeNow }, HTTP: l.http, Hostname: func() string { return "testbox" },
 		SecretStore: func(string, func(string)) secrets.Store { return l.secrets },
+		Notify:      l.notify,
 		EditFile: func(path string) error {
 			b, err := os.ReadFile(path)
 			if err != nil {

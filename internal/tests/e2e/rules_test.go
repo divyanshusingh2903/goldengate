@@ -1,6 +1,8 @@
 package e2e
 
 import (
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -112,5 +114,94 @@ func TestRulesAndTrustLevelsFromTheCommandLine(t *testing.T) {
 	l.must(nil, "projects", "auto", "demo", "off")
 	if out := l.must(nil, "projects", "list"); !strings.Contains(out, "[ask: new sessions wait in the inbox]") {
 		t.Fatalf("auto off is ask: %s", out)
+	}
+}
+
+// Receipts from the command line: an automatic send is listed with its rule,
+// can be retracted from the receipt, and sessions approved by hand are not
+// in it.
+func TestReceiptsFromTheCommandLine(t *testing.T) {
+	b := startBridge(t)
+	l := newLaptop(t)
+	var notes []string
+	l.notify = func(title, body string) error { notes = append(notes, title+": "+body); return nil }
+	l.must(l.initEnv(b), "init", "--non-interactive")
+	l.must(nil, "share", "add", "~/projects/demo")
+	if out := l.must(nil, "receipts"); !strings.Contains(out, "no receipts") {
+		t.Fatalf("nothing yet: %s", out)
+	}
+	// approved by hand: sent, but no receipt
+	l.must(nil, "sync", "--approve")
+	if out := l.must(nil, "receipts"); !strings.Contains(out, "no receipts") {
+		t.Fatalf("a manual approval leaves no receipt: %s", out)
+	}
+
+	out := l.must(nil, "rules", "add", "demo", "--source", "claude-code")
+	rule := regexp.MustCompile(`r_[0-9a-f]{8}`).FindString(out)
+	l.must(nil, "projects", "trust", "demo", "auto")
+	l.addClaudeSession("33333333-3333-4333-8333-333333333333", "/home/user/projects/demo", "second thing AUTOSENT")
+	l.errOut.Reset()
+	l.must(nil, "sync", "--quiet")
+	if len(notes) != 0 {
+		t.Fatalf("notifications are off by default: %v", notes)
+	}
+	out = l.must(nil, "receipts")
+	id := regexp.MustCompile(`rc_[0-9a-f]{8}`).FindString(out)
+	if id == "" || !strings.Contains(out, "1 session(s) to demo") {
+		t.Fatalf("receipts: %s", out)
+	}
+	out = l.must(nil, "receipts", "show")
+	for _, want := range []string{"receipt " + id, "33333333-3333-4333-8333-333333333333", "AUTOSENT", "why: rule " + rule + ": approve sessions from claude-code", "goldengate receipts retract " + id} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("receipts show lacks %q: %s", want, out)
+		}
+	}
+	if strings.Contains(out, demoSession) {
+		t.Fatalf("the session approved by hand is not in a receipt: %s", out)
+	}
+	// which assistants can read it, asked from the server with the admin token
+	out = l.must(map[string]string{"GOLDENGATE_ADMIN_TOKEN": adminSecret}, "receipts", "show", id, "--agents")
+	if !strings.Contains(out, "visible to: Default") {
+		t.Fatalf("--agents names who can read the project: %s", out)
+	}
+
+	// retract from the receipt: gone from the server, marked, never sent again
+	for _, bad := range [][]string{
+		{"receipts", "retract", id},
+		{"receipts", "retract", id, demoSession},
+		{"receipts", "retract", "rc_00000000", "--all"},
+		{"receipts", "show", "rc_00000000"},
+	} {
+		if err := l.run(nil, bad...); err == nil {
+			t.Errorf("%v must be refused", bad)
+		}
+	}
+	l.must(nil, "receipts", "retract", id, "--all")
+	if held := everythingTheServerHolds(t, b); strings.Contains(held, "AUTOSENT") || !strings.Contains(held, "widget") {
+		t.Fatal("only the retracted session leaves the server")
+	}
+	if out := l.must(nil, "receipts", "show", id); !strings.Contains(out, "[retracted ") || strings.Contains(out, "take back:") {
+		t.Fatalf("the receipt shows the retraction: %s", out)
+	}
+	if out := l.must(nil, "receipts"); !strings.Contains(out, "(1 retracted)") {
+		t.Fatalf("list: %s", out)
+	}
+	if out := l.must(nil, "receipts", "retract", id, "--all"); !strings.Contains(out, "already retracted") {
+		t.Fatalf("nothing left: %s", out)
+	}
+	l.must(nil, "sync")
+	if strings.Contains(everythingTheServerHolds(t, b), "AUTOSENT") {
+		t.Fatal("a retracted session was sent again")
+	}
+
+	// the notification is opt-in and carries counts only
+	cfg := l.readConfig(t)
+	if err := os.WriteFile(filepath.Join(l.root, "cfg", "goldengate", "config.toml"), []byte(strings.Replace(cfg, "[ui]", "[ui]\nnotify_receipts = true", 1)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	l.addClaudeSession("55555555-5555-4555-8555-555555555555", "/home/user/projects/demo", "third thing NOTIFIED")
+	l.must(nil, "sync", "--quiet")
+	if len(notes) != 1 || !strings.Contains(notes[0], "1 session(s) sent automatically to 1 project(s)") || strings.Contains(notes[0], "NOTIFIED") || strings.Contains(notes[0], "demo") {
+		t.Fatalf("notification: %v", notes)
 	}
 }

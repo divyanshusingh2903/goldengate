@@ -299,6 +299,11 @@ type Backend interface {
 	EditBegin(ctx context.Context, item InboxItem) (path string, err error)
 	EditFinish(ctx context.Context, item InboxItem, path string) (string, error)
 
+	// Receipts lists what was sent automatically (by a project's trust
+	// level and rules), newest receipt first. An item is retracted with
+	// InboxDecide and InboxRetract.
+	Receipts(ctx context.Context) ([]Receipt, error)
+
 	// The agents methods manage which assistant sees which project. Each
 	// takes the admin secret, which the UI holds in memory for the run and
 	// the backend uses for that call only; it is never stored.
@@ -359,6 +364,23 @@ type InboxItem struct {
 	// Note says what the project's rules think of a waiting session
 	// ("suggested by rule r_1a2b"); empty when they say nothing.
 	Note string
+}
+
+// Receipt is one sync's automatic sends.
+type Receipt struct {
+	ID    string
+	At    time.Time
+	Items []ReceiptItem
+}
+
+// ReceiptItem is one session that was sent without the user approving it by
+// hand, and why.
+type ReceiptItem struct {
+	Source, ID string
+	Project    string // the named project, or the folder
+	Title      string // redacted, as sent
+	Why        string // the rule in words, or that the whole project is automatic
+	Retracted  bool   // deleted from the server again
 }
 
 // AgentsInfo is the Agents screen's content.
