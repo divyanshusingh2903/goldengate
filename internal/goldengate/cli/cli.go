@@ -56,6 +56,12 @@ type Deps struct {
 	// Notify shows a desktop notification. Used only when the user turned
 	// receipt notifications on.
 	Notify func(title, body string) error
+	// The installers (install-schedule, install-hook) run the scheduler's
+	// own tool, need the path of this binary, and depend on the operating
+	// system. Nil and empty mean the real ones.
+	RunCommand func(ctx context.Context, name string, args ...string) ([]byte, error)
+	Executable func() (string, error)
+	GOOS       string
 }
 
 // DefaultDeps wires the real process environment.
@@ -117,7 +123,7 @@ func New(d Deps) *cobra.Command {
 	root.SetOut(d.Stdout)
 	root.SetErr(d.Stderr)
 	root.PersistentFlags().StringVar(&a.configPath, "config", "", "config file (default: XDG config dir)")
-	root.AddCommand(a.syncCmd(), a.shareCmd(), a.projectsCmd(), a.rulesCmd(), a.receiptsCmd(), a.agentsCmd(), a.inboxCmd(), a.sessionsCmd(), a.doctorCmd(), a.summarizerCmd(), a.initCmd(), a.tokenCmd(), a.purgeCmd(), a.importsCmd(), &cobra.Command{
+	root.AddCommand(a.syncCmd(), a.shareCmd(), a.projectsCmd(), a.rulesCmd(), a.receiptsCmd(), a.installScheduleCmd(), a.uninstallScheduleCmd(), a.hookCmd(false), a.hookCmd(true), a.agentsCmd(), a.inboxCmd(), a.sessionsCmd(), a.doctorCmd(), a.summarizerCmd(), a.initCmd(), a.tokenCmd(), a.purgeCmd(), a.importsCmd(), &cobra.Command{
 		Use: "version", Short: "Print the version",
 		Run: func(*cobra.Command, []string) {
 			fmt.Fprintln(a.Stdout, "goldengate", Version, runtime.GOOS+"/"+runtime.GOARCH)
@@ -151,8 +157,40 @@ func (a *app) openState() (*gsync.State, error) {
 
 // --- sync ---
 
+// autoReport is the one line an unattended sync prints: what it sent and
+// what it left for the user. Counts only.
+func autoReport(rep gsync.Report, dry bool) string {
+	sent := len(rep.Auto) + len(rep.Unattended)
+	other := rep.Planned - sent // re-filed or re-summarized sessions: already on the server
+	var parts []string
+	switch {
+	case sent == 0:
+		parts = append(parts, "nothing new was sent")
+	case dry:
+		parts = append(parts, fmt.Sprintf("%d session(s) would be sent", sent))
+	default:
+		parts = append(parts, fmt.Sprintf("%d session(s) sent, listed in receipt %s (goldengate receipts show %s)", sent, rep.Receipt, rep.Receipt))
+	}
+	if other > 0 {
+		parts = append(parts, fmt.Sprintf("%d already-sent session(s) refreshed", other))
+	}
+	if rep.Pending > 0 {
+		parts = append(parts, fmt.Sprintf("%d session(s) wait in the inbox and were not sent (goldengate inbox)", rep.Pending))
+	}
+	if rep.Conflicts > 0 {
+		parts = append(parts, fmt.Sprintf("%d edited session(s) changed and are held (goldengate sessions list)", rep.Conflicts))
+	}
+	if rep.RuleExcluded > 0 {
+		parts = append(parts, fmt.Sprintf("%d kept back by an exclude rule", rep.RuleExcluded))
+	}
+	if rep.ModelFailures > 0 {
+		parts = append(parts, fmt.Sprintf("%d summarized by the local rules because the model failed", rep.ModelFailures))
+	}
+	return "goldengate auto sync: " + strings.Join(parts, "; ")
+}
+
 func (a *app) syncCmd() *cobra.Command {
-	var dry, quiet, resummarize, approve bool
+	var dry, quiet, resummarize, approve, auto bool
 	var project, source, since string
 	cmd := &cobra.Command{
 		Use:   "sync",
@@ -182,8 +220,11 @@ func (a *app) syncCmd() *cobra.Command {
 					return err
 				}
 			}
+			if auto && (approve || resummarize) {
+				return errors.New("--auto is for unattended runs: it never approves what waits (--approve) and never re-sends old sessions to a model (--resummarize)")
+			}
 			level := slog.LevelInfo
-			if quiet {
+			if quiet || auto {
 				level = slog.LevelWarn
 			}
 			s := &gsync.Syncer{
@@ -202,12 +243,18 @@ func (a *app) syncCmd() *cobra.Command {
 			if resummarize && s.Summarizer == nil {
 				return errors.New("--resummarize needs a model summarizer: run `goldengate summarizer use anthropic` (or openai) first")
 			}
-			rep, err := s.Run(cmd.Context(), gsync.RunOpts{Project: project, Source: source, Since: sinceD, Resummarize: resummarize, Approve: approve}, sink, dry)
+			rep, err := s.Run(cmd.Context(), gsync.RunOpts{Project: project, Source: source, Since: sinceD, Resummarize: resummarize, Approve: approve, Unattended: auto}, sink, dry)
 			if err != nil {
 				return err
 			}
 			if !dry {
 				a.notifyReceipt(cfg, rep)
+			}
+			if auto {
+				if !quiet {
+					fmt.Fprintln(a.Stderr, autoReport(rep, dry))
+				}
+				return nil
 			}
 			if !quiet {
 				verb := "sent"
@@ -253,6 +300,9 @@ func (a *app) syncCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&dry, "dry-run", false, "print the payloads that would be sent; send and record nothing")
 	cmd.Flags().BoolVar(&approve, "approve", false, "also send the sessions that wait in the inbox (with --dry-run: print them too, to look before you approve)")
 	cmd.Flags().BoolVar(&quiet, "quiet", false, "only print warnings and errors")
+	cmd.Flags().BoolVar(&auto, "auto", false,
+		"unattended run, for a timer or a hook: sends only what you approved or your rules approve, never what waits in the inbox,\n"+
+			"lists everything it sent in a receipt and prints one line saying what happened")
 	cmd.Flags().StringVar(&project, "project", "", "only this project folder")
 	cmd.Flags().StringVar(&source, "source", "", "only this source (e.g. claude-code)")
 	cmd.Flags().StringVar(&since, "since", "", "override the since window (e.g. 7d)")

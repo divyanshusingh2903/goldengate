@@ -526,8 +526,10 @@ goldengate agents grant|revoke <agent> <project>... | --all       # which projec
 goldengate agents token <agent>                                   # a read token for that agent, shown once
 goldengate import-claude-ai ./export.zip
 goldengate doctor               # detects tools, checks formats, server, token
-goldengate install-hook claude-code   # adds a SessionEnd hook that runs `goldengate sync --quiet`
-goldengate install-schedule     # launchd / systemd timer / Task Scheduler
+goldengate sync --auto          # unattended run: only what is approved or rule-approved; one-line report; everything sent is in a receipt
+goldengate install-hook claude-code     # adds a SessionEnd hook that runs `goldengate sync --auto --quiet --source claude-code`
+goldengate install-schedule [--every 30m]   # systemd user timer / launchd agent / Task Scheduler running `goldengate sync --auto`
+goldengate uninstall-hook claude-code | uninstall-schedule      # remove them; every installer has --print
 goldengate purge --project PATH # delete remote data
 goldengate token rotate read|ingest   # mint a replacement token; needs the admin token
 goldengate summarizer use heuristic|anthropic|openai|gemini|opencode|custom [--model M] [--base-url URL]   # opt-in model summaries
@@ -546,8 +548,10 @@ goldengatebridge version
 ```
 
 Automation
-- Claude Code: `SessionEnd` hook calling `goldengate sync --quiet --source claude-code`.
-- Codex / OpenCode: a scheduled timer (every 15-30 min) running `goldengate sync --quiet`; also document their own hook/notify mechanisms if present, but do not depend on them.
+- Unattended runs use `goldengate sync --auto`. It goes through the same plan and the same gate as every sync, so it sends only sessions the user approved or that a project's trust level and rules send, and never what waits in the inbox; it refuses `--approve` and `--resummarize`. It prints one line of counts (what was sent and under which receipt, what waits, what is held or excluded) and nothing with `--quiet`. Everything it sends is listed in the receipt, also sessions the user approved by hand earlier ("you approved it in the inbox"), because they too leave while nobody is watching (`RunOpts.Unattended`). The model summarizer runs only if the user turned it on, and only for sessions that are sent.
+- Claude Code: `goldengate install-hook claude-code` adds a `SessionEnd` hook to Claude Code's `settings.json` that runs `goldengate sync --auto --quiet --source claude-code`. The rest of the file is kept, the file as it was is copied to `settings.json.goldengate-backup`, an existing Golden Gate hook is replaced rather than doubled, and a file that is not valid JSON is left alone.
+- Codex, OpenCode and chats: `goldengate install-schedule` installs a timer for the user (default every 30 minutes, 5m to 24h): a systemd user service and timer on Linux, a launchd agent on macOS, a Task Scheduler task on Windows. The unit holds only the path of the binary and `sync --auto`: no token and no option that approves.
+- Both installers print every file they write and every command they run, have `--print` to show that without changing anything, and have an uninstall command.
 - Sync is **idempotent**, keyed on `(source, session_id)` with a content hash; unchanged sessions are skipped via a local state DB (`~/.local/state/goldengate/state.db`, SQLite).
 
 ### 7.1 Setup and token bootstrap

@@ -205,3 +205,79 @@ func TestReceiptsFromTheCommandLine(t *testing.T) {
 		t.Fatalf("notification: %v", notes)
 	}
 }
+
+// The unattended sync (a timer or a hook runs `goldengate sync --auto`)
+// follows the inbox: it never sends what waits, says what it left, and
+// lists everything it did send in a receipt.
+func TestAutoSyncSendsOnlyWhatIsApproved(t *testing.T) {
+	b := startBridge(t)
+	l := newLaptop(t)
+	l.must(l.initEnv(b), "init", "--non-interactive")
+	l.must(nil, "share", "add", "~/projects/demo")
+
+	// a pending session and no rule: nothing is sent, and it says so
+	l.errOut.Reset()
+	l.must(nil, "sync", "--auto")
+	line := strings.TrimSpace(l.errOut.String())
+	if line != "goldengate auto sync: nothing new was sent; 1 session(s) wait in the inbox and were not sent (goldengate inbox)" {
+		t.Fatalf("report: %q", line)
+	}
+	if held := everythingTheServerHolds(t, b); strings.Contains(held, "widget") {
+		t.Fatal("--auto sent a session that waits in the inbox")
+	}
+	if out := l.must(nil, "receipts"); !strings.Contains(out, "no receipts") {
+		t.Fatalf("nothing sent, no receipt: %s", out)
+	}
+	// it cannot be told to approve
+	for _, bad := range [][]string{{"sync", "--auto", "--approve"}, {"sync", "--auto", "--resummarize"}} {
+		if err := l.run(nil, bad...); err == nil || !strings.Contains(err.Error(), "unattended") {
+			t.Errorf("%v must be refused: %v", bad, err)
+		}
+	}
+	// --quiet prints nothing at all
+	l.errOut.Reset()
+	l.must(nil, "sync", "--auto", "--quiet")
+	if l.errOut.Len() != 0 || l.out.Len() != 0 {
+		t.Fatalf("--auto --quiet is silent: %q %q", l.errOut, l.out)
+	}
+
+	// what the user approved is sent by the next unattended run, and the
+	// receipt says why it left
+	l.must(nil, "inbox", "approve", "--all")
+	l.errOut.Reset()
+	l.must(nil, "sync", "--auto")
+	line = strings.TrimSpace(l.errOut.String())
+	id := regexp.MustCompile(`rc_[0-9a-f]{8}`).FindString(line)
+	if id == "" || !strings.HasPrefix(line, "goldengate auto sync: 1 session(s) sent, listed in receipt "+id) {
+		t.Fatalf("report: %q", line)
+	}
+	if !strings.Contains(everythingTheServerHolds(t, b), "widget") {
+		t.Fatal("the approved session is sent")
+	}
+	if out := l.must(nil, "receipts", "show", id); !strings.Contains(out, demoSession) || !strings.Contains(out, "why: you approved it in the inbox") {
+		t.Fatalf("the receipt lists what the unattended run sent: %s", out)
+	}
+
+	// a rule at trust auto: the next session goes on its own; one that the
+	// rule does not match still waits
+	l.must(nil, "rules", "add", "demo", "--folder", "~/projects/demo")
+	l.must(nil, "projects", "trust", "demo", "auto")
+	l.addClaudeSession("33333333-3333-4333-8333-333333333333", "/home/user/projects/demo", "second thing AUTOSENT")
+	l.addClaudeSession("44444444-4444-4444-8444-444444444444", "/home/user/projects/demo/sub", "NEWFOLDER work")
+	l.errOut.Reset()
+	l.must(nil, "sync", "--auto")
+	line = strings.TrimSpace(l.errOut.String())
+	if !strings.Contains(line, "1 session(s) sent, listed in receipt") || !strings.Contains(line, "1 session(s) wait in the inbox and were not sent") {
+		t.Fatalf("report: %q", line)
+	}
+	held := everythingTheServerHolds(t, b)
+	if !strings.Contains(held, "AUTOSENT") || strings.Contains(held, "NEWFOLDER") {
+		t.Fatal("the rule's match is sent, the session from a new folder is not")
+	}
+	// a second run has nothing to do
+	l.errOut.Reset()
+	l.must(nil, "sync", "--auto")
+	if line := strings.TrimSpace(l.errOut.String()); !strings.HasPrefix(line, "goldengate auto sync: nothing new was sent") {
+		t.Fatalf("idle run: %q", line)
+	}
+}
