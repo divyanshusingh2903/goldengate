@@ -144,3 +144,78 @@ func TestGitLabJoinsTheDefaultProviders(t *testing.T) {
 		}
 	}
 }
+
+func TestMembersLimitedToConversations(t *testing.T) {
+	c := Default()
+	if _, err := c.ShareSession("Research", "chatgpt:Chats", "c1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.ShareSession("Travel", "chatgpt:Chats", "c2"); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Validate(); err != nil {
+		t.Fatalf("one grouping in two projects, by conversation: %v", err)
+	}
+	if err := c.validateProjects(); err != nil {
+		t.Fatal(err)
+	}
+	for id, want := range map[string]int{"c1": 0, "c2": 1, "c3": -1} {
+		if limited, i := c.SessionScope("chatgpt:Chats", id); !limited || i != want {
+			t.Errorf("%s: limited=%v project=%d, want %d", id, limited, i, want)
+		}
+	}
+	if limited, _ := c.SessionScope("claude-ai:Chats", "c1"); limited {
+		t.Error("another grouping is not limited")
+	}
+	if n := slices.Index(c.Share.Allow, "chatgpt:Chats"); n < 0 || strings.Count(strings.Join(c.Share.Allow, ","), "chatgpt:Chats") != 1 {
+		t.Errorf("the grouping is selected once: %v", c.Share.Allow)
+	}
+	// a conversation is in one project: sharing it elsewhere moves it
+	if moved, err := c.ShareSession("Travel", "chatgpt:Chats", "c1"); err != nil || moved != "Research" {
+		t.Fatalf("move: %q %v", moved, err)
+	}
+	if _, i := c.SessionScope("chatgpt:Chats", "c1"); i != 1 || len(c.Projects[0].Members) != 0 {
+		t.Fatalf("after the move: %+v", c.Projects)
+	}
+	// unsharing the last conversation removes the member rather than leaving an empty list
+	if c.UnshareSession("chatgpt:Chats", "c1") != "Travel" || c.UnshareSession("chatgpt:Chats", "c2") != "Travel" || c.UnshareSession("chatgpt:Chats", "c2") != "" {
+		t.Fatal("unshare")
+	}
+	if limited, _ := c.SessionScope("chatgpt:Chats", "c1"); limited || len(c.Share.Allow) != 0 {
+		t.Fatalf("nothing of the grouping is shared any more: %+v %v", c.Projects, c.Share.Allow)
+	}
+
+	// what the file may not say
+	bad := func(name string, ps ...Project) {
+		t.Helper()
+		c := Default()
+		c.Projects = ps
+		if err := c.validateProjects(); err == nil {
+			t.Errorf("%s must be refused", name)
+		}
+	}
+	bad("a conversation in two projects",
+		Project{ID: "p_1", Name: "A", Members: []Member{{Path: "chatgpt:Chats", Sessions: []string{"c1"}}}},
+		Project{ID: "p_2", Name: "B", Members: []Member{{Path: "chatgpt:Chats", Sessions: []string{"c1"}}}})
+	bad("whole and by conversation",
+		Project{ID: "p_1", Name: "A", Members: []Member{{Path: "chatgpt:Chats"}}},
+		Project{ID: "p_2", Name: "B", Members: []Member{{Path: "chatgpt:Chats", Sessions: []string{"c1"}}}})
+	bad("by conversation and whole",
+		Project{ID: "p_1", Name: "A", Members: []Member{{Path: "chatgpt:Chats", Sessions: []string{"c1"}}}},
+		Project{ID: "p_2", Name: "B", Members: []Member{{Path: "chatgpt:Chats"}}})
+	bad("conversations of a folder", Project{ID: "p_1", Name: "A", Members: []Member{{Path: "~/code/app", Sessions: []string{"s1"}}}})
+	bad("conversations of a pattern", Project{ID: "p_1", Name: "A", Members: []Member{{Path: "chatgpt:*", Sessions: []string{"s1"}}}})
+
+	// adding the whole grouping replaces the list; a whole grouping refuses single conversations
+	c = Default()
+	_, _ = c.ShareSession("A", "chatgpt:Chats", "c1")
+	if _, err := c.AddMember("B", "chatgpt:Chats"); err != nil {
+		t.Fatal(err)
+	}
+	if limited, _ := c.SessionScope("chatgpt:Chats", "c1"); limited || c.WholeMember("chatgpt:Chats") != 1 {
+		t.Fatalf("whole replaces the list: %+v", c.Projects)
+	}
+	if _, err := c.ShareSession("A", "chatgpt:Chats", "c1"); err == nil {
+		t.Error("a conversation cannot be added next to the whole grouping")
+	}
+}

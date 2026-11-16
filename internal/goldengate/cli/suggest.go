@@ -59,9 +59,6 @@ func (o offer) commands() (yes, notNow string) {
 // projectSuggestions returns a suggestion for every unshared folder that
 // has one, strongest reason first within a folder.
 func (a *app) projectSuggestions(ctx context.Context, cfg config.Config, st *gsync.State) ([]offer, error) {
-	if len(cfg.Projects) == 0 {
-		return nil, nil
-	}
 	m, err := a.matcher(cfg)
 	if err != nil {
 		return nil, err
@@ -154,7 +151,18 @@ func (a *app) projectSuggestions(ctx context.Context, cfg config.Config, st *gsy
 
 	var out []offer
 	for _, f := range found.Projects {
-		if f.Decision.Shared || pathutil.IsVirtualKey(f.Key) || m.Denied(f.Key) || f.Sessions == 0 {
+		if f.Decision.Shared || m.Denied(f.Key) || f.Sessions == 0 {
+			continue
+		}
+		if pathutil.IsVirtualKey(f.Key) {
+			// a project the user made in claude.ai or ChatGPT is a named
+			// project in waiting; catch-all groupings are not
+			if o, ok := a.chatProjectOffer(cfg, f.Key, f.Sessions, dismissed); ok {
+				out = append(out, o)
+			}
+			continue
+		}
+		if len(cfg.Projects) == 0 {
 			continue
 		}
 		pi, reason := -1, ""
@@ -219,6 +227,50 @@ func (a *app) projectSuggestions(ctx context.Context, cfg config.Config, st *gsy
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Question < out[j].Question })
 	return out, nil
+}
+
+// chatProjectOffer suggests a named project for a chat project of
+// claude.ai or ChatGPT: a grouping the user created there themselves. The
+// catch-all groupings (ungrouped chats, GPTs and projects known only by an
+// id) get no suggestion: their conversations are shared one at a time with
+// `goldengate chats`. Only the grouping's name is used, never its content.
+func (a *app) chatProjectOffer(cfg config.Config, key string, sessions int, dismissed map[string]bool) (offer, bool) {
+	source, name, _ := strings.Cut(key, ":")
+	if (source != "claude-ai" && source != "chatgpt") || name == "" || name == "Chats" || strings.HasPrefix(name, "project-") || strings.HasPrefix(name, "gpt-") {
+		return offer{}, false
+	}
+	if limited, _ := cfg.SessionScope(key, ""); limited {
+		return offer{}, false // the user is already sharing it by conversation
+	}
+	okey := "project-for-chat-grouping\x00" + key
+	if dismissed[okey] {
+		return offer{}, false
+	}
+	product := map[string]string{"claude-ai": "claude.ai", "chatgpt": "ChatGPT"}[source]
+	target, existing := name, cfg.ProjectIndex(name) >= 0
+	effect := []string{fmt.Sprintf("creates the project %q with %s as its member, which shares all %d conversation(s) of it", target, key, sessions)}
+	if existing {
+		effect[0] = fmt.Sprintf("adds %s to your project %q, which shares all %d conversation(s) of it", key, target, sessions)
+	}
+	if i := cfg.ProjectIndex(name); i >= 0 && cfg.Projects[i].Auto() && !hasApproveRule(cfg.Projects[i]) {
+		effect = append(effect, "the project is at trust level auto, so they are sent on the next sync")
+	} else {
+		effect = append(effect, "they then wait in the inbox for your approval; nothing is sent by accepting")
+	}
+	effect = append(effect, "to share only some of them instead: goldengate chats --all")
+	return offer{
+		ID: "s_" + offerID(okey)[2:], Key: okey, Kind: "project",
+		Question: fmt.Sprintf("Make %q a project?", name),
+		Because:  fmt.Sprintf("It is a project in %s with %d conversation(s), and is in no Golden Gate project.", product, sessions),
+		Effect:   effect,
+		accept: func(cfg *config.Config) (string, error) {
+			if _, err := cfg.AddMember(target, key); err != nil {
+				return "", err
+			}
+			return fmt.Sprintf("%q: added %s (shared)", target, key), nil
+		},
+		after: func(ctx context.Context, st *gsync.State) error { return st.ClearTombstone(ctx, key) },
+	}, true
 }
 
 // allOffers is every offer that is due: rules first, then projects.

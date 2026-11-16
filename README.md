@@ -173,6 +173,18 @@ Whatever auto sends is listed in a receipt, with the rule that sent it. `goldeng
 
 **Project suggestions.** If a folder with sessions is in no project but looks like it belongs to one (a worktree of a shared repository, the same repository remote, or a branch named after one of the project's issues), the inbox suggests the project and says why. `goldengate projects accept <id>` adds the folder in one step and its sessions then wait in the inbox; `goldengate projects dismiss <id>` says not now. Comparing remotes and branches needs `git = true` under `[enrich]` in the config, which lets Golden Gate read each folder's git `HEAD` and `config` files; sessions of folders you have not shared are never read.
 
+**Chats, one conversation at a time.** After importing a claude.ai or ChatGPT export, share the conversations you want rather than a whole bucket:
+
+```bash
+goldengate chats                                   # imported conversations that are in no project (shown here only)
+goldengate chats --grep invoice                    # narrow by title
+goldengate chats share <conversation-id> --project "Job search"
+goldengate chats move <conversation-id> "Other project"
+goldengate chats unshare <conversation-id>
+```
+
+Only the conversations you name are shared; the rest of the export stays on your machine and is not read by a sync. A shared conversation then waits in the inbox like any session. A project you made in claude.ai or ChatGPT is suggested as a Golden Gate project in the inbox. To share a whole grouping instead, add it as a member: `goldengate projects add <project> 'claude-ai:Chats'`.
+
 **Sync in the background.** To send without thinking about it, let the system run the unattended sync:
 
 ```bash
@@ -217,7 +229,7 @@ Grants and revocations apply to the assistant's next request. A project an assis
 | claude.ai | `goldengate import-claude-ai export.zip` |
 | ChatGPT | `goldengate import-chatgpt export.zip` |
 
-The same folder in several tools is one project. Worktrees are filed under their repository when it is selected. Chat exports become projects like `claude-ai:Chats` and are shared only with an explicit `goldengate share add 'claude-ai:Chats'` (globs work: `chatgpt:*`). Exports stay where you keep them; `goldengate imports list|remove` manages them.
+The same folder in several tools is one project. Worktrees are filed under their repository when it is selected. Chat exports become groupings like `claude-ai:Chats`. Nothing of them is shared until you share single conversations (`goldengate chats`) or a whole grouping (`goldengate share add 'claude-ai:Chats'`; globs work: `chatgpt:*`). Exports stay where you keep them; `goldengate imports list|remove` manages them.
 
 ## Development
 

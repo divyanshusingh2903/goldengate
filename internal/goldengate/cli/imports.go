@@ -79,7 +79,8 @@ func (a *app) importCmds() []*cobra.Command {
 The zip is validated and then left where it is: goldengate reads it each time
 you sync, never extracts it to disk, and only opens its conversation files (not
 account details). Conversations are grouped into projects such as "` + source + `:Chats".
-Nothing is shared until you allow a project explicitly with 'goldengate share add'.`,
+Nothing is shared until you share single conversations with 'goldengate chats share',
+or a whole grouping with 'goldengate share add'.`,
 			Args: cobra.ExactArgs(1),
 			RunE: func(cmd *cobra.Command, args []string) error {
 				return a.runImport(cmd.Context(), source, product, args[0])
@@ -133,7 +134,7 @@ func (a *app) runImport(ctx context.Context, source, product, arg string) error 
 	for _, k := range keys {
 		fmt.Fprintf(w, "  %-40s %d conversation(s)\n", k, sum.Buckets[k])
 	}
-	fmt.Fprintf(w, "\nNothing is shared yet. To share a project:  goldengate share add '%s'\nThe zip stays where it is; keep it there, or use 'goldengate imports remove'.\n", keys[0])
+	fmt.Fprintf(w, "\nNothing is shared yet.\n  share single conversations:  goldengate chats    (then: goldengate chats share <id> --project <name>)\n  share a whole grouping:      goldengate share add '%s'\nThe zip stays where it is; keep it there, or use 'goldengate imports remove'.\n", keys[0])
 	return nil
 }
 
