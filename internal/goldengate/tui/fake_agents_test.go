@@ -3,6 +3,8 @@ package tui
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"time"
 )
 
@@ -239,6 +241,10 @@ func (f *fakeBackend) EditBegin(_ context.Context, it InboxItem) (string, error)
 		return "", f.inboxErr
 	}
 	f.editBegun = append(f.editBegun, it.ID)
+	if f.editDir != "" {
+		p := filepath.Join(f.editDir, it.ID+".txt")
+		return p, os.WriteFile(p, []byte("# form for "+it.ID+"\ntitle: "+it.Title+"\n"), 0o600)
+	}
 	return "/fake/edit/" + it.ID + ".txt", nil
 }
 
