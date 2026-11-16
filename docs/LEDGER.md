@@ -12,7 +12,7 @@ This file lets any Claude Code session (or person) pick up the Product v2 work w
 _Last updated 2026-11-15. Update this section whenever a row in the queue changes._
 
 **Progress:** 25 of 31 scheduled issues done (plus 2 stretch). Phases 1 (Foundations), 2 (Per-agent access) and 3 (Inbox and curation) are complete.
-**Next up:** #42 Incremental export re-import, size S, planned Nov 27. Its dependency #20 is done. **Blocked:** #40 Share-link import: the #39 spike recommends not building it; whether to close it as not planned is the user's call. Phase 4 (work items, rules and automation) is complete: #21, #35, #36, #45, #31, #33, #34, #32 and #22.
+**In progress:** #42 Incremental export re-import, size S, planned Nov 27. **Next up:** #23 Plain words in UI and docs (#40 is blocked). **Blocked:** #40 Share-link import: the #39 spike recommends not building it; whether to close it as not planned is the user's call. Phase 4 (work items, rules and automation) is complete: #21, #35, #36, #45, #31, #33, #34, #32 and #22.
 
 ### Done
 
@@ -149,7 +149,7 @@ Status values: `todo`, `in progress`, `in review`, `blocked`, `done`. Size: S ab
 | 23 | #44 Cursor adapter: spike, then build | L | | Nov 26 | done | #92 |
 | 24 | #39 Spike: share-link import | S | #17 | Nov 27 | done | #94 |
 | 25 | #41 Per-conversation sharing for chats | M | #18, #29 | Nov 27 | done | #96 |
-| 26 | #42 Incremental export re-import | S | #20 | Nov 27 | todo | |
+| 26 | #42 Incremental export re-import | S | #20 | Nov 27 | in progress | |
 | 27 | #40 Share-link import | M | #39, #20 | Nov 28 | blocked | |
 | 28 | #23 Plain words in UI and docs | S | #17 | Nov 28 | todo | |
 | 29 | #46 HTTP JSON API over `tui.Backend` | M | #45 | Nov 29 | todo | |
@@ -214,3 +214,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-15: #39 done (#94). #40 set to blocked: the spike says do not build; the user decides whether to close it. Roadmap page updated. Next: #41.
 - 2026-11-15: #41 implemented: chats are shared by conversation (`sessions` on a project member, `goldengate chats`), chat projects are suggested as named projects, the inbox counts unassigned conversations, and whole-grouping shares keep working unchanged.
 - 2026-11-15: #41 done (#96). Roadmap page updated. Next: #42.
+- 2026-11-15: #42 implemented: importing an export compares it with the registered ones (by conversation id and data), reports new, changed and already-imported conversations, does not register an export that adds nothing, and records what each export brought in for `goldengate imports list`.

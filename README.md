@@ -183,7 +183,7 @@ goldengate chats move <conversation-id> "Other project"
 goldengate chats unshare <conversation-id>
 ```
 
-Only the conversations you name are shared; the rest of the export stays on your machine and is not read by a sync. A shared conversation then waits in the inbox like any session. A project you made in claude.ai or ChatGPT is suggested as a Golden Gate project in the inbox. To share a whole grouping instead, add it as a member: `goldengate projects add <project> 'claude-ai:Chats'`.
+Only the conversations you name are shared; the rest of the export stays on your machine and is not read by a sync. When you export again later, import the new zip the same way: only new and continued conversations are added, and `goldengate imports list` shows what each export brought in. A shared conversation then waits in the inbox like any session. A project you made in claude.ai or ChatGPT is suggested as a Golden Gate project in the inbox. To share a whole grouping instead, add it as a member: `goldengate projects add <project> 'claude-ai:Chats'`.
 
 **Sync in the background.** To send without thinking about it, let the system run the unattended sync:
 
