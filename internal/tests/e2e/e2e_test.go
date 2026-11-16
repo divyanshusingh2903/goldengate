@@ -480,7 +480,7 @@ func TestInitRefusals(t *testing.T) {
 		"plain http to a public host": {map[string]string{"GOLDENGATE_ADMIN_TOKEN": adminSecret}, []string{"init", "--non-interactive", "--server", "http://example.com"}, "https"},
 		"no server":                   {map[string]string{"GOLDENGATE_ADMIN_TOKEN": adminSecret}, []string{"init", "--non-interactive"}, "server URL required"},
 		"no admin token":              {map[string]string{"GOLDENGATE_SERVER_URL": b.ts.URL}, []string{"init", "--non-interactive"}, "admin token required"},
-		"wrong admin token":           {map[string]string{"GOLDENGATE_SERVER_URL": b.ts.URL, "GOLDENGATE_ADMIN_TOKEN": strings.Repeat("W", 44)}, []string{"init", "--non-interactive"}, "ingest token"},
+		"wrong admin token":           {map[string]string{"GOLDENGATE_SERVER_URL": b.ts.URL, "GOLDENGATE_ADMIN_TOKEN": strings.Repeat("W", 44)}, []string{"init", "--non-interactive"}, "upload token"},
 		"unreachable server":          {map[string]string{"GOLDENGATE_SERVER_URL": "http://127.0.0.1:1", "GOLDENGATE_ADMIN_TOKEN": adminSecret}, []string{"init", "--non-interactive"}, "not reachable"},
 	}
 	for name, c := range cases {

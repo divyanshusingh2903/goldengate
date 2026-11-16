@@ -172,7 +172,7 @@ func TestBackendRemoveExcludesWhatABroaderRuleShares(t *testing.T) {
 		t.Fatalf("a folder rule covers its children: %+v", sub)
 	}
 	res, err := be.Apply(ctx, tui.Action{Kind: tui.ActRemove, Keys: []string{sub.Key}})
-	if err != nil || !strings.Contains(res.Message, "excluded with a deny rule") {
+	if err != nil || !strings.Contains(res.Message, "blocked, because a broader rule shares them") {
 		t.Fatalf("a covered child cannot lose the parent's rule, so it is excluded: %v %q", err, res.Message)
 	}
 	s, _ = be.Snapshot(ctx)
@@ -194,7 +194,7 @@ func TestBackendRemoveExcludesWhatABroaderRuleShares(t *testing.T) {
 	cfgPath := filepath.Join(l.root, "cfg", "goldengate", "config.toml")
 	b, _ := os.ReadFile(cfgPath)
 	_ = os.WriteFile(cfgPath, []byte(strings.Replace(string(b), "deny = []", "deny = ['~/projects/**/sub']", 1)), 0o600)
-	if _, err := be.Apply(ctx, tui.Action{Kind: tui.ActAllow, Keys: []string{sub.Key}}); err == nil || !strings.Contains(err.Error(), "denied by a broader rule") {
+	if _, err := be.Apply(ctx, tui.Action{Kind: tui.ActAllow, Keys: []string{sub.Key}}); err == nil || !strings.Contains(err.Error(), "blocked by a broader rule") {
 		t.Fatalf("lifting a glob deny must be refused with an explanation: %v", err)
 	}
 }
@@ -448,7 +448,7 @@ func TestBackendServerScreenAndRemoteDelete(t *testing.T) {
 	if ps, _ := b.st.ListProjects(ctx); len(ps) != 0 {
 		t.Fatal("deleted on the server")
 	}
-	// the project is still shared, so the next sync uploads it again
+	// the project is still shared, so the next send uploads it again
 	l.must(nil, "sync")
 	if ps, _ := b.st.ListProjects(ctx); len(ps) != 1 {
 		t.Fatalf("a still-shared project re-uploads after a manual delete: %+v", ps)
@@ -686,7 +686,7 @@ func TestFirstRunInTheTUI(t *testing.T) {
 	d.key("space")
 	d.mustSee("▌ [x] ~/projects/demo ")
 	d.key("tab")
-	d.mustSee("Dry run: this is exactly what the first sync would send", "1 session(s) in 1 project(s)")
+	d.mustSee("Dry run: this is exactly what the first send would send", "1 session(s) in 1 project(s)")
 	d.key("enter")
 	d.mustSee("✓ Ready to send", "nothing has left this machine yet", "[enter Send 1 session]")
 	d.key("enter") // step 2: send for real

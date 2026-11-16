@@ -21,7 +21,7 @@ func (a *app) agentsCmd() *cobra.Command {
 		Use:   "agents",
 		Short: "Choose which assistant sees which projects (needs the admin token)",
 		Long: `An agent is one assistant that reads your work through the server (ChatGPT, Claude, ...).
-Each agent has its own read token and sees only the projects you grant it. A project you
+Each agent has its own assistant token and sees only the projects you grant it. A project you
 start sharing is visible to no agent until you grant it, unless the agent is set to see
 all projects.
 
@@ -199,7 +199,7 @@ call and never stored.`,
 	revoke.Flags().BoolVar(&revokeAll, "all", false, "turn off 'every project' for this agent")
 
 	var label, expires string
-	token := &cobra.Command{Use: "token <agent>", Short: "Create a read token for an agent (shown once)", Args: cobra.ExactArgs(1),
+	token := &cobra.Command{Use: "token <agent>", Short: "Create an assistant token for an agent (shown once)", Args: cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			ac, ag, err := a.agentArg(c.Context(), admin, args[0])
 			if err != nil {
@@ -210,7 +210,7 @@ call and never stored.`,
 				return agentsErr(err)
 			}
 			cfg, _ := a.load()
-			fmt.Fprintf(a.Stdout, "Read token for %q (shown ONCE; it cannot be recovered):\n\n    %s\n\nConnector URL: %s/mcp\nSend it as \"Authorization: Bearer <token>\". Revoke it by removing the agent, or with `goldengatebridge token revoke %s` on the server.\n",
+			fmt.Fprintf(a.Stdout, "Assistant token for %q (shown ONCE; it cannot be recovered):\n\n    %s\n\nConnector URL: %s/mcp\nSend it as \"Authorization: Bearer <token>\". Revoke it by removing the agent, or with `goldengatebridge token revoke %s` on the server.\n",
 				ag.Name, m.Secret, cfg.Server.URL, m.ID)
 			return nil
 		}}

@@ -156,6 +156,20 @@ func (a *app) openState() (*gsync.State, error) {
 	return gsync.OpenState(a.dirs().StatePath())
 }
 
+// oldFlagNames keeps the earlier spellings of the server-data flags
+// working, hidden from help: --purge-remote and --keep-remote.
+func oldFlagNames(c *cobra.Command) {
+	for old, now := range map[string]string{"purge-remote": "delete-from-server", "keep-remote": "keep-on-server"} {
+		f := c.Flags().Lookup(now)
+		if f == nil {
+			continue
+		}
+		c.Flags().Var(f.Value, old, "same as --"+now)
+		c.Flags().Lookup(old).NoOptDefVal = "true"
+		_ = c.Flags().MarkHidden(old)
+	}
+}
+
 // --- sync ---
 
 // autoReport is the one line an unattended sync prints: what it sent and
@@ -187,16 +201,17 @@ func autoReport(rep gsync.Report, dry bool) string {
 	if rep.ModelFailures > 0 {
 		parts = append(parts, fmt.Sprintf("%d summarized by the local rules because the model failed", rep.ModelFailures))
 	}
-	return "goldengate auto sync: " + strings.Join(parts, "; ")
+	return "goldengate background send: " + strings.Join(parts, "; ")
 }
 
 func (a *app) syncCmd() *cobra.Command {
 	var dry, quiet, resummarize, approve, auto bool
 	var project, source, since string
 	cmd := &cobra.Command{
-		Use:   "sync",
-		Short: "Redact, summarize and push selected sessions (use --dry-run to only print them)",
-		Args:  cobra.NoArgs,
+		Use:     "sync",
+		Aliases: []string{"send"},
+		Short:   "Send your approved sessions: redact, summarize and upload them (--dry-run only prints them)",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			cfg, err := a.load()
 			if err != nil {
@@ -285,13 +300,13 @@ func (a *app) syncCmd() *cobra.Command {
 					fmt.Fprintf(a.Stderr, "%d sessions wait in the inbox and were not sent: see them with `goldengate inbox`, approve with `goldengate inbox approve --all`, or send them now with `goldengate sync --approve`\n", rep.Pending)
 				}
 				if rep.Refiled > 0 {
-					fmt.Fprintf(a.Stderr, "%d synced sessions re-sent as they were, under their project's current name and id\n", rep.Refiled)
+					fmt.Fprintf(a.Stderr, "%d sent sessions re-sent as they were, under their project's current name and id\n", rep.Refiled)
 				}
 				if rep.Resummarized > 0 {
-					fmt.Fprintf(a.Stderr, "%d synced sessions re-summarized by %s\n", rep.Resummarized, s.Summarizer.Name())
+					fmt.Fprintf(a.Stderr, "%d sent sessions re-summarized by %s\n", rep.Resummarized, s.Summarizer.Name())
 				}
 				if rep.Stale > 0 {
-					fmt.Fprintf(a.Stderr, "%d synced sessions still have summaries not written by %s with the current settings; `goldengate sync --resummarize` upgrades them\n",
+					fmt.Fprintf(a.Stderr, "%d sent sessions still have summaries not written by %s with the current settings; `goldengate sync --resummarize` upgrades them\n",
 						rep.Stale, s.Summarizer.Name())
 				}
 			}
@@ -308,7 +323,7 @@ func (a *app) syncCmd() *cobra.Command {
 	cmd.Flags().StringVar(&source, "source", "", "only this source (e.g. claude-code)")
 	cmd.Flags().StringVar(&since, "since", "", "override the since window (e.g. 7d)")
 	cmd.Flags().BoolVar(&resummarize, "resummarize", false,
-		"also rebuild already-synced sessions whose summary was not written by the configured model summarizer;\n"+
+		"also rebuild already-sent sessions whose summary was not written by the configured model summarizer;\n"+
 			"sends the redacted conversations of those sessions to that model (answers are cached, so each is sent once)")
 	return cmd
 }
@@ -321,7 +336,7 @@ func (a *app) shareCmd() *cobra.Command {
 	mode := func() (string, error) {
 		switch {
 		case purgeRemote && keepRemote:
-			return "", errors.New("--purge-remote and --keep-remote are mutually exclusive")
+			return "", errors.New("--delete-from-server and --keep-on-server are mutually exclusive")
 		case purgeRemote:
 			return "yes", nil
 		case keepRemote:
@@ -337,7 +352,7 @@ func (a *app) shareCmd() *cobra.Command {
 			}
 			return a.shareRemove(c.Context(), args[0], m)
 		}}
-	deny := &cobra.Command{Use: "deny <path>", Short: "Never share a folder (beats any allow rule)", Args: cobra.ExactArgs(1),
+	deny := &cobra.Command{Use: "deny <path>", Aliases: []string{"block"}, Short: "Block a folder: never share it, even when a parent folder is shared", Args: cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			m, err := mode()
 			if err != nil {
@@ -346,8 +361,9 @@ func (a *app) shareCmd() *cobra.Command {
 			return a.shareDeny(c.Context(), args[0], m)
 		}}
 	for _, c := range []*cobra.Command{remove, deny} {
-		c.Flags().BoolVar(&purgeRemote, "purge-remote", false, "also delete the un-shared projects' data from the server")
-		c.Flags().BoolVar(&keepRemote, "keep-remote", false, "leave data already on the server in place")
+		c.Flags().BoolVar(&purgeRemote, "delete-from-server", false, "also delete the un-shared projects' data from the server")
+		c.Flags().BoolVar(&keepRemote, "keep-on-server", false, "leave data already on the server in place")
+		oldFlagNames(c)
 	}
 	var auto bool
 	add := &cobra.Command{Use: "add <path>", Short: "Share a folder (and everything under it); its sessions wait in the inbox unless --auto-approve", Args: cobra.ExactArgs(1),
@@ -414,7 +430,7 @@ func (a *app) shareAdd(ctx context.Context, p string, auto bool) error {
 		return err
 	}
 	if m, err := a.matcher(cfg); err == nil && m.Denied(a.localKey(p)) {
-		fmt.Fprintf(a.Stderr, "warning: %s is also matched by a deny rule; deny wins, nothing will be shared\n", rule)
+		fmt.Fprintf(a.Stderr, "warning: %s is also blocked (`share deny`); a block always wins, nothing will be shared\n", rule)
 	}
 	st, err := a.openState()
 	if err != nil {
@@ -426,9 +442,9 @@ func (a *app) shareAdd(ctx context.Context, p string, auto bool) error {
 	}
 	fmt.Fprintf(a.Stdout, "sharing %s\n", rule)
 	if auto {
-		fmt.Fprintln(a.Stdout, "its new and changed sessions are sent on every sync without asking")
+		fmt.Fprintln(a.Stdout, "its new and changed sessions go out every time you send, without asking")
 	} else {
-		fmt.Fprintln(a.Stdout, "its sessions wait for your approval: `goldengate inbox`, or review and send from the Sync screen")
+		fmt.Fprintln(a.Stdout, "its sessions wait for your approval: `goldengate inbox`, or review and send from the Send screen")
 	}
 	return nil
 }
@@ -461,11 +477,11 @@ func (a *app) shareDeny(ctx context.Context, p, purge string) error {
 	rule := a.ruleFor(p)
 	for _, r := range cfg.Share.Deny {
 		if sameRule(a, r, rule) {
-			fmt.Fprintf(a.Stdout, "already denied: %s\n", rule)
+			fmt.Fprintf(a.Stdout, "already blocked: %s\n", rule)
 			return nil
 		}
 	}
-	return a.change(ctx, cfg, func(c *config.Config) { c.Share.Deny = append(c.Share.Deny, rule) }, "denying "+rule, purge)
+	return a.change(ctx, cfg, func(c *config.Config) { c.Share.Deny = append(c.Share.Deny, rule) }, "blocking "+rule, purge)
 }
 
 // change applies an edit that may un-share projects. Every discovered project
@@ -595,7 +611,7 @@ func (a *app) offerRemoteDelete(ctx context.Context, cfg config.Config, targets 
 	switch purge {
 	case "ask":
 		if !a.Interactive {
-			fmt.Fprintln(a.Stdout, "Data already on the server was left in place. Delete it with: goldengate purge --project PATH (or rerun with --purge-remote).")
+			fmt.Fprintln(a.Stdout, "Data already on the server was left in place. Delete it with: goldengate purge --project PATH (or rerun with --delete-from-server).")
 			return nil
 		}
 		ans, err := a.prompt(fmt.Sprintf("Also delete %d project(s) from the server? [y/N] ", len(targets)))

@@ -150,7 +150,7 @@ func TestWizardFullFlow(t *testing.T) {
 	if h.m.wz.step != wizReview {
 		t.Fatalf("tab advances: %v", h.m.wz.step)
 	}
-	h.contains("Dry run: this is exactly what the first sync would send", "7 session(s) in 3 project(s)", "2 redaction(s) applied")
+	h.contains("Dry run: this is exactly what the first send would send", "7 session(s) in 3 project(s)", "2 redaction(s) applied")
 	h.golden("wizard_review")
 	h.key("enter") // -> sync step
 	if h.m.wz.step != wizSync {

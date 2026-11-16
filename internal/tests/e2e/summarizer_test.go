@@ -161,7 +161,7 @@ func TestResummarizeUpgradesSessionsSyncedWithTheHeuristic(t *testing.T) {
 	l.must(nil, "summarizer", "use", "custom", "--model", "tiny", "--base-url", ts.URL+"/v1")
 	key := map[string]string{"GOLDENGATE_SUMMARIZER_KEY": "sk-local"}
 	l.must(key, "sync")
-	if len(fake.bodies) != 0 || !strings.Contains(l.errOut.String(), "1 synced sessions still have summaries not written by custom:tiny") {
+	if len(fake.bodies) != 0 || !strings.Contains(l.errOut.String(), "1 sent sessions still have summaries not written by custom:tiny") {
 		t.Fatalf("turning the model on alone sends nothing, but says what is left: %d calls\n%s", len(fake.bodies), l.errOut)
 	}
 
@@ -178,7 +178,7 @@ func TestResummarizeUpgradesSessionsSyncedWithTheHeuristic(t *testing.T) {
 			t.Errorf("%q reached the model", leak)
 		}
 	}
-	if !strings.Contains(l.errOut.String(), "1 synced sessions re-summarized by custom:tiny") {
+	if !strings.Contains(l.errOut.String(), "1 sent sessions re-summarized by custom:tiny") {
 		t.Errorf("the run reports the upgrade:\n%s", l.errOut)
 	}
 	held := everythingTheServerHolds(t, b)
@@ -223,7 +223,7 @@ func TestRenamingOrMergingAProjectReachesTheServerOnTheNextSync(t *testing.T) {
 	if len(fake.bodies) != 0 {
 		t.Fatalf("re-filing a session never calls the model: %d calls", len(fake.bodies))
 	}
-	if !strings.Contains(l.errOut.String(), "1 synced sessions re-sent as they were") {
+	if !strings.Contains(l.errOut.String(), "1 sent sessions re-sent as they were") {
 		t.Errorf("the run says why it sent something:\n%s", l.errOut)
 	}
 	ps, _ = b.st.ListProjects(ctx)

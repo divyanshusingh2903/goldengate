@@ -324,9 +324,9 @@ func (m *Model) resummarizeOffer(add func(string), buttons func(...btn)) {
 	if !s.canResummarize() {
 		return
 	}
-	add(m.th.Warn.Render(fmt.Sprintf("%s rule-based summaries", plural(s.plan.Stale, "synced session")+" "+haveHas(s.plan.Stale))))
+	add(m.th.Warn.Render(fmt.Sprintf("%s rule-based summaries", plural(s.plan.Stale, "sent session")+" "+haveHas(s.plan.Stale))))
 	add(m.th.Dim.Render(clip("Including them sends their redacted conversations to "+s.plan.Summarizer+".", m.w-6)))
-	buttons(btn{m.th.Button, "m", "Include them in this sync"})
+	buttons(btn{m.th.Button, "m", "Include them this time"})
 	add("")
 }
 
@@ -371,7 +371,7 @@ func (m *Model) viewSync() string {
 	case s.phase == syncReady && s.plan.Sessions == 0:
 		if len(s.plan.Projects) == 0 && s.plan.Unchanged == 0 {
 			add(m.th.Title.Render("Nothing is shared yet"))
-			add(m.th.Dim.Render("Share a project on the Projects screen (space, or click its box), then sync."))
+			add(m.th.Dim.Render("Share a project on the Projects screen (space, or click its box), then send."))
 		} else {
 			add(m.th.Good.Render("✓ Everything is up to date"))
 			add(m.th.Dim.Render(fmt.Sprintf("The server already has all %s from the projects you share.", plural(s.plan.Unchanged, "session"))))
@@ -472,7 +472,7 @@ func (m *Model) viewSync() string {
 			add(m.th.Dim.Render(fmt.Sprintf("%s you excluded %s on this machine.", plural(s.plan.Excluded, "session"), map[bool]string{true: "stays", false: "stay"}[s.plan.Excluded == 1])))
 		}
 		if s.opts.Resummarize && s.plan.Resummarized > 0 {
-			add(m.th.Dim.Render(fmt.Sprintf("Includes %s re-summarized by %s.", plural(s.plan.Resummarized, "synced session"), s.plan.Summarizer)))
+			add(m.th.Dim.Render(fmt.Sprintf("Includes %s re-summarized by %s.", plural(s.plan.Resummarized, "sent session"), s.plan.Summarizer)))
 		}
 		add("")
 		m.resummarizeOffer(add, buttons)
@@ -496,7 +496,7 @@ func (m *Model) viewSync() string {
 		}
 	}
 
-	f := frame{th: m.th, w: m.w, h: m.h, title: m.header("sync"), right: m.serverBadge(), top: m.stepper()}
+	f := frame{th: m.th, w: m.w, h: m.h, title: m.header("send"), right: m.serverBadge(), top: m.stepper()}
 	f.left = lines(strings.Join(out, "\n"), w, bh)
 	switch {
 	case s.phase == syncRunning:

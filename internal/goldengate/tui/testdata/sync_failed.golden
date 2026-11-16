@@ -1,4 +1,4 @@
-┌ goldengate  1 Projects [2 Sync] 3 Server  4 Settings  5 Agents  ─ ● connected bridge.example.com ┐
+┌ goldengate  1 Projects [2 Send] 3 Server  4 Settings  5 Agents  ─ ● connected bridge.example.com ┐
 │ ✓ Review ──── ② Send   to bridge.example.com                                                     │
 ├──────────────────────────────────────────────────────────────────────────────────────────────────┤
 │ ✗ 1 project could not be sent                                                                    │

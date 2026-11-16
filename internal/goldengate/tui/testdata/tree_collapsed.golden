@@ -1,11 +1,11 @@
-┌ goldengate [1 Projects] 2 Sync  3 Server  4 Settings  5 Agents  ─ ● connected bridge.example.com ┐
-│ [All 8]  Shared 4   To sync 3   Not shared 4                                                     │
+┌ goldengate [1 Projects] 2 Send  3 Server  4 Settings  5 Agents  ─ ● connected bridge.example.com ┐
+│ [All 8]  Shared 4   To send 3   Not shared 4                                                     │
 ├────────────────────────────────────────────────┬─────────────────────────────────────────────────┤
 │ / search projects…        sort recent · ▤ tree │ code                                            │
-│  [~] ▾ home/u                       ▲ 6 to sync│ /home/u/code                                    │
-│▌ [~]   ▸ code                       ▲ 6 to sync│                                                 │
+│  [~] ▾ home/u                       ▲ 6 to send│ /home/u/code                                    │
+│▌ [~]   ▸ code                       ▲ 6 to send│                                                 │
 │  [ ]     scratch/tmp         CX      not shared│ Projects  5, 4 shared                           │
-│  [-]     work/client-x       CC        ✕ denied│ To sync   ▲ 6 sessions                          │
+│  [-]     work/client-x       CC       ✕ blocked│ To send   ▲ 6 sessions                          │
 │  [ ] ▾ claude-ai:                    1 projects│                                                 │
 │  [ ]     Chats               AI      not shared│ [space Share folder] [enter Fold]               │
 │                                                │                                                 │
@@ -26,5 +26,5 @@
 │                                                │                                                 │
 │                                                │                                                 │
 ├────────────────────────────────────────────────┴─────────────────────────────────────────────────┤
-│ space share  p preview  s sync  f view  / search  d deny  u undo  t tree  ? help                 │
+│ space share  p preview  s send  f view  / search  d block  u undo  t tree  ? help                │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘

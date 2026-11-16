@@ -242,7 +242,7 @@ func TestOneFolderInTwoProjectsIsRejected(t *testing.T) {
 
 func TestAllowRulesOutsideProjectsStillWork(t *testing.T) {
 	m := mustNew(t, Policy{Allow: []string{"~/code/app"}}, false)
-	if d := m.Decide("/home/u/code/app", ""); !d.Shared || d.Reason != "allowed by ~/code/app" || m.Project("/home/u/code/app") != "" {
+	if d := m.Decide("/home/u/code/app", ""); !d.Shared || d.Reason != "shared by ~/code/app" || m.Project("/home/u/code/app") != "" {
 		t.Errorf("plain allow rule: %+v", d)
 	}
 }

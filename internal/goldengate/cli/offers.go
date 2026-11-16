@@ -57,7 +57,7 @@ func (o ruleOffer) Question() string {
 func (o ruleOffer) Effect() []string {
 	out := []string{fmt.Sprintf("adds to project %q the rule: %s", o.ProjectName, o.Rule)}
 	if o.SetTrust != "" {
-		out = append(out, fmt.Sprintf("sets the project's trust level to %s, so sessions the rule matches are sent on the next sync; everything else in the project still waits in the inbox", o.SetTrust))
+		out = append(out, fmt.Sprintf("sets the project's trust level to %s, so sessions the rule matches are sent the next time you send; everything else in the project still waits in the inbox", o.SetTrust))
 	}
 	return out
 }

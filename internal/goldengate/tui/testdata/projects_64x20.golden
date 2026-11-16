@@ -1,13 +1,13 @@
 ┌ goldengate ────────────────── ● connected bridge.example.com ┐
-│ [All 8]  Shared 4   To sync 3   Not shared 4                 │
+│ [All 8]  Shared 4   To send 3   Not shared 4                 │
 ├──────────────────────────────────────────────────────────────┤
 │ / search projects…                      sort recent · ▤ list │
-│▌ [x] ~/code/pharmfindr                  CC CX     ▲ 3 to sync│
-│  [x] …/pharmfindr/.claude/worktrees/fox    CC     ▲ 2 to sync│
-│  [x] ~/code/forge                          CC     ▲ 1 to sync│
+│▌ [x] ~/code/pharmfindr                  CC CX     ▲ 3 to send│
+│  [x] …/pharmfindr/.claude/worktrees/fox    CC     ▲ 2 to send│
+│  [x] ~/code/forge                          CC     ▲ 1 to send│
 │  [ ] ~/code/vihayas                        CC      not shared│
-│  [~] ~/code/website                     CC OC    ✓ synced 40h│
-│  [-] ~/work/client-x                       CC        ✕ denied│
+│  [~] ~/code/website                     CC OC      ✓ sent 40h│
+│  [-] ~/work/client-x                       CC       ✕ blocked│
 │  [ ] ~/scratch/tmp                         CX      not shared│
 │  [ ] claude-ai:Chats                       AI      not shared│
 │                                                              │
@@ -16,5 +16,5 @@
 │                                                              │
 │                                                              │
 ├──────────────────────────────────────────────────────────────┤
-│ space unshare  p preview  s sync  f view  / search  ? help   │
+│ space unshare  p preview  s send  f view  / search  ? help   │
 └──────────────────────────────────────────────────────────────┘

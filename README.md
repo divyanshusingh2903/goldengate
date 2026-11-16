@@ -22,7 +22,7 @@
 
 Let a remote AI assistant know what you have been working on in your coding tools, with **you choosing which projects are shared**.
 
-- `goldengate` (laptop): reads your local session history, applies your allow/deny choices, redacts and summarizes, and pushes to your own server.
+- `goldengate` (laptop): reads your local session history, applies your choices of what is shared and what is blocked, redacts and summarizes, and sends to your own server.
 - `goldengatebridge` (server you run): stores the summaries and serves them read-only over MCP (streamable HTTP, stateless JSON).
 
 Status: pre-release (M4). Sources: Claude Code, Codex, OpenCode, Cursor, and claude.ai / ChatGPT data exports. Deployment scripts and release packaging are on the roadmap in [DESIGN.md](DESIGN.md). See [SECURITY.md](SECURITY.md) before connecting an assistant.
@@ -42,9 +42,9 @@ Status: pre-release (M4). Sources: Claude Code, Codex, OpenCode, Cursor, and cla
    goldengate init --server https://bridge.example.com
    ```
 
-   This stores an `ingest` token in your OS keyring and prints a `read` token **once**. On a server where you have a shell you can pair instead: run `goldengatebridge pair` there and `goldengate init --server URL --pair-code CODE` here.
+   This stores an upload token (what this computer sends with) in your OS keyring and prints an assistant token (what your assistant reads with) **once**. On a server where you have a shell you can pair instead: run `goldengatebridge pair` there and `goldengate init --server URL --pair-code CODE` here.
 
-3. **Choose what to share, preview, sync:**
+3. **Choose what to share, preview, send:**
 
    ```bash
    goldengate share add ~/code/myproject
@@ -55,27 +55,27 @@ Status: pre-release (M4). Sources: Claude Code, Codex, OpenCode, Cursor, and cla
    Sessions of a project you share wait for your approval; `--approve` approves and sends what is waiting. Later sessions wait again (see the inbox below), unless the project's trust level is auto (share with `--auto-approve`, or see rules and trust levels below).
 
 4. **Connect the assistant.**
-   - If its connector lets you set a header: use `https://bridge.example.com/mcp` and send the read token as `Authorization: Bearer <token>`.
+   - If its connector lets you set a header: use `https://bridge.example.com/mcp` and send the assistant token as `Authorization: Bearer <token>`.
    - If it only supports OAuth (Gemini's custom apps do; it supports dynamic client registration): start the server with `--oauth --public-url https://bridge.example.com`, then add `https://bridge.example.com/mcp` as the connector URL (Gemini: Settings > Connected Apps > Add a custom app). A consent page opens; approve it with your admin secret. No token to paste. If the assistant asks for a client ID and secret instead, run `goldengatebridge oauth clients create --redirect-uri <the address it shows>`.
    - Revoke a connected assistant with `goldengatebridge oauth clients delete <id>`.
 
-Un-share with `goldengate share remove ~/code/myproject --purge-remote`. Rotate the assistant's token with `goldengate token rotate read`.
+Un-share with `goldengate share remove ~/code/myproject --delete-from-server`. Replace the assistant's token with `goldengate token rotate assistant`.
 
 ## The interactive UI
 
-Run `goldengate` in a terminal. The first run starts a short setup (find your tools, connect to your server, choose the share level, pick projects, review, first sync); after that it opens the project picker.
+Run `goldengate` in a terminal. The first run starts a short setup (find your tools, connect to your server, choose the share level, pick projects, review, first send); after that it opens the project picker.
 
 | Screen | What it does |
 |---|---|
-| Projects (`1`) | Every project folder, with its sync state: `▲ 3 to sync`, `✓ synced 2h`, `not shared`, `✕ denied`. Views: All / Shared / To sync / Not shared (`f`). `space` share or un-share · `v` range · `a`/`A` mark all/none · `d` deny · `n` put in a project · `N` rename or merge a project · `u` undo · `e` choose which tools are sent · `/` search · `t` folder tree (space on a folder shares everything below it) · `o` sort · `p` preview · `P` paranoid (raw payloads) |
-| Sync (`2`, or `s`) | Two steps. **Review** runs at once: every session is read and redacted exactly as it would be sent, and nothing leaves the machine. **Send** (`enter`) sends exactly what was reviewed. Progress follows each session; a failed project can be retried and skips what already arrived. |
+| Projects (`1`) | Every project folder, with where it stands: `▲ 3 to send`, `✓ sent 2h`, `not shared`, `✕ blocked`. Views: All / Shared / To send / Not shared (`f`). `space` share or un-share · `v` range · `a`/`A` mark all/none · `d` deny · `n` put in a project · `N` rename or merge a project · `u` undo · `e` choose which tools are sent · `/` search · `t` folder tree (space on a folder shares everything below it) · `o` sort · `p` preview · `P` paranoid (raw payloads) |
+| Send (`2`, or `s`) | Two steps. **Review** runs at once: every session is read and redacted exactly as it would be sent, and nothing leaves the machine. **Send** (`enter`) sends exactly what was reviewed. Progress follows each session; a failed project can be retried and skips what already arrived. |
 | Server (`3`) | Health, token check, what the server holds (code or chat), `D` delete a project from it |
 | Settings (`4`) | Theme, share level, look-back window, sources, redaction patterns, commit verification |
 | Agents (`5`) | A grid of projects by assistants: `space` (or a click) ticks which assistant sees which project, `enter` shows the changes for review before anything is applied. `v` shows exactly what the highlighted assistant can read right now; `d` its tokens, with `R` to revoke one. Asks for the admin secret once per run and keeps it in memory only. |
 
-The card beside the list says in words what happens to the highlighted project: "Not shared: nothing from this project leaves your machine", "Shared · never synced", "Shared · up to date". Every project and session carries the tag of the tool it came from: `CC` Claude Code, `CX` Codex, `OC` OpenCode (coding sessions), `AI` claude.ai, `GPT` ChatGPT (chat exports).
+The card beside the list says in words what happens to the highlighted project: "Not shared: nothing from this project leaves your machine", "Shared · never sent", "Shared · up to date". Every project and session carries the tag of the tool it came from: `CC` Claude Code, `CX` Codex, `OC` OpenCode (coding sessions), `AI` claude.ai, `GPT` ChatGPT (chat exports).
 
-The preview is the exact outgoing payload, redactions marked, with what changed since the last sync. `?` shows every key. It works at 80x24 and follows resizes.
+The preview is the exact outgoing payload, redactions marked, with what changed since it was last sent. `?` shows every key. It works at 80x24 and follows resizes.
 
 **Mouse.** Click a row to select it, click its `[ ]` box to share it, double-click to preview, ctrl+click to mark. Tabs, view chips, buttons, settings and the keys in the bottom bar are all clickable, and the wheel scrolls.
 
@@ -105,18 +105,18 @@ goldengate summarizer set-key gemini
 goldengate summarizer test                    # one tiny sample call (not your data)
 goldengate summarizer use custom --base-url http://localhost:1234/v1 --model qwen3
 goldengate summarizer use heuristic           # back to local rules
-goldengate sync --resummarize                 # also upgrade sessions already synced with the rules
+goldengate sync --resummarize                 # also upgrade sessions already sent with rule-based summaries
 ```
 
 A session is summarized once per content: answers are cached, and an unchanged session is not sent to the model again.
 
-Turning a model on only affects new and changed sessions. Sessions synced earlier keep their rule-based summaries until you ask: `goldengate sync --resummarize` (or, on the Sync screen, the "N synced sessions have rule-based summaries" line and its **Include them in this sync** button) rebuilds them and sends their redacted conversations to the model. Only sessions whose summary actually changes are pushed again. Changing the narrative length works the same way: it applies to new and changed sessions, and synced ones are rebuilt only when you ask.
+Turning a model on only affects new and changed sessions. Sessions sent earlier keep their rule-based summaries until you ask: `goldengate sync --resummarize` (or, on the Send screen, the "N sent sessions have rule-based summaries" line and its **Include them in this sync** button) rebuilds them and sends their redacted conversations to the model. Only sessions whose summary actually changes are pushed again. Changing the narrative length works the same way: it applies to new and changed sessions, and synced ones are rebuilt only when you ask.
 
 Everything the UI does is also available as a command.
 
 The tools sent for one project can be chosen with `e`: on a shared project, untick a tool to stop sending it; on one that is not shared yet, ticking a tool shares the project with only that tool. That is stored as `exclude_sources` on the folder in the config.
 
-**Named projects.** What you share is grouped into named projects: one project can hold several folders and chat groupings, and the card names the project a folder is in. Press `n` to put the marked folders in a project (typing a new name creates it), and `N` to rename one (typing an existing name merges them). Putting a folder in a project shares it, and a deny rule still wins. From the command line:
+**Named projects.** What you share is grouped into named projects: one project can hold several folders and chat groupings, and the card names the project a folder is in. Press `n` to put the marked folders in a project (typing a new name creates it), and `N` to rename one (typing an existing name merges them). Putting a folder in a project shares it, and a block (`goldengate share deny`) still wins. From the command line:
 
 ```bash
 goldengate projects create "Pharmfindr" ~/code/pharmfindr ~/code/pharmfindr-web
@@ -128,7 +128,7 @@ goldengate projects remove "Pharmfindr app" ~/code/pharmfindr-web   # stops shar
 goldengate projects delete "Pharmfindr app"                          # stops sharing every member
 ```
 
-**The inbox: nothing new leaves without your approval.** When you share a project, its sessions wait until you approve them. In the terminal UI that is the Sync screen: Review shows every session exactly as it would be sent, and Send approves what you reviewed. From the command line, `goldengate sync` (and a hook or timer running it) sends only what is approved:
+**The inbox: nothing new leaves without your approval.** When you share a project, its sessions wait until you approve them. In the terminal UI that is the Send screen: Review shows every session exactly as it would be sent, and Send approves what you reviewed. From the command line, `goldengate sync` (and a hook or timer running it) sends only what is approved:
 
 ```bash
 goldengate inbox                        # what is waiting, and what you excluded
@@ -165,7 +165,7 @@ goldengate inbox approve --suggested               # at "suggest": approve what 
 
 - **ask**: everything waits in the inbox.
 - **suggest**: sessions your rules approve are marked in the inbox; one command approves them. Nothing is sent before that.
-- **auto**: sessions your rules approve are sent on the next sync. With no approve rule, that is every session of the project (`goldengate share add <folder> --auto-approve` sets this up in one step).
+- **auto**: sessions your rules approve go out the next time you send. With no approve rule, that is every session of the project (`goldengate share add <folder> --auto-approve` sets this up in one step).
 
 Whatever auto sends is listed in a receipt, with the rule that sent it. `goldengate receipts` lists them, `goldengate receipts show` prints the latest (add `--agents` to see which assistants can read each project), and `goldengate receipts retract <receipt-id> --all` deletes those sessions from the server again. In the TUI, press `c` in the inbox.
 
@@ -173,7 +173,7 @@ Whatever auto sends is listed in a receipt, with the rule that sent it. `goldeng
 
 **Project suggestions.** If a folder with sessions is in no project but looks like it belongs to one (a worktree of a shared repository, the same repository remote, or a branch named after one of the project's issues), the inbox suggests the project and says why. `goldengate projects accept <id>` adds the folder in one step and its sessions then wait in the inbox; `goldengate projects dismiss <id>` says not now. Comparing remotes and branches needs `git = true` under `[enrich]` in the config, which lets Golden Gate read each folder's git `HEAD` and `config` files; sessions of folders you have not shared are never read.
 
-**Chats, one conversation at a time.** After importing a claude.ai or ChatGPT export, share the conversations you want rather than a whole bucket:
+**Chats, one conversation at a time.** After importing a claude.ai or ChatGPT export, share the conversations you want rather than a whole grouping:
 
 ```bash
 goldengate chats                                   # imported conversations that are in no project (shown here only)
@@ -183,9 +183,9 @@ goldengate chats move <conversation-id> "Other project"
 goldengate chats unshare <conversation-id>
 ```
 
-Only the conversations you name are shared; the rest of the export stays on your machine and is not read by a sync. When you export again later, import the new zip the same way: only new and continued conversations are added, and `goldengate imports list` shows what each export brought in. A shared conversation then waits in the inbox like any session. A project you made in claude.ai or ChatGPT is suggested as a Golden Gate project in the inbox. To share a whole grouping instead, add it as a member: `goldengate projects add <project> 'claude-ai:Chats'`.
+Only the conversations you name are shared; the rest of the export stays on your machine and is not read when you send. When you export again later, import the new zip the same way: only new and continued conversations are added, and `goldengate imports list` shows what each export brought in. A shared conversation then waits in the inbox like any session. A project you made in claude.ai or ChatGPT is suggested as a Golden Gate project in the inbox. To share a whole grouping instead, add it as a member: `goldengate projects add <project> 'claude-ai:Chats'`.
 
-**Sync in the background.** To send without thinking about it, let the system run the unattended sync:
+**Send in the background.** To send without thinking about it, let the system run the background send:
 
 ```bash
 goldengate install-schedule              # every 30 minutes (systemd, launchd or Task Scheduler); --every 15m to change
@@ -196,15 +196,15 @@ goldengate uninstall-schedule            # and uninstall-hook claude-code
 
 Both run `goldengate sync --auto`. It sends only what you approved in the inbox or what your rules approve, never what is still waiting, and everything it sends is in a receipt. With every project at trust level ask, the background sync only delivers what you approve by hand.
 
-A rule matches on facts your tools recorded: the tool, the folder or chat grouping, the repository remote, the branch, and issue or pull request keys (`--work-item linear:ENG`). It acts only inside the project: it cannot share anything you did not share, and a deny rule always wins. An exclude rule keeps its matches on your machine. Even at auto, the first session from a folder or chat you did not name yourself (one reached through a parent folder or a pattern such as `chatgpt:*`) waits for you; after you send one, the rest follow automatically.
+A rule matches on facts your tools recorded: the tool, the folder or chat grouping, the repository remote, the branch, and issue or pull request keys (`--work-item linear:ENG`). It acts only inside the project: it cannot share anything you did not share, and a block always wins. An exclude rule keeps its matches on your machine. Even at auto, the first session from a folder or chat you did not name yourself (one reached through a parent folder or a pattern such as `chatgpt:*`) waits for you; after you send one, the rest follow automatically.
 
-**Which assistant sees what.** Each assistant you connect is an *agent* with its own read token and its own list of projects. The assistant you set up first sees every project you share; any other starts with nothing. These commands ask for the admin secret (or read `GOLDENGATE_ADMIN_TOKEN`) and never store it:
+**Which assistant sees what.** Each assistant you connect is an *agent* with its own assistant token and its own list of projects. The assistant you set up first sees every project you share; any other starts with nothing. These commands ask for the admin secret (or read `GOLDENGATE_ADMIN_TOKEN`) and never store it:
 
 ```bash
 goldengate agents list                               # agents and what each sees
 goldengate agents add "ChatGPT"                      # a new agent; sees nothing yet
-goldengate agents grant ChatGPT "Pharmfindr"         # by project name, id, or folder (sync it first)
-goldengate agents token ChatGPT                      # its read token, shown once
+goldengate agents grant ChatGPT "Pharmfindr"         # by project name, id, or folder (send it first)
+goldengate agents token ChatGPT                      # its assistant token, shown once
 goldengate agents revoke ChatGPT "Pharmfindr"
 goldengate agents grant ChatGPT --all                # every project, including future ones
 goldengate agents revoke Default --all               # stop the first assistant seeing everything

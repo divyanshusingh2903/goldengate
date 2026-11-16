@@ -204,7 +204,7 @@ func (a *app) editSave(ctx context.Context, cfg config.Config, st *gsync.State, 
 			Project: p.ProjectLabel(), Title: payloadTitle(p)}); err != nil {
 			return "", err
 		}
-		return "saved your version; the next sync sends it in place of what the server has", nil
+		return "saved your version; the next send puts it in place of what the server has", nil
 	}
 	return "saved your version; it is what will be sent for this session", nil
 }

@@ -94,7 +94,7 @@ func TestQuitWhileSyncRunningAsksFirst(t *testing.T) {
 	if quit != nil || h.m.modal == nil {
 		t.Fatal("ctrl+c during a sync asks before quitting")
 	}
-	h.contains("A sync is in progress.")
+	h.contains("A send is in progress.")
 	_, none := h.m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
 	if none != nil || h.m.modal != nil {
 		t.Fatal("n keeps running")
@@ -594,16 +594,16 @@ func TestSyncOffersToResummarizeHeuristicSessions(t *testing.T) {
 	be.stale = 5
 	h := newHarnessWith(t, be, 110, 34)
 	h.key("s")
-	h.contains("5 synced sessions have rule-based summaries", "anthropic:claude-haiku-5-5", "[m Include them in this sync]")
-	h.click("[m Include them in this sync]")
+	h.contains("5 sent sessions have rule-based summaries", "anthropic:claude-haiku-5-5", "[m Include them this time]")
+	h.click("[m Include them this time]")
 	if n := len(be.planOpts); n < 2 || !be.planOpts[n-1].Resummarize {
 		t.Fatalf("the button plans again with the flag: %+v", be.planOpts)
 	}
 	if n := len(be.syncOpts); n < 2 || !be.syncOpts[n-1].Resummarize || !be.syncs[n-1] {
 		t.Fatalf("and reviews again (dry) with it: %+v %v", be.syncOpts, be.syncs)
 	}
-	h.lacks("[m Include them in this sync]")
-	h.contains("Includes 5 synced sessions re-summarized by anthropic:claude-haiku-5-5")
+	h.lacks("[m Include them this time]")
+	h.contains("Includes 5 sent sessions re-summarized by anthropic:claude-haiku-5-5")
 	h.key("enter")
 	if n := len(be.syncOpts); be.syncs[n-1] || !be.syncOpts[n-1].Resummarize {
 		t.Fatalf("the send keeps the flag: %+v %v", be.syncOpts, be.syncs)

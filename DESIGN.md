@@ -51,6 +51,19 @@ These decide every product question. When a feature conflicts with one of them, 
 | **Receipt** | The record of what an automatic send sent, to which projects and agents, and which rule sent it. |
 | **Facts / narrative** | The two parts of a session summary: deterministic facts, and prose written by the rules, a model or the user. |
 
+Words people read (the UI, command help, README and SECURITY.md use the left column; the right column is what the code, the config file and older text call the same thing):
+
+| Plain word | Internal name |
+|---|---|
+| **Send** (the Send screen, "to send", "sent") | sync. The command stays `goldengate sync`; `goldengate send` is the same command. |
+| **Blocked**, "block a folder" | deny (`share deny`, also `share block`; the config key stays `deny`) |
+| **Upload token**: what this computer sends with | the `ingest` token scope |
+| **Assistant token**: what an assistant reads with | the `read` token scope (`token rotate assistant|upload` accepts the old names too) |
+| **Delete from the server** | purge (`--delete-from-server` and `--keep-on-server`; `--purge-remote` and `--keep-remote` still work) |
+| **Grouping** (a set of chats from an export) | bucket |
+
+Command and flag names never change under a user: every older spelling keeps working, hidden from help. A test (`cli/words_test.go`) fails if command help uses an internal name again. The server's own command (`goldengatebridge`) and its API keep the scope names, since those are what an operator configures.
+
 Non-goals
 - No multi-tenant hosted service. One deployment = one user (or one team that trusts each other).
 - No real-time streaming of in-progress sessions.

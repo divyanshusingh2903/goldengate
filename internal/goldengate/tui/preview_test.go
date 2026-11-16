@@ -13,7 +13,7 @@ func TestPreviewScreen(t *testing.T) {
 	if h.m.scr != scrPreview {
 		t.Fatal("p opens the preview")
 	}
-	h.contains("~/code/pharmfindr", "level summary", "Fix OAuth redirect mismatch", "Since the last sync:",
+	h.contains("~/code/pharmfindr", "level summary", "Fix OAuth redirect mismatch", "Since it was last sent:",
 		"+ file auth/redirect_test.go", "[REDACTED:aws-access-key]", "pull_request example/pharmfindr#7 [mentioned] (text)",
 		"commit pharmfindr@abc1234 [created] (tool_result)", "2 redactions", "showing the newest 3 of 47 sessions")
 	h.contains("Goals: The login redirect fails on staging", "Outcomes:", "• tests passed", "Summarized by local heuristic")
@@ -41,7 +41,7 @@ func TestParanoidShowsEveryByte(t *testing.T) {
 	h := newHarness(t, 100, 40)
 	h.key("p", "P")
 	h.contains("PARANOID", "\"session_id\": \"s-0001\"", "\"title\": \"Fix OAuth redirect mismatch\"")
-	h.lacks("Since the last sync:") // raw payloads, not the friendly summary
+	h.lacks("Since it was last sent:") // raw payloads, not the friendly summary
 	h.golden("preview_paranoid")
 	h.key("P")
 	h.contains("Title: Fix OAuth")
@@ -114,7 +114,7 @@ func TestNarrativeLengthRowCyclesAndSaves(t *testing.T) {
 	if s := h.be.saved[len(h.be.saved)-1].Summarize; s.Length != "detailed" {
 		t.Fatalf("enter cycles to detailed and saves: %+v", s)
 	}
-	h.contains("detailed (several paragraphs) · new and changed sessions; Sync offers the rest")
+	h.contains("detailed (several paragraphs) · new and changed sessions; Send offers the rest")
 	for want, got := range map[string]string{"standard": nextLength("short"), "short": nextLength("detailed"), "detailed": nextLength("")} {
 		if want != got {
 			t.Errorf("cycle: want %s, got %s", want, got)

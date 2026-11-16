@@ -211,12 +211,12 @@ func TestDenyAndUndo(t *testing.T) {
 
 func TestActionErrorsAreShown(t *testing.T) {
 	be := newFake()
-	be.applyErr = fmtErr("denied by ~/work/*; edit the config")
+	be.applyErr = fmtErr("blocked by ~/work/*; edit the config")
 	h := newHarnessWith(t, be, 100, 30)
 	h.key("space")
-	h.contains("denied by ~/work/*")
+	h.contains("blocked by ~/work/*")
 	h.key("j") // the message clears on the next key
-	h.lacks("denied by ~/work/*")
+	h.lacks("blocked by ~/work/*")
 }
 
 type strErr string
@@ -361,7 +361,7 @@ func TestTreeBuildsCompactFoldersAndChatGroups(t *testing.T) {
 
 func TestPendingAndStateGlyphs(t *testing.T) {
 	h := newHarness(t, 100, 30)
-	h.contains("[x]", "[ ]", "[~]", "[-]", "▲ 3 to sync", "not shared", "✕ denied", "✓ synced 40h")
+	h.contains("[x]", "[ ]", "[~]", "[-]", "▲ 3 to send", "not shared", "✕ blocked", "✓ sent 40h")
 }
 
 func TestMouse(t *testing.T) {
@@ -412,7 +412,7 @@ func TestSourceEditorOnDeniedProject(t *testing.T) {
 	if len(be.actions) != 0 {
 		t.Fatal("a denied project's tools cannot be switched on here")
 	}
-	h.contains("this project is denied")
+	h.contains("this project is blocked")
 }
 
 func TestPutInProjectCreatesOrJoinsOne(t *testing.T) {

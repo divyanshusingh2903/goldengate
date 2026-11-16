@@ -1,7 +1,7 @@
 ┌ goldengate setup ────────────────────────────────────────────────────── server: ○ not configured ┐
 │ Setup 5/6 · Review                                                                               │
 ├──────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ Dry run: this is exactly what the first sync would send                                          │
+│ Dry run: this is exactly what the first send would send                                          │
 │                                                                                                  │
 │ 7 session(s) in 3 project(s)                                                                     │
 │ 2 redaction(s) applied                                                                           │

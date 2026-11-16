@@ -128,7 +128,7 @@ func (m *Model) onInbox(msg inboxMsg) {
 	}
 	section("Waiting for your approval", msg.in.Pending)
 	section("Excluded: kept on this machine", msg.in.Excluded)
-	section("Sent, or queued for the next sync", msg.in.Sent)
+	section("Sent, or queued for the next send", msg.in.Sent)
 	section("Retracted: deleted from the server", msg.in.Retracted)
 	ib.clamp(m, 0)
 }
@@ -222,7 +222,7 @@ func (m *Model) onKeyInbox(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case it.State == "sent" || it.State == "queued":
 			m.setStatus("Nothing to approve: this session is already "+it.State+".", false)
 		default:
-			return m, m.inboxDecide(it, InboxApprove, "approved \""+title+"\": the next sync sends it")
+			return m, m.inboxDecide(it, InboxApprove, "approved \""+title+"\": it goes out the next time you send")
 		}
 	case "x":
 		switch {
@@ -289,7 +289,7 @@ func (m *Model) viewInbox() string {
 	case len(ib.rows) == 0:
 		out = append(out, " "+m.th.Title.Render("No sessions yet"), "", " Share a project first; its sessions then wait here for your approval.")
 	default:
-		note := "Approving records your decision; the next sync sends it. Or review and send everything from Sync (2)."
+		note := "Approving records your decision; it goes out the next time you send. Or review and send everything from Send (2)."
 		if it, ok := ib.current(); ok && it.State == InboxStateConflict {
 			note = "This session changed after you edited its summary. e: edit again · K: keep your version · D: use the new one"
 		}

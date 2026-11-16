@@ -220,7 +220,7 @@ func TestAutoSyncSendsOnlyWhatIsApproved(t *testing.T) {
 	l.errOut.Reset()
 	l.must(nil, "sync", "--auto")
 	line := strings.TrimSpace(l.errOut.String())
-	if line != "goldengate auto sync: nothing new was sent; 1 session(s) wait in the inbox and were not sent (goldengate inbox)" {
+	if line != "goldengate background send: nothing new was sent; 1 session(s) wait in the inbox and were not sent (goldengate inbox)" {
 		t.Fatalf("report: %q", line)
 	}
 	if held := everythingTheServerHolds(t, b); strings.Contains(held, "widget") {
@@ -249,7 +249,7 @@ func TestAutoSyncSendsOnlyWhatIsApproved(t *testing.T) {
 	l.must(nil, "sync", "--auto")
 	line = strings.TrimSpace(l.errOut.String())
 	id := regexp.MustCompile(`rc_[0-9a-f]{8}`).FindString(line)
-	if id == "" || !strings.HasPrefix(line, "goldengate auto sync: 1 session(s) sent, listed in receipt "+id) {
+	if id == "" || !strings.HasPrefix(line, "goldengate background send: 1 session(s) sent, listed in receipt "+id) {
 		t.Fatalf("report: %q", line)
 	}
 	if !strings.Contains(everythingTheServerHolds(t, b), "widget") {
@@ -278,7 +278,7 @@ func TestAutoSyncSendsOnlyWhatIsApproved(t *testing.T) {
 	// a second run has nothing to do
 	l.errOut.Reset()
 	l.must(nil, "sync", "--auto")
-	if line := strings.TrimSpace(l.errOut.String()); !strings.HasPrefix(line, "goldengate auto sync: nothing new was sent") {
+	if line := strings.TrimSpace(l.errOut.String()); !strings.HasPrefix(line, "goldengate background send: nothing new was sent") {
 		t.Fatalf("idle run: %q", line)
 	}
 }

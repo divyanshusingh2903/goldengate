@@ -17,7 +17,7 @@ func (a *app) rulesCmd() *cobra.Command {
 		Use:   "rules",
 		Short: "Rules that approve or exclude a project's sessions for you",
 		Long: `A rule belongs to a project and acts only on that project's sessions: folders
-and chats you do not share are never read, and a deny rule always wins.
+and chats you do not share are never read, and a block (goldengate share deny) always wins.
 
 A rule matches on facts about a session, never on what a model wrote: the tool
 it came from, its folder or chat grouping, the repository remote, the git
@@ -28,7 +28,7 @@ What an approve rule does depends on the project's trust level
   ask      nothing: everything waits in the inbox
   suggest  matching sessions are marked in the inbox; approve them together with
            goldengate inbox approve --suggested
-  auto     matching sessions are sent on the next sync
+  auto     matching sessions go out the next time you send
 
 With no approve rule, the trust level covers every session of the project.
 An exclude rule keeps matching sessions on this machine at every trust level.
@@ -75,9 +75,9 @@ func trustWords(p config.Project) string {
 	switch p.TrustLevel() {
 	case rules.TrustAuto:
 		if approve {
-			return "auto: sessions an approve rule matches are sent on the next sync; the rest wait in the inbox"
+			return "auto: sessions an approve rule matches go out the next time you send; the rest wait in the inbox"
 		}
-		return "auto: new and changed sessions are sent on the next sync"
+		return "auto: new and changed sessions go out the next time you send"
 	case rules.TrustSuggest:
 		if approve {
 			return "suggest: sessions an approve rule matches are marked in the inbox; nothing is sent until you approve"

@@ -1,13 +1,13 @@
-┌ goldengate [1 Projects] 2 Sync  3 Server  4 Settings  5 Agents  ─ ● connected bridge.example.com ┐
-│ [All 8]  Shared 4   To sync 3   Not shared 4                                                     │
+┌ goldengate [1 Projects] 2 Send  3 Server  4 Settings  5 Agents  ─ ● connected bridge.example.com ┐
+│ [All 8]  Shared 4   To send 3   Not shared 4                                                     │
 ├────────────────────────────────────────────────┬─────────────────────────────────────────────────┤
 │ / search projects…        sort recent · ▤ list │ Which tools to send from pharmfindr             │
-│▌ [x] ~/code/pharmfindr              ▲ 3 to sync│                                                 │
-│  [x] …ndr/.claude/worktrees/fox     ▲ 2 to sync│ ● Shared. Untick a tool to stop sending its     │
-│  [x] ~/code/forge                   ▲ 1 to sync│ sessions; the others are still sent.            │
+│▌ [x] ~/code/pharmfindr              ▲ 3 to send│                                                 │
+│  [x] …ndr/.claude/worktrees/fox     ▲ 2 to send│ ● Shared. Untick a tool to stop sending its     │
+│  [x] ~/code/forge                   ▲ 1 to send│ sessions; the others are still sent.            │
 │  [ ] ~/code/vihayas                  not shared│                                                 │
-│  [~] ~/code/website                ✓ synced 40h│▌[x] CC Claude Code     41 sessions  ✓ sent      │
-│  [-] ~/work/client-x                   ✕ denied│ [x] CX Codex            6 sessions  ✓ sent      │
+│  [~] ~/code/website                  ✓ sent 40h│▌[x] CC Claude Code     41 sessions  ✓ sent      │
+│  [-] ~/work/client-x                  ✕ blocked│ [x] CX Codex            6 sessions  ✓ sent      │
 │  [ ] ~/scratch/tmp                   not shared│                                                 │
 │  [ ] claude-ai:Chats                 not shared│ [esc Done]                                      │
 │                                                │                                                 │

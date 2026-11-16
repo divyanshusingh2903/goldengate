@@ -200,7 +200,7 @@ func Open(stateDir string, warn func(string)) Store {
 		return k
 	}
 	if warn != nil {
-		warn("no OS keyring available: the ingest token will be stored in " + filepath.Join(stateDir, "secrets.json") +
+		warn("no OS keyring available: the upload token will be stored in " + filepath.Join(stateDir, "secrets.json") +
 			" (readable only by you, but NOT encrypted)")
 	}
 	return &File{Path: filepath.Join(stateDir, "secrets.json")}

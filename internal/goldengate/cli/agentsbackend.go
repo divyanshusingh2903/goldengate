@@ -157,7 +157,7 @@ func (b *tuiBackend) AgentView(ctx context.Context, admin, agentID string) (tui.
 			v.Projects = append(v.Projects, p)
 		}
 	}
-	v.Note = "From what this computer synced; sessions from another computer are not listed."
+	v.Note = "From what this computer sent; sessions from another computer are not listed."
 	st, err := b.a.openState()
 	if err != nil {
 		return v, err
