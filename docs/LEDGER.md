@@ -11,8 +11,8 @@ This file lets any Claude Code session (or person) pick up the Product v2 work w
 
 _Last updated 2026-11-16. Update this section whenever a row in the queue changes._
 
-**Progress:** 27 of 31 scheduled issues done (plus 2 stretch). Phases 1 (Foundations), 2 (Per-agent access) and 3 (Inbox and curation) are complete.
-**In progress:** #46 HTTP JSON API over `tui.Backend`, size M, planned Nov 29. **Next up:** #47 Web UI v1. (#40 is blocked.) **Blocked:** #40 Share-link import: the #39 spike recommends not building it; whether to close it as not planned is the user's call. Phase 4 (work items, rules and automation) is complete: #21, #35, #36, #45, #31, #33, #34, #32 and #22.
+**Progress:** 28 of 31 scheduled issues done (plus 2 stretch). Phases 1 (Foundations), 2 (Per-agent access) and 3 (Inbox and curation) are complete.
+**Next up:** #47 Web UI v1: the TUI flow in a browser, size L, planned Nov 29-30. Its dependency #46 is done. After it only #48 is left. (#40 is blocked.) **Blocked:** #40 Share-link import: the #39 spike recommends not building it; whether to close it as not planned is the user's call. Phase 4 (work items, rules and automation) is complete: #21, #35, #36, #45, #31, #33, #34, #32 and #22.
 
 ### Done
 
@@ -45,6 +45,7 @@ _Last updated 2026-11-16. Update this section whenever a row in the queue change
 | #41 | Chats shared by conversation: `sessions` on a project member, `goldengate chats` (list, share, move, unshare), chat projects suggested as named projects | #96 | 2026-11-15 |
 | #42 | Incremental re-import of chat exports: compared by conversation id and data, exports that add nothing are not registered, `imports list` shows what each brought in | #98 | 2026-11-15 |
 | #23 | Plain words in the UI, help and docs (send, blocked, upload and assistant token, delete from the server, grouping); compatible aliases; TUI goldens refreshed | #100 | 2026-11-16 |
+| #46 | Local web server and JSON API over `tui.Backend` on loopback, with the security checks of DESIGN 6.1; `goldengate ui`; contract and security tests | #102 | 2026-11-16 |
 
 Supporting changes (not queue issues):
 
@@ -54,7 +55,7 @@ Supporting changes (not queue issues):
 | First `pr-template` check (unblocked the `main` ruleset); later replaced | #52 | 2026-11-14 |
 | The user's stricter `pr-template` check (Checklist with every item ticked; skips Dependabot) | #9 | 2026-11-14 |
 | This ledger, then its checklist rule, status section and roadmap sync | #54, #56, #57, #58 | 2026-11-14 |
-| Ledger status updates between issues (#49 done; phase 2 complete; refresh; phase 3 complete; #21 done; #35 done; #36 done; #45 done; #31 done; #33 done; #34 done; #32 done; #22 done; #44 done; #39 done; #41 done; #42 done; #23 done) | #61, #68, #69, #73, #75, #77, #79, #81, #83, #85, #87, #89, #91, #93, #95, #97, #99, #101 | 2026-11-15 |
+| Ledger status updates between issues (#49 done; phase 2 complete; refresh; phase 3 complete; #21 done; #35 done; #36 done; #45 done; #31 done; #33 done; #34 done; #32 done; #22 done; #44 done; #39 done; #41 done; #42 done; #23 done; #46 done) | #61, #68, #69, #73, #75, #77, #79, #81, #83, #85, #87, #89, #91, #93, #95, #97, #99, #101, #103 | 2026-11-15 |
 
 ### Open loose ends
 
@@ -114,6 +115,8 @@ The page reads all progress from one JSON block near its top, `<script id="statu
 2. In that file's status JSON, set `"updated"` to today, `"next"` to the next issue number, and add or change the issue's entry: `"<n>": {"state": "done", "pr": <pr>, "merged": "YYYY-MM-DD"}`. States: `done`, `in-progress`, `in-review`, `blocked`; issues not listed show as planned. Add PRs that are not queue issues to `"supporting"`.
 3. Publish that file with the Artifact tool and the same `url`, so the link stays the same. Keep the JSON valid.
 
+If no local copy exists (scratch folders do not survive), fetch the page file with `action: "read"`, `path: "index.html"`, and before publishing strip the document skeleton the service added: everything before `<title>` and the closing `</body></html>`.
+
 ### Rules that hold across sessions
 
 - Product principles in DESIGN.md 1.1 win over anything an issue body implies. If they conflict, stop and ask the user.
@@ -156,7 +159,7 @@ Status values: `todo`, `in progress`, `in review`, `blocked`, `done`. Size: S ab
 | 26 | #42 Incremental export re-import | S | #20 | Nov 27 | done | #98 |
 | 27 | #40 Share-link import | M | #39, #20 | Nov 28 | blocked | |
 | 28 | #23 Plain words in UI and docs | S | #17 | Nov 28 | done | #100 |
-| 29 | #46 HTTP JSON API over `tui.Backend` | M | #45 | Nov 29 | in progress | |
+| 29 | #46 HTTP JSON API over `tui.Backend` | M | #45 | Nov 29 | done | #102 |
 | 30 | #47 Web UI v1: the TUI flow in a browser | L | #46 | Nov 29–30 | todo | |
 | 31 | #48 Web UI: inbox, agents, receipts | M | #47, #20, #26, #33 | Nov 30 | todo | |
 | — | #38 Tracker lookups, opt-in per tracker (stretch) | M | #21 | after Nov 30 | todo | |
@@ -223,3 +226,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-15: #23 implemented: UI, command help, README and SECURITY.md say send, blocked, upload token, assistant token, delete from the server and grouping; aliases `send`, `share block`, `--delete-from-server`, `--keep-on-server`, `token rotate assistant|upload`; older spellings keep working; TUI goldens refreshed; a test guards command help.
 - 2026-11-16: #23 done (#100). Roadmap page updated. Next: #46.
 - 2026-11-16: #46 implemented: local web server on loopback with launch token, session cookie plus request token, Host and Origin checks, no CORS; every `tui.Backend` method reachable over a JSON API, sync progress as server-sent events; `goldengate ui`; contract test over the TUI's fake backend and the security tests from DESIGN 6.1.
+- 2026-11-16: #46 done (#102). Roadmap page updated. Next: #47.
