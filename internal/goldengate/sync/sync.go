@@ -356,7 +356,7 @@ func (s *Syncer) Plan(ctx context.Context, o RunOpts) (Batch, Report, error) {
 				rep.NotSelected++
 				continue
 			}
-			if d := s.Matcher.Decide(ref.ProjectKey, ref.Source); !d.Shared {
+			if !s.Shared(ref) {
 				rep.NotSelected++
 				continue
 			}
@@ -683,7 +683,25 @@ func (p *buildPool) wait() ([]job, error) {
 
 // projectOf is the named project a session belongs to (its id and name), or
 // two empty strings when its folder is shared without being in a project.
+// Shared reports whether a session is selected for sharing: its folder or
+// chat grouping is, by the selection rules (where deny wins), and, when the
+// grouping is shared by conversation, this conversation is one of the
+// listed ones. Nothing else about the session is looked at.
+func (s *Syncer) Shared(ref model.SessionRef) bool {
+	if !s.Matcher.Decide(ref.ProjectKey, ref.Source).Shared {
+		return false
+	}
+	limited, project := s.Config.SessionScope(ref.ProjectKey, ref.ID)
+	return !limited || project >= 0
+}
+
 func (s *Syncer) projectOf(ref model.SessionRef) (id, name string) {
+	if limited, i := s.Config.SessionScope(ref.ProjectKey, ref.ID); limited {
+		if i < 0 {
+			return "", ""
+		}
+		return s.Config.Projects[i].ID, s.Config.Projects[i].Name
+	}
 	name = s.Matcher.Project(ref.ProjectKey)
 	if name == "" {
 		if k := s.serverKey(ref); k != ref.ProjectKey {

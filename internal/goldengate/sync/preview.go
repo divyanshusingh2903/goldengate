@@ -133,7 +133,7 @@ func (s *Syncer) PendingCounts(ctx context.Context) (map[string]int, error) {
 			if lerr != nil {
 				continue
 			}
-			if !s.Matcher.Decide(ref.ProjectKey, ref.Source).Shared {
+			if !s.Shared(ref) {
 				continue
 			}
 			if dead, err := s.State.Tombstoned(ctx, ref.ProjectKey); err != nil {

@@ -325,6 +325,20 @@ max_input_chars = 0              # conversation sent per session; 0 = 24000 (abo
 length = "standard"              # narrative a model writes per session: short | standard | detailed
 ```
 
+**Chats are shared by conversation.** A chat grouping from an export (`claude-ai:Chats`, `chatgpt:Chats`) can hold hundreds of unrelated conversations, so the unit of sharing for chats is the single conversation. A project member may list conversations:
+
+```toml
+[[projects.members]]
+path = "chatgpt:Chats"
+sessions = ["6f0c…", "a41e…"]     # only these conversations of the grouping
+```
+
+- A member with `sessions` shares exactly those conversations; the rest of the grouping is not selected, is not read by a sync, and never appears in a payload (`Syncer.Shared`, checked on the session's id before it is loaded). The same grouping may be a member of several projects, each with its own conversations; one conversation is in one project. A grouping is shared either as a whole or by conversation, never both, and only chat groupings (not folders or patterns) can list conversations.
+- `goldengate chats` lists imported conversations that are in no project (id, date, title, grouping), on the machine only: listing reads the export's index, sends nothing and loads no conversation. `chats share <id>... --project <name>` shares single conversations, `chats move <id> <project>` re-files one, `chats unshare <id>...` stops sharing. A shared conversation then waits in the inbox like any session; approving, excluding and retracting it are the session commands.
+- A project the user made in claude.ai or ChatGPT is offered as a named project through the suggestion mechanism ("Make \"Pharmfindr\" a project?"), from the grouping's name alone. The catch-all groupings (ungrouped chats, GPTs, projects known only by an id) get no such suggestion; their conversations are shared one at a time. The inbox says how many imported conversations are in no project.
+- Groupings shared as a whole before this existed stay whole members: nothing about them changes and nothing new is sent. `projects add <project> <grouping>` turns a grouping shared by conversation into a whole member; `share add` refuses to do that silently.
+- Not built: picking single conversations in the TUI (it shows the suggestions and the usual inbox; choosing unassigned conversations is `goldengate chats`), and the project list still counts every conversation of a grouping that is shared by conversation.
+
 **Inbox (per-session approval).** Sharing a project selects it; it does not send its sessions. Each named project has a trust level (`trust`: ask, suggest or auto; see "Rules and trust levels" below). Unless trust and rules send it, a new or changed session waits as *pending* and is sent only once the user approved exactly that content (the decision stores the session's content hash). A session that changes after it was approved or sent is pending again. An *excluded* session is never read or sent again, in any project, until the user resets the decision. Decisions live in the local state DB (`decisions`: session, state, content hash, time, and the redacted title for listing); the states are approved, excluded and (from #29) retracted, while sent is the existing record of what was pushed. `RunOpts.Approve` plans pending sessions too: the TUI sets it because its Sync screen shows every session as it would be sent and sends only on the user's command, so sending is the approval (`PlanInfo.Approving` says how many); the CLI sets it only with `sync --approve`. Unattended sync (hooks, timers) never sets it. Configurations written before the inbox (`version` absent) load with trust `auto` for every existing project, once, so nothing changes for them; projects shared afterwards wait. The older `auto_approve = true` is read as `trust = "auto"` and not written again. A folder shared without any named project (a default-allow configuration) sends everything, as it always did.
 
 **Rules and trust levels.** Automation is rules the user wrote (principle 2). A rule belongs to a project and acts only on sessions that are already in it: whether a folder or chat is shared at all is decided before a session is read, by the selection rules above, where deny always wins. A rule cannot pull in anything from outside the project's members, and folders outside projects are still never read.
@@ -556,6 +570,7 @@ goldengate agents list|add|rename|limit|remove                    # one agent pe
 goldengate agents grant|revoke <agent> <project>... | --all       # which projects an agent sees
 goldengate agents token <agent>                                   # a read token for that agent, shown once
 goldengate import-claude-ai ./export.zip
+goldengate chats [--all] [--grep TEXT] | chats share <id>... --project P | chats move <id> P | chats unshare <id>...   # share single conversations of imported exports
 goldengate doctor               # detects tools, checks formats, server, token
 goldengate sync --auto          # unattended run: only what is approved or rule-approved; one-line report; everything sent is in a receipt
 goldengate install-hook claude-code     # adds a SessionEnd hook that runs `goldengate sync --auto --quiet --source claude-code`

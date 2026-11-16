@@ -85,6 +85,114 @@ type Member struct {
 	// ExcludeSources lists tools whose sessions are not sent for this member
 	// while the rest of it is ("codex"). It replaces share.deny_source.
 	ExcludeSources []string `toml:"exclude_sources,omitempty"`
+	// Sessions, when set, limits the member to these conversations of a chat
+	// grouping: only they are shared, the rest of the grouping is not. The
+	// same grouping may then be a member of several projects, each with its
+	// own conversations. Empty means the whole grouping or folder.
+	Sessions []string `toml:"sessions,omitempty"`
+}
+
+// SessionScope says how a session of the grouping key is covered by members
+// that list single conversations. limited is true when at least one member
+// of that grouping lists conversations; project is then the index of the
+// project that lists id, or -1 when none does (the conversation is not
+// shared). When limited is false the grouping is shared, or not, as a whole.
+func (c *Config) SessionScope(key, id string) (limited bool, project int) {
+	project = -1
+	want := cleanMember(key)
+	for i := range c.Projects {
+		for _, m := range c.Projects[i].Members {
+			if len(m.Sessions) == 0 || cleanMember(m.Path) != want {
+				continue
+			}
+			limited = true
+			if slices.Contains(m.Sessions, id) {
+				project = i
+			}
+		}
+	}
+	return limited, project
+}
+
+// WholeMember returns the index of the project that has the grouping or
+// folder as a whole member (not limited to conversations), or -1.
+func (c *Config) WholeMember(key string) int {
+	want := cleanMember(key)
+	for i := range c.Projects {
+		for _, m := range c.Projects[i].Members {
+			if len(m.Sessions) == 0 && cleanMember(m.Path) == want {
+				return i
+			}
+		}
+	}
+	return -1
+}
+
+// ShareSession adds one conversation of a chat grouping to a project
+// (created if new). A conversation is in one project only: it leaves any
+// other project that listed it, and moved names that project. It is an
+// error when the whole grouping is already a member somewhere.
+func (c *Config) ShareSession(ref, key, id string) (moved string, err error) {
+	key, id = cleanMember(key), strings.TrimSpace(id)
+	if key == "" || id == "" {
+		return "", fmt.Errorf("a conversation needs its grouping and its id")
+	}
+	if w := c.WholeMember(key); w >= 0 {
+		return "", fmt.Errorf("all of %s is already shared in project %q; single conversations cannot be added next to that", key, c.Projects[w].Name)
+	}
+	i := c.ProjectIndex(ref)
+	if i < 0 {
+		if _, err := c.CreateProject(ref); err != nil {
+			return "", err
+		}
+		i = len(c.Projects) - 1
+	}
+	if _, j := c.SessionScope(key, id); j == i {
+		return "", nil
+	} else if j >= 0 {
+		moved = c.Projects[j].Name
+		c.dropSession(j, key, id)
+	}
+	for k := range c.Projects[i].Members {
+		m := &c.Projects[i].Members[k]
+		if cleanMember(m.Path) == key {
+			m.Sessions = append(m.Sessions, id)
+			c.Flatten()
+			return moved, nil
+		}
+	}
+	c.Projects[i].Members = append(c.Projects[i].Members, Member{Path: key, Sessions: []string{id}})
+	c.Flatten()
+	return moved, nil
+}
+
+// UnshareSession takes one conversation out of whichever project lists it,
+// and returns that project's name ("" when none did).
+func (c *Config) UnshareSession(key, id string) string {
+	_, j := c.SessionScope(key, id)
+	if j < 0 {
+		return ""
+	}
+	name := c.Projects[j].Name
+	c.dropSession(j, key, id)
+	c.Flatten()
+	return name
+}
+
+// dropSession removes id from project j's member for key; a member left
+// without conversations is removed, since an empty list would mean "whole".
+func (c *Config) dropSession(j int, key, id string) {
+	ms := c.Projects[j].Members[:0:0]
+	for _, m := range c.Projects[j].Members {
+		if len(m.Sessions) > 0 && cleanMember(m.Path) == cleanMember(key) {
+			m.Sessions = slices.DeleteFunc(slices.Clone(m.Sessions), func(s string) bool { return s == id })
+			if len(m.Sessions) == 0 {
+				continue
+			}
+		}
+		ms = append(ms, m)
+	}
+	c.Projects[j].Members = ms
 }
 
 // The share rules other code edits (Share.Allow and Share.SourceDeny) are a
@@ -98,7 +206,9 @@ func (c *Config) Flatten() {
 	var allow, sd []string
 	for _, p := range c.Projects {
 		for _, m := range p.Members {
-			allow = append(allow, m.Path)
+			if !slices.Contains(allow, m.Path) { // a grouping listed by conversation can be in several projects
+				allow = append(allow, m.Path)
+			}
 			for _, s := range m.ExcludeSources {
 				sd = append(sd, selection.SourceRule(s, m.Path))
 			}
@@ -312,6 +422,12 @@ func (c *Config) AddMember(ref, member string) (moved string, err error) {
 		}
 		i = len(c.Projects) - 1
 	}
+	// adding the whole grouping replaces any sharing of it by conversation
+	for k := range c.Projects {
+		c.Projects[k].Members = slices.DeleteFunc(c.Projects[k].Members, func(x Member) bool {
+			return len(x.Sessions) > 0 && cleanMember(x.Path) == cleanMember(member)
+		})
+	}
 	if j := c.ProjectOfMember(member); j >= 0 {
 		if j == i {
 			return "", nil
@@ -360,6 +476,7 @@ func CloneProjects(ps []Project) []Project {
 		p.Members = slices.Clone(p.Members)
 		for j := range p.Members {
 			p.Members[j].ExcludeSources = slices.Clone(p.Members[j].ExcludeSources)
+			p.Members[j].Sessions = slices.Clone(p.Members[j].Sessions)
 		}
 		p.WorkItems = slices.Clone(p.WorkItems)
 		p.Rules = slices.Clone(p.Rules)
@@ -370,6 +487,7 @@ func CloneProjects(ps []Project) []Project {
 
 func (c Config) validateProjects() error {
 	ids, names, members := map[string]bool{}, map[string]string{}, map[string]string{}
+	limited, sessions := map[string]bool{}, map[string]string{}
 	for _, p := range c.Projects {
 		if p.ID == "" {
 			return fmt.Errorf("config: project %q has no id", p.Name)
@@ -403,6 +521,29 @@ func (c Config) validateProjects() error {
 			k := cleanMember(m.Path)
 			if k == "" {
 				return fmt.Errorf("config: project %q has an empty member", p.Name)
+			}
+			if len(m.Sessions) > 0 {
+				// limited to conversations: the grouping may be in several
+				// projects, a conversation in one only, and never next to
+				// a member that shares the whole grouping
+				if !pathutil.IsVirtualKey(k) || strings.ContainsAny(k, "*?[{") {
+					return fmt.Errorf("config: project %q: only a chat grouping can list single conversations, not %s", p.Name, m.Path)
+				}
+				if other, ok := members[k]; ok {
+					return fmt.Errorf("config: %s is shared as a whole in project %q and by conversation in %q; choose one", m.Path, other, p.Name)
+				}
+				limited[k] = true
+				for _, id := range m.Sessions {
+					sk := k + "\x00" + id
+					if other, ok := sessions[sk]; ok {
+						return fmt.Errorf("config: conversation %s of %s is in two projects (%q and %q)", id, m.Path, other, p.Name)
+					}
+					sessions[sk] = p.Name
+				}
+				continue
+			}
+			if limited[k] {
+				return fmt.Errorf("config: %s is shared by conversation in another project and as a whole in %q; choose one", m.Path, p.Name)
 			}
 			if other, ok := members[k]; ok {
 				if other == p.Name {

@@ -128,6 +128,18 @@ func (a *app) inboxList(ctx context.Context) error {
 		return err
 	}
 	a.printOffers(offers, "")
+	// conversations of imported chat exports that nobody placed yet
+	if cs, err := a.chats(ctx, cfg); err == nil {
+		n := 0
+		for _, c := range cs {
+			if c.Project == "" {
+				n++
+			}
+		}
+		if n > 0 {
+			fmt.Fprintf(a.Stdout, "\n%d conversation(s) from your chat exports are in no project. Share single ones: `goldengate chats`\n", n)
+		}
+	}
 	return nil
 }
 

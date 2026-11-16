@@ -237,7 +237,7 @@ func (s *Syncer) BuildOne(ctx context.Context, source, id string, generated bool
 				}
 				return nil, fmt.Errorf("sync: list %s: %w", a.Name(), lerr)
 			}
-			if ref.ID != id || !s.Matcher.Decide(ref.ProjectKey, ref.Source).Shared {
+			if ref.ID != id || !s.Shared(ref) {
 				continue
 			}
 			raw, err := a.Load(ctx, ref)

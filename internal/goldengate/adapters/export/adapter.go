@@ -216,6 +216,37 @@ func (a *Adapter) ListSessions(ctx context.Context, opt adapters.ListOpts) iter.
 	}
 }
 
+// Heads returns the cheap metadata of every conversation in the imported
+// archives (id, grouping, title, times), newest first. A conversation
+// present in several exports is returned once, from the export that saw it
+// last. The titles are for showing the user their own conversations on
+// their own machine: Heads sends nothing and loads no conversation body.
+func (a *Adapter) Heads() []Head {
+	best := map[string]Head{}
+	for _, p := range a.paths {
+		ix, err := a.load(p)
+		if err != nil {
+			continue
+		}
+		for id, e := range ix.elems {
+			if old, dup := best[id]; !dup || !e.head.Updated.Before(old.Updated) {
+				best[id] = e.head
+			}
+		}
+	}
+	out := make([]Head, 0, len(best))
+	for _, h := range best {
+		out = append(out, h)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if !out[i].Updated.Equal(out[j].Updated) {
+			return out[i].Updated.After(out[j].Updated)
+		}
+		return out[i].ID < out[j].ID
+	})
+	return out
+}
+
 // Load implements adapters.Adapter.
 func (a *Adapter) Load(ctx context.Context, ref model.SessionRef) (*model.RawSession, error) {
 	if err := ctx.Err(); err != nil {
