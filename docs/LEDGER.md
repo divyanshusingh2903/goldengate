@@ -12,7 +12,7 @@ This file lets any Claude Code session (or person) pick up the Product v2 work w
 _Last updated 2026-11-16. Update this section whenever a row in the queue changes._
 
 **Progress:** 28 of 31 scheduled issues done (plus 2 stretch). Phases 1 (Foundations), 2 (Per-agent access) and 3 (Inbox and curation) are complete.
-**Next up:** #47 Web UI v1: the TUI flow in a browser, size L, planned Nov 29-30. Its dependency #46 is done. After it only #48 is left. (#40 is blocked.) **Blocked:** #40 Share-link import: the #39 spike recommends not building it; whether to close it as not planned is the user's call. Phase 4 (work items, rules and automation) is complete: #21, #35, #36, #45, #31, #33, #34, #32 and #22.
+**In progress:** #47 Web UI v1: the TUI flow in a browser, size L, planned Nov 29-30. **Next up:** #48 Web UI: inbox, agents, receipts. (#40 is blocked.) **Blocked:** #40 Share-link import: the #39 spike recommends not building it; whether to close it as not planned is the user's call. Phase 4 (work items, rules and automation) is complete: #21, #35, #36, #45, #31, #33, #34, #32 and #22.
 
 ### Done
 
@@ -160,7 +160,7 @@ Status values: `todo`, `in progress`, `in review`, `blocked`, `done`. Size: S ab
 | 27 | #40 Share-link import | M | #39, #20 | Nov 28 | blocked | |
 | 28 | #23 Plain words in UI and docs | S | #17 | Nov 28 | done | #100 |
 | 29 | #46 HTTP JSON API over `tui.Backend` | M | #45 | Nov 29 | done | #102 |
-| 30 | #47 Web UI v1: the TUI flow in a browser | L | #46 | Nov 29–30 | todo | |
+| 30 | #47 Web UI v1: the TUI flow in a browser | L | #46 | Nov 29–30 | in progress | |
 | 31 | #48 Web UI: inbox, agents, receipts | M | #47, #20, #26, #33 | Nov 30 | todo | |
 | — | #38 Tracker lookups, opt-in per tracker (stretch) | M | #21 | after Nov 30 | todo | |
 | — | #43 Spike: browser extension (stretch) | S | #40 | after Nov 30 | todo | |
