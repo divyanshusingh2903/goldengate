@@ -460,7 +460,7 @@ Legend: `[x]` shared, `[ ]` not shared, `[~]` some sources shared, `[-]` denied.
 
 ### 6.1 Local web UI (`goldengate ui`): design and security model
 
-Status: the server, its security checks and the JSON API are built (issue #46, package `internal/goldengate/webui`, command `goldengate ui`). The screens are not: the page it serves today only proves the session works and says so; they come with #47 and #48.
+Status: the server, its security checks and the JSON API are built (issue #46, package `internal/goldengate/webui`, command `goldengate ui`). The first set of screens is built too (#47): Setup, Projects, Preview, Send, Server and Settings, the same flow as the terminal UI. Inbox, agents and receipts come with #48; until then those are in the terminal UI and the commands.
 
 `goldengate ui` runs the same product in a browser, for people who do not live in a terminal. It is a second front end on `tui.Backend`, not a second implementation: every selection, preview, redaction, validation and send goes through the code the TUI and the commands already use, and through the single push path (`sync.Push`). It adds no capability. What it does add is a browser-facing surface on the laptop, so this section is mostly about keeping that surface closed.
 
@@ -529,6 +529,21 @@ JSON bodies use the `tui` types with their Go field names. A backend error is a 
 
 Not built from this section yet: content-hashed asset paths with `immutable` caching (assets are served as they are), and the optional request log.
 
+#### Screens as built (#47)
+
+The page is plain ES modules under `webui/assets`: `app.js` (launch, session, navigation), `api.js` (the only code that calls the API; it holds the request token in memory and reads the event stream with `fetch`, because `EventSource` cannot send the token), `dom.js` (element helpers), and one module per screen.
+
+- **Setup**: the tools found on this computer, and a form to connect (server address, then the admin secret or a pairing code). The assistant token is shown once, with a copy button, and the admin field is emptied after the call.
+- **Projects**: the list with the same marks as the terminal UI (`[x]`, `[ ]`, `[~]`, `[-]`; `▲ n to send`, `✓ sent`, `not shared`, `✕ blocked`), views (All, Shared, To send, Not shared), search, a folder view where a folder holding several projects can be shared as a whole, and a card that says in words what happens to the selected project. Share, stop sharing, block, undo, per-tool choice, and putting a folder in a named project. Stopping to share offers to delete the data from the server.
+- **Preview**: the exact payload per session, redaction marks highlighted, and what changed since it was last sent.
+- **Send**: Review runs first and says that nothing leaves; it lists what Send would upload, what stays, what was redacted and how many sessions Send approves. Send shows progress per project; a failure offers to review and retry, and what already arrived is not sent again.
+- **Server**: reachability, whether the upload token is accepted, what the server holds, and deleting a project there.
+- **Settings**: share level, look-back, tools, extra redaction patterns, git metadata, and who writes summaries (provider, model, endpoint, length, a write-only API key, a test call). Choosing a model states what is then sent to it.
+
+Rules the page keeps: every screen has a line saying what leaves the computer and when; session text is placed as text only (no HTML strings anywhere, which a test checks); colours come from the brand tokens with light and dark, and every state also has a glyph or a word; everything is a native button, input or link, so it works from the keyboard; layouts collapse to one column at phone width. Reloading the page ends its session on purpose (the request token lives in memory); pasting a fresh link into the same tab restarts it.
+
+Not in this version: multi-select of projects, renaming a project, the "paranoid" preview, theme presets beyond light and dark, and the keyboard shortcuts of the terminal UI.
+
 #### API shape (as designed in #45)
 
 - One endpoint per `tui.Backend` method under `/api/`, `GET` for reads and `POST` for anything that changes state or contacts the server. The JSON types are the `tui` types, so the TUI's fake backend drives the contract tests.
@@ -583,7 +598,7 @@ Tests that #46 must include (the "security checks" its issue refers to): a wrong
 
 ```
 goldengate                      # open TUI
-goldengate ui [--no-open] [--port N]   # the local web server and API (6.1), on loopback only; the screens are not built yet
+goldengate ui [--no-open] [--port N]   # the same product in your browser (6.1), on this computer only
 goldengate init [--server URL] [--pair-code CODE]   # first-run wizard; headless via flags/env (see 7.1)
 goldengate sync [--dry-run] [--project PATH] [--since 7d] [--source codex]
 goldengate share add|remove|list

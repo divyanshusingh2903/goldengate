@@ -5,6 +5,7 @@ import (
 	"context"
 	"io/fs"
 	"net/http"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -288,5 +289,45 @@ func TestThePageIsSelfContained(t *testing.T) {
 	})
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+// Every script the page imports is one of its own embedded files, served as
+// JavaScript, and the page starts from app.js.
+func TestThePagesScriptsAllExistAndAreServed(t *testing.T) {
+	c, _ := start(t, webui.Options{})
+	imports := regexp.MustCompile(`from "(/assets/[a-z]+\.js)"`)
+	seen := map[string]bool{"/assets/app.js": true, "/assets/app.css": true}
+	_ = fs.WalkDir(webui.AssetFS, "assets", func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".js") {
+			return err
+		}
+		b, _ := fs.ReadFile(webui.AssetFS, path)
+		for _, m := range imports.FindAllStringSubmatch(string(b), -1) {
+			seen[m[1]] = true
+		}
+		if strings.Contains(string(b), "import(") {
+			t.Errorf("%s loads a script at run time", path)
+		}
+		return nil
+	})
+	if len(seen) < 8 {
+		t.Fatalf("expected the screens to be imported, found %v", seen)
+	}
+	for path := range seen {
+		res, body := c.Do("GET", path, nil, nil)
+		want := "text/javascript"
+		if strings.HasSuffix(path, ".css") {
+			want = "text/css"
+		}
+		if res.StatusCode != 200 || !strings.HasPrefix(res.Header.Get("Content-Type"), want) || len(body) == 0 {
+			t.Errorf("%s: %d %q", path, res.StatusCode, res.Header.Get("Content-Type"))
+		}
+	}
+	_, page := c.Do("GET", "/launch", nil, nil)
+	for _, want := range []string{`<script type="module" src="/assets/app.js"></script>`, `<nav id="nav"`, `role="status"`, `<main id="main"`} {
+		if !strings.Contains(string(page), want) {
+			t.Errorf("the page lacks %s", want)
+		}
 	}
 }

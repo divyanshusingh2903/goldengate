@@ -7,11 +7,31 @@
 <link rel="stylesheet" href="/assets/app.css">
 </head>
 <body>
-<main>
-<h1>Golden Gate</h1>
-<p id="status">Connecting…</p>
-<p id="detail" hidden></p>
-</main>
+<a class="skip" href="#main">Skip to content</a>
+<header class="bar">
+  <span class="brand">Golden Gate</span>
+  <nav id="nav" aria-label="Screens" hidden>
+    <button type="button" data-screen="projects">Projects</button>
+    <button type="button" data-screen="send">Send</button>
+    <button type="button" data-screen="server">Server</button>
+    <button type="button" data-screen="settings">Settings</button>
+    <button type="button" data-screen="setup">Setup</button>
+  </nav>
+  <span id="badge" class="badge"></span>
+  <button type="button" id="theme" class="quiet" aria-label="Switch between light and dark">◐</button>
+</header>
+<p id="status" class="status" role="status" aria-live="polite"></p>
+<main id="main" tabindex="-1"><p>Connecting…</p></main>
+<dialog id="confirm">
+  <form method="dialog">
+    <h2 id="confirm-title"></h2>
+    <div id="confirm-body"></div>
+    <div class="row end">
+      <button value="no" id="confirm-no">No</button>
+      <button value="yes" id="confirm-yes" class="primary">Yes</button>
+    </div>
+  </form>
+</dialog>
 <script type="module" src="/assets/app.js"></script>
 </body>
 </html>

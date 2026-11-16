@@ -67,7 +67,7 @@ Some assistants only connect through OAuth. With `--oauth --public-url https://y
 The UI cannot do anything the commands cannot: it runs on the same code, so selection, redaction, validation and the single push path apply unchanged. Sync starts as a dry run, which goes through validation but sends and records nothing. The admin token typed into the setup is masked, used for the one connection, and wiped from memory-backed fields afterwards; it is never written down or displayed. Previewing reads and summarizes sessions locally and writes nothing. The state database keeps the last pushed payload of each session (the already-redacted text the server received) so the UI can show what changed; it lives next to the config with mode 0600.
 
 ## The local web UI (`goldengate ui`)
-The server and its checks are built and tested; the screens are not yet, so today the page only confirms that it connected. The model is DESIGN.md section 6.1. What holds now:
+`goldengate ui` shows Golden Gate in your browser. The model is DESIGN.md section 6.1. What holds:
 
 - It listens on loopback only, on a random port, and there is no option to listen anywhere else. It runs only while the command runs.
 - It opens with a single-use launch token that expires in two minutes and never appears in a request line or a log. After that, every request needs both a session cookie (`HttpOnly`, `SameSite=Strict`) and a request token held in the page's memory, and passes exact Host and Origin checks. There is no CORS.

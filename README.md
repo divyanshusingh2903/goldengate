@@ -63,6 +63,8 @@ Un-share with `goldengate share remove ~/code/myproject --delete-from-server`. R
 
 ## The interactive UI
 
+Prefer a browser? `goldengate ui` opens the same flow (setup, projects, preview, send, server, settings) in your browser. It runs on this computer only, for as long as the command runs; the inbox, agents and receipts are in the terminal UI and the commands for now.
+
 Run `goldengate` in a terminal. The first run starts a short setup (find your tools, connect to your server, choose the share level, pick projects, review, first send); after that it opens the project picker.
 
 | Screen | What it does |
