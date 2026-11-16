@@ -11,8 +11,8 @@ This file lets any Claude Code session (or person) pick up the Product v2 work w
 
 _Last updated 2026-11-15. Update this section whenever a row in the queue changes._
 
-**Progress:** 25 of 31 scheduled issues done (plus 2 stretch). Phases 1 (Foundations), 2 (Per-agent access) and 3 (Inbox and curation) are complete.
-**In progress:** #42 Incremental export re-import, size S, planned Nov 27. **Next up:** #23 Plain words in UI and docs (#40 is blocked). **Blocked:** #40 Share-link import: the #39 spike recommends not building it; whether to close it as not planned is the user's call. Phase 4 (work items, rules and automation) is complete: #21, #35, #36, #45, #31, #33, #34, #32 and #22.
+**Progress:** 26 of 31 scheduled issues done (plus 2 stretch). Phases 1 (Foundations), 2 (Per-agent access) and 3 (Inbox and curation) are complete.
+**Next up:** #23 Plain words in UI and docs, size S, planned Nov 28. Its dependency #17 is done. (#40, the row before it, is blocked.) **Blocked:** #40 Share-link import: the #39 spike recommends not building it; whether to close it as not planned is the user's call. Phase 4 (work items, rules and automation) is complete: #21, #35, #36, #45, #31, #33, #34, #32 and #22.
 
 ### Done
 
@@ -43,6 +43,7 @@ _Last updated 2026-11-15. Update this section whenever a row in the queue change
 | #44 | Cursor source adapter (3.30, Linux): conversations from the state database, prompts of sidebar conversations from transcripts, tag `CU`; work items mentioned only (no exit code recorded) | #92 | 2026-11-15 |
 | #39 | Spike: share-link import. Recommendation: do not build (both services' terms forbid programmatic extraction); non-goal updated | #94 | 2026-11-15 |
 | #41 | Chats shared by conversation: `sessions` on a project member, `goldengate chats` (list, share, move, unshare), chat projects suggested as named projects | #96 | 2026-11-15 |
+| #42 | Incremental re-import of chat exports: compared by conversation id and data, exports that add nothing are not registered, `imports list` shows what each brought in | #98 | 2026-11-15 |
 
 Supporting changes (not queue issues):
 
@@ -52,7 +53,7 @@ Supporting changes (not queue issues):
 | First `pr-template` check (unblocked the `main` ruleset); later replaced | #52 | 2026-11-14 |
 | The user's stricter `pr-template` check (Checklist with every item ticked; skips Dependabot) | #9 | 2026-11-14 |
 | This ledger, then its checklist rule, status section and roadmap sync | #54, #56, #57, #58 | 2026-11-14 |
-| Ledger status updates between issues (#49 done; phase 2 complete; refresh; phase 3 complete; #21 done; #35 done; #36 done; #45 done; #31 done; #33 done; #34 done; #32 done; #22 done; #44 done; #39 done; #41 done) | #61, #68, #69, #73, #75, #77, #79, #81, #83, #85, #87, #89, #91, #93, #95, #97 | 2026-11-15 |
+| Ledger status updates between issues (#49 done; phase 2 complete; refresh; phase 3 complete; #21 done; #35 done; #36 done; #45 done; #31 done; #33 done; #34 done; #32 done; #22 done; #44 done; #39 done; #41 done; #42 done) | #61, #68, #69, #73, #75, #77, #79, #81, #83, #85, #87, #89, #91, #93, #95, #97, #99 | 2026-11-15 |
 
 ### Open loose ends
 
@@ -149,7 +150,7 @@ Status values: `todo`, `in progress`, `in review`, `blocked`, `done`. Size: S ab
 | 23 | #44 Cursor adapter: spike, then build | L | | Nov 26 | done | #92 |
 | 24 | #39 Spike: share-link import | S | #17 | Nov 27 | done | #94 |
 | 25 | #41 Per-conversation sharing for chats | M | #18, #29 | Nov 27 | done | #96 |
-| 26 | #42 Incremental export re-import | S | #20 | Nov 27 | in progress | |
+| 26 | #42 Incremental export re-import | S | #20 | Nov 27 | done | #98 |
 | 27 | #40 Share-link import | M | #39, #20 | Nov 28 | blocked | |
 | 28 | #23 Plain words in UI and docs | S | #17 | Nov 28 | todo | |
 | 29 | #46 HTTP JSON API over `tui.Backend` | M | #45 | Nov 29 | todo | |
@@ -215,3 +216,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-15: #41 implemented: chats are shared by conversation (`sessions` on a project member, `goldengate chats`), chat projects are suggested as named projects, the inbox counts unassigned conversations, and whole-grouping shares keep working unchanged.
 - 2026-11-15: #41 done (#96). Roadmap page updated. Next: #42.
 - 2026-11-15: #42 implemented: importing an export compares it with the registered ones (by conversation id and data), reports new, changed and already-imported conversations, does not register an export that adds nothing, and records what each export brought in for `goldengate imports list`.
+- 2026-11-15: #42 done (#98). Roadmap page updated. Next: #23.
