@@ -22,6 +22,7 @@ import (
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/adapters"
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/adapters/claudecode"
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/adapters/codex"
+	"github.com/divyanshusingh2903/goldengate/internal/goldengate/adapters/cursor"
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/adapters/opencode"
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/config"
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/discover"
@@ -87,7 +88,7 @@ func DefaultDeps() Deps {
 // DefaultRegistry registers every adapter this build ships.
 func DefaultRegistry(_ string, _ func(string) string) (*adapters.Registry, error) {
 	var r adapters.Registry
-	for _, ad := range []adapters.Adapter{claudecode.New(claudecode.Options{}), codex.New(codex.Options{}), opencode.New(opencode.Options{})} {
+	for _, ad := range []adapters.Adapter{claudecode.New(claudecode.Options{}), codex.New(codex.Options{}), opencode.New(opencode.Options{}), cursor.New(cursor.Options{})} {
 		if err := r.Register(ad); err != nil {
 			return nil, err
 		}

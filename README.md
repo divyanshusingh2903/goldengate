@@ -25,7 +25,7 @@ Let a remote AI assistant know what you have been working on in your coding tool
 - `goldengate` (laptop): reads your local session history, applies your allow/deny choices, redacts and summarizes, and pushes to your own server.
 - `goldengatebridge` (server you run): stores the summaries and serves them read-only over MCP (streamable HTTP, stateless JSON).
 
-Status: pre-release (M4). Sources: Claude Code, Codex, OpenCode, and claude.ai / ChatGPT data exports. Deployment scripts and release packaging are on the roadmap in [DESIGN.md](DESIGN.md). See [SECURITY.md](SECURITY.md) before connecting an assistant.
+Status: pre-release (M4). Sources: Claude Code, Codex, OpenCode, Cursor, and claude.ai / ChatGPT data exports. Deployment scripts and release packaging are on the roadmap in [DESIGN.md](DESIGN.md). See [SECURITY.md](SECURITY.md) before connecting an assistant.
 
 ## Quickstart (about ten minutes)
 
@@ -213,6 +213,7 @@ Grants and revocations apply to the assistant's next request. A project an assis
 | Claude Code | `~/.claude/projects/**.jsonl` (honors `CLAUDE_CONFIG_DIR`) |
 | Codex CLI / Desktop | `~/.codex/sessions/**/rollout-*.jsonl` (honors `CODEX_HOME`) |
 | OpenCode | its SQLite database, read-only (`$XDG_DATA_HOME/opencode/opencode.db`) |
+| Cursor | its state database, read-only (`~/.config/Cursor/User/globalStorage/state.vscdb` on Linux); tag `CU`. Commits and pull requests from Cursor show as mentioned only, because Cursor records no exit code for commands |
 | claude.ai | `goldengate import-claude-ai export.zip` |
 | ChatGPT | `goldengate import-chatgpt export.zip` |
 

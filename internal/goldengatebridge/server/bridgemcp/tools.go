@@ -460,7 +460,7 @@ type RecentActivityIn struct {
 	Since   string `json:"since,omitempty" jsonschema:"start of the range, YYYY-MM-DD (UTC) or RFC 3339; takes precedence over days"`
 	Until   string `json:"until,omitempty" jsonschema:"end of the range, YYYY-MM-DD (that whole day is included) or RFC 3339; default now"`
 	Project string `json:"project,omitempty" jsonschema:"only this project: its name or id, as shown by list_projects"`
-	Source  string `json:"source,omitempty" jsonschema:"only this tool: claude-code, codex, opencode or claude-ai"`
+	Source  string `json:"source,omitempty" jsonschema:"only this tool: claude-code, codex, opencode, cursor, claude-ai or chatgpt"`
 	Limit   int    `json:"limit,omitempty" jsonschema:"maximum sessions to return (default 20, max 50)"`
 	Cursor  string `json:"cursor,omitempty" jsonschema:"opaque cursor from a previous result's next_cursor"`
 }
@@ -780,7 +780,7 @@ type ListWorkIn struct {
 	Until    string `json:"until,omitempty" jsonschema:"end of the range, YYYY-MM-DD (that whole day is included) or RFC 3339; default now"`
 	Status   string `json:"status,omitempty" jsonschema:"filter by status: mentioned, created, updated, merged, closed, completed or canceled"`
 	Provider string `json:"provider,omitempty" jsonschema:"github, gitlab, linear or jira"`
-	Source   string `json:"source,omitempty" jsonschema:"artifacts only: claude-code, codex, opencode or claude-ai"`
+	Source   string `json:"source,omitempty" jsonschema:"artifacts only: claude-code, codex, opencode, cursor, claude-ai or chatgpt"`
 	Limit    int    `json:"limit,omitempty" jsonschema:"maximum results (default 20, max 50)"`
 	Cursor   string `json:"cursor,omitempty" jsonschema:"opaque cursor from a previous result's next_cursor"`
 }

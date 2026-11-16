@@ -1,0 +1,3 @@
+{"role": "user", "message": {"content": [{"type": "text", "text": "<timestamp>Monday, Jan 5, 2026, 10:00 AM</timestamp>\n<user_query>\nfind the bug in the widget\n</user_query>"}]}}
+{"role": "assistant", "message": {"content": [{"type": "text", "text": "Looking for the bug now."}, {"type": "tool_use", "name": "Shell", "input": {"command": "go test ./...", "description": "run tests"}}]}}
+{"type": "turn_ended", "status": "success"}

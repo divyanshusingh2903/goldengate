@@ -1,0 +1,173 @@
+[
+  {
+    "ID": "aaaaaaaa-0000-4000-8000-000000000001",
+    "Project": "/home/user/projects/demo",
+    "Title": "Ship the widget",
+    "Version": "3.30.14",
+    "Started": "2026-01-05T09:00:00Z",
+    "Updated": "2026-01-05T09:11:00Z",
+    "ToolsUsed": {
+      "glob_file_search": 1,
+      "read_file_v2": 1,
+      "ripgrep_raw_search": 1,
+      "run_terminal_command_v2": 3
+    },
+    "FilesTouched": null,
+    "Warnings": null,
+    "Turns": [
+      {
+        "Role": "user",
+        "Text": "please ship the widget and open a pull request",
+        "LastText": ""
+      },
+      {
+        "Role": "assistant",
+        "Text": "I will look at the code first.\n\nThe widget is committed and https://github.com/example/demo/pull/7 is open. See LIN-9 in the tracker: https://linear.app/acme/issue/LIN-9/widget",
+        "LastText": "The widget is committed and https://github.com/example/demo/pull/7 is open. See LIN-9 in the tracker: https://linear.app/acme/issue/LIN-9/widget",
+        "Tools": [
+          {
+            "Name": "read_file_v2",
+            "Kind": "file_read",
+            "Command": "",
+            "Path": "/home/user/projects/demo/src/widget.go",
+            "Known": false,
+            "OK": false
+          },
+          {
+            "Name": "ripgrep_raw_search",
+            "Kind": "other",
+            "Command": "",
+            "Path": "",
+            "Known": false,
+            "OK": false
+          },
+          {
+            "Name": "run_terminal_command_v2",
+            "Kind": "shell",
+            "Command": "git commit -m \"ship the widget\"",
+            "Path": "",
+            "Known": false,
+            "OK": false
+          },
+          {
+            "Name": "run_terminal_command_v2",
+            "Kind": "shell",
+            "Command": "gh pr create --title \"Ship the widget\" --body \"done\"",
+            "Path": "",
+            "Known": false,
+            "OK": false
+          },
+          {
+            "Name": "run_terminal_command_v2",
+            "Kind": "shell",
+            "Command": "gh pr merge 7 --merge",
+            "Path": "",
+            "Known": false,
+            "OK": false
+          },
+          {
+            "Name": "glob_file_search",
+            "Kind": "other",
+            "Command": "",
+            "Path": "",
+            "Known": false,
+            "OK": false
+          }
+        ]
+      },
+      {
+        "Role": "user",
+        "Text": "thanks, anything left?",
+        "LastText": ""
+      },
+      {
+        "Role": "assistant",
+        "Text": "Nothing is left for this request.",
+        "LastText": "Nothing is left for this request."
+      }
+    ]
+  },
+  {
+    "ID": "bbbbbbbb-0000-4000-8000-000000000002",
+    "Project": "/home/user/projects/demo",
+    "Title": "Find the bug",
+    "Version": "3.30.14",
+    "Started": "2026-01-05T10:00:00Z",
+    "Updated": "2026-01-05T10:03:20Z",
+    "ToolsUsed": {
+      "run_terminal_command_v2": 1
+    },
+    "FilesTouched": null,
+    "Warnings": null,
+    "Turns": [
+      {
+        "Role": "user",
+        "Text": "find the bug in the widget",
+        "LastText": ""
+      },
+      {
+        "Role": "assistant",
+        "Text": "Looking for the bug now.\n\nAll tests pass; I found no bug.",
+        "LastText": "All tests pass; I found no bug.",
+        "Tools": [
+          {
+            "Name": "run_terminal_command_v2",
+            "Kind": "shell",
+            "Command": "go test ./...",
+            "Path": "",
+            "Known": false,
+            "OK": false
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "ID": "cccccccc-0000-4000-8000-000000000003",
+    "Project": "cursor:no-folder",
+    "Title": "A quick question",
+    "Version": "3.30.14",
+    "Started": "2026-01-05T11:00:00Z",
+    "Updated": "2026-01-05T11:00:00Z",
+    "ToolsUsed": {},
+    "FilesTouched": null,
+    "Warnings": null,
+    "Turns": [
+      {
+        "Role": "user",
+        "Text": "what does this error mean?",
+        "LastText": ""
+      },
+      {
+        "Role": "assistant",
+        "Text": "It means the file is missing.",
+        "LastText": "It means the file is missing."
+      }
+    ]
+  },
+  {
+    "ID": "88888888-0000-4000-8000-000000000008",
+    "Project": "/home/user/projects/other",
+    "Title": "Mostly fine",
+    "Version": "3.30.14",
+    "Started": "2026-01-05T11:30:00Z",
+    "Updated": "2026-01-05T11:31:40Z",
+    "ToolsUsed": {},
+    "FilesTouched": null,
+    "Warnings": [
+      "1 message(s) of an unknown shape were skipped"
+    ],
+    "Turns": [
+      {
+        "Role": "user",
+        "Text": "rename the helper",
+        "LastText": ""
+      },
+      {
+        "Role": "assistant",
+        "Text": "Renamed.",
+        "LastText": "Renamed."
+      }
+    ]
+  }
+]

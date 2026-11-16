@@ -4,7 +4,7 @@
 
 An open-source, self-hosted tool that lets any MCP-capable assistant (Gemini, ChatGPT, Claude, etc.) know what you have been working on in your AI coding tools, with **you choosing exactly which projects are shared**.
 
-- **Sources (read from your machine):** Claude Code, Codex CLI, OpenCode, plus imported claude.ai and ChatGPT data exports. Cursor is planned.
+- **Sources (read from your machine):** Claude Code, Codex CLI, OpenCode, Cursor, plus imported claude.ai and ChatGPT data exports.
 - **Ingester + TUI (runs locally):** discovers sessions, lets you pick which project folders to share, redacts, summarizes, pushes.
 - **Server (runs in the cloud, e.g. Cloud Run):** stores summaries, serves them over MCP (streamable HTTP) to a remote assistant.
 
@@ -82,7 +82,7 @@ cmd/goldengatebridge/     # server entry (thin main)
 internal/
   goldengate/             # code that ships only in the local tool
     adapters/             # one package per source tool (+ Adapter interface, registry)
-      claudecode/ codex/ opencode/ claudeai/ chatgpt/
+      claudecode/ codex/ opencode/ cursor/ claudeai/ chatgpt/
     cli/ tui/             # cobra commands; Bubble Tea models, views, styles
     webui/                # (planned, see 6.1) local web UI: loopback server, request checks, embedded assets
     client/ config/       # bridge HTTP client; TOML config, XDG paths
@@ -131,7 +131,20 @@ These come from memory and tool formats change. The implementer must inspect rea
 | Claude Code | `~/.claude/projects/<encoded-cwd>/<session-id>.jsonl` (honor `CLAUDE_CONFIG_DIR`) | JSONL events; the project folder name is an encoding of the working directory, so prefer the `cwd` field inside events over decoding the folder name. |
 | Codex CLI | `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` (honor `CODEX_HOME`) | JSONL; working directory is recorded in session metadata events. |
 | OpenCode | `~/.local/share/opencode/` (honor XDG data dir) | Historically JSON files under a `storage/` tree (sessions, messages, parts); newer versions may use SQLite. Support whichever exists; detect by presence. |
+| Cursor | `<user dir>/globalStorage/state.vscdb` (`~/.config/Cursor/User` on Linux), plus `~/.cursor/projects/<slug>/agent-transcripts/<id>/<id>.jsonl` | Verified on disk with Cursor 3.30 on Linux; see "Cursor" below. The macOS and Windows locations follow the platform convention and were not verified. |
 | claude.ai export | user-supplied `.zip` from Settings -> Privacy -> Export data | Conversations and projects as JSON. No folder concept; treat each claude.ai Project as a "project" and ungrouped chats as one "Chats" bucket. |
+
+### Cursor (spike result, 3.30 on Linux)
+
+What was found on disk, and what the adapter (`adapters/cursor`, format version 3) does with it:
+
+- **Where.** Conversations ("composers") are in the global state database `<user dir>/globalStorage/state.vscdb`, not in the per-workspace databases. Table `composerHeaders` has one row per conversation: id, workspace id, `createdAt`, `lastUpdatedAt`, `checkpointAt`, `isSubagent`, and a JSON `value` with the name, `isDraft`, and the workspace folder as `workspaceIdentifier.uri.fsPath`. That folder is the working directory; a conversation opened without a folder has none and is filed under the grouping `cursor:no-folder`.
+- **Messages.** Rows of the key-value table `cursorDiskKV` under `bubbleId:<conversation>:<bubble>`, in insertion order. `type` 1 is the user, 2 the assistant. An assistant bubble holds text, thinking (dropped), or one tool call in `toolFormerData`: `name`, `status` (`completed`, `error`, `cancelled`), and `params` and `result` as JSON strings.
+- **Prompts from the sidebar.** A conversation started from the agent sidebar had no user bubble at all. Its prompt was only in the transcript Cursor writes to `~/.cursor/projects/<slug>/agent-transcripts/<id>/<id>.jsonl` (`role`, `message.content[]` of `text` and `tool_use`, and `turn_ended` records; no timestamps, no tool results, and the folder only as a lossy slug). The adapter reads prompts from there when the database has none, strips the `<user_query>` wrapper, and puts them first, since their position is not recorded.
+- **Tool calls and evidence.** The shell tool (`run_terminal_command_v2`) stores the command and its output, and a status, but **no exit code**. Whether a command that exits non-zero is stored differently from one that succeeds could not be established from the available conversations, so the adapter never marks a Cursor shell result as known: by the evidence rule in 4.1, commits and pull requests from Cursor are `mentioned` only. `read_file_v2` is mapped as a file read. No file-editing call was available, so edits are not mapped and `FilesTouched` stays empty. The git branch is not recorded.
+- **Not listed.** Drafts, sub-agent conversations, and conversations without any message. A header of an unknown shape is skipped with a warning; a conversation whose bubbles are not version 3 is skipped rather than guessed at; single unreadable bubbles are dropped with a warning on the session.
+- **What is not read.** The same database holds sign-in state (`ItemTable`) and per-conversation encryption keys (`composerData:*`). The adapter opens it read-only and reads `composerHeaders`, the `bubbleId:*` rows and one version entry, nothing else; fixtures plant decoy secrets there and tests check they never surface.
+- **Open, to verify with real data:** how a failing shell command is recorded (to allow evidence), the file-editing tools, the `cursor-agent` CLI's own store, and the macOS and Windows locations.
 
 ### Normalized model
 
@@ -186,6 +199,7 @@ What each source can provide
 | Source | Commits and PRs | Files and artifacts |
 |---|---|---|
 | Claude Code, Codex, OpenCode | From shell tool calls and results (`git commit`, `git push`, `gh pr create\|merge\|close`, `glab mr create\|merge\|close`), plus SHAs, URLs and `#n` in text | Files created vs modified, from write/edit/patch tool calls (each tool names these differently; the adapter normalizes them) |
+| Cursor | Mentions only (status `mentioned`): a shell call records no exit code, so its result is never taken as proof | None yet: no file-editing call was available to verify |
 | claude.ai export | Mentions in text only (status `mentioned`) | Artifacts and files created or uploaded in chats, if the export includes them (verify against a real export) |
 
 Privacy
@@ -264,7 +278,7 @@ path = "claude-ai:Pharmfindr"
 [share]
 default = "deny"                 # deny | allow
 deny  = ["~/code/**/secrets", "~/work/client-x"]   # deny always wins over project membership
-include_sources = ["claude-code", "codex", "opencode"]
+include_sources = ["claude-code", "codex", "opencode", "cursor"]
 since = "90d"                    # ignore older sessions (upload look-back; agents still default to the last 5 days, see section 9)
 level = "summary"                # summary | titles-only | full (full requires --i-understand)
 

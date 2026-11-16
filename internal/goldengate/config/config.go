@@ -42,7 +42,7 @@ type Config struct {
 }
 
 // CurrentVersion is the Version written by this build.
-const CurrentVersion = 3
+const CurrentVersion = 4
 
 // Summarize chooses how session summaries are written. The default is the
 // local heuristic; a model is opt-in, and then the redacted conversation of
@@ -132,7 +132,7 @@ func Default() Config {
 		Version: CurrentVersion,
 		Share: Share{
 			Default:        "deny",
-			IncludeSources: []string{"claude-code", "codex", "opencode", "claude-ai", "chatgpt"},
+			IncludeSources: []string{"claude-code", "codex", "opencode", "cursor", "claude-ai", "chatgpt"},
 			Since:          "90d",
 			Level:          model.LevelSummary,
 		},
@@ -308,6 +308,12 @@ func Load(path string) (Config, error) {
 		// The list every earlier build wrote: GitLab joins it. A list the
 		// user changed is left as it is.
 		c.Issues.Providers = append(c.Issues.Providers, "gitlab")
+	}
+	if c.Version < 4 && slices.Equal(c.Share.IncludeSources, []string{"claude-code", "codex", "opencode", "claude-ai", "chatgpt"}) {
+		// The source list every earlier build wrote: Cursor joins it. A list
+		// the user changed is left as it is. Being a source shares nothing:
+		// a Cursor session is sent only from a folder the user shares.
+		c.Share.IncludeSources = []string{"claude-code", "codex", "opencode", "cursor", "claude-ai", "chatgpt"}
 	}
 	if c.Version < CurrentVersion {
 		c.Version = CurrentVersion
