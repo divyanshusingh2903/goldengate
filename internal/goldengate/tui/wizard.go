@@ -19,7 +19,7 @@ const (
 	wizSync
 )
 
-var wizTitles = [...]string{"Welcome", "Server", "Share level", "Choose projects", "Review", "First sync"}
+var wizTitles = [...]string{"Welcome", "Server", "Share level", "Choose projects", "Review", "First send"}
 
 type wizardState struct {
 	started bool
@@ -336,7 +336,7 @@ func (m *Model) viewWizard() string {
 		add(m.th.Dim.Render("Redaction runs either way. Raw transcripts are never sent."))
 		hint = m.hints(inner, "←/→", "choose", "enter", "continue", "esc", "skip setup")
 	case wizReview:
-		add(m.th.Title.Render("Dry run: this is exactly what the first sync would send"))
+		add(m.th.Title.Render("Dry run: this is exactly what the first send would send"))
 		add("")
 		if m.sy.phase == syncPlanning || m.sy.phase == syncRunning {
 			add(m.th.Dim.Render("planning…"))

@@ -1,4 +1,4 @@
-┌ [1 Projects] 2 Sync  3 Server  4 Settings  5 Agents  › preview ── ● connected bridge.example.com ┐
+┌ [1 Projects] 2 Send  3 Server  4 Settings  5 Agents  › preview ── ● connected bridge.example.com ┐
 │ ~/code/pharmfindr · level summary · summary view · 1 new, 1 changed, 1 unchanged · 2 redactions  │
 ├──────────────────────────────────────────────────────────────────────────────────────────────────┤
 │ ── [changed] CC Claude Code · 2h ago · s-0001                                                    │
@@ -14,7 +14,7 @@
 │  Work items:                                                                                     │
 │    commit pharmfindr@abc1234 [created] (tool_result)                                             │
 │    pull_request example/pharmfindr#7 [mentioned] (text)                                          │
-│  Since the last sync:                                                                            │
+│  Since it was last sent:                                                                         │
 │    title: "Fix OAuth redirect" -> "Fix OAuth redirect mismatch"                                  │
 │    + file auth/redirect_test.go                                                                  │
 │                                                                                                  │
@@ -46,5 +46,5 @@
 │                                                                                                  │
 │                                                                                                  │
 ├──────────────────────────────────────────────────────────────────────────────────────────────────┤
-│ ↑/↓ scroll  P paranoid  r reload  s sync  esc back                                               │
+│ ↑/↓ scroll  P paranoid  r reload  s send  esc back                                               │
 └──────────────────────────────────────────────────────────────────────────────────────────────────┘

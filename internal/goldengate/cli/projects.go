@@ -20,7 +20,7 @@ func (a *app) projectsCmd() *cobra.Command {
 	mode := func() (string, error) {
 		switch {
 		case purgeRemote && keepRemote:
-			return "", errors.New("--purge-remote and --keep-remote are mutually exclusive")
+			return "", errors.New("--delete-from-server and --keep-on-server are mutually exclusive")
 		case purgeRemote:
 			return "yes", nil
 		case keepRemote:
@@ -58,8 +58,9 @@ func (a *app) projectsCmd() *cobra.Command {
 			return a.projectsDelete(c.Context(), args[0], m)
 		}}
 	for _, c := range []*cobra.Command{remove, del} {
-		c.Flags().BoolVar(&purgeRemote, "purge-remote", false, "also delete the un-shared members' data from the server")
-		c.Flags().BoolVar(&keepRemote, "keep-remote", false, "leave data already on the server in place")
+		c.Flags().BoolVar(&purgeRemote, "delete-from-server", false, "also delete the un-shared members' data from the server")
+		c.Flags().BoolVar(&keepRemote, "keep-on-server", false, "leave data already on the server in place")
+		oldFlagNames(c)
 	}
 	auto := &cobra.Command{Use: "auto <project> on|off", Short: "Auto-approve: send a project's new sessions without asking (off: they wait in the inbox)", Args: cobra.ExactArgs(2),
 		RunE: func(c *cobra.Command, args []string) error { return a.projectsAuto(args[0], args[1]) }}
@@ -104,7 +105,7 @@ func (a *app) projectsList() error {
 				line += "  (not sent: " + strings.Join(mb.ExcludeSources, ", ") + ")"
 			}
 			if !strings.ContainsAny(mb.Path, "*?[{") && m.Denied(a.localKey(mb.Path)) {
-				line += "  [denied: a deny rule wins, nothing is sent]"
+				line += "  [blocked: a block always wins, nothing is sent]"
 			}
 			fmt.Fprintln(a.Stdout, line)
 		}
@@ -141,7 +142,7 @@ func (a *app) projectsCreate(ctx context.Context, name string, members []string,
 		return err
 	}
 	if !auto {
-		fmt.Fprintln(a.Stdout, "its sessions wait for your approval: `goldengate inbox`, or review and send from the Sync screen")
+		fmt.Fprintln(a.Stdout, "its sessions wait for your approval: `goldengate inbox`, or review and send from the Send screen")
 		return nil
 	}
 	return a.projectsAuto(name, "on")
@@ -216,7 +217,7 @@ func (a *app) projectsAdd(ctx context.Context, ref string, members []string) err
 			continue
 		}
 		if m.Denied(a.localKey(raw)) {
-			fmt.Fprintf(a.Stderr, "warning: %s is also matched by a deny rule; deny wins, nothing from it will be shared\n", a.ruleFor(raw))
+			fmt.Fprintf(a.Stderr, "warning: %s is also blocked (`share deny`); a block always wins, nothing from it will be shared\n", a.ruleFor(raw))
 		}
 		if err := st.ClearTombstone(ctx, a.localKey(raw)); err != nil {
 			return err
@@ -305,7 +306,7 @@ func (a *app) projectsAuto(ref, v string) error {
 		return err
 	}
 	if on {
-		fmt.Fprintf(a.Stdout, "%q: new and changed sessions are sent on the next sync without asking\n", cfg.Projects[i].Name)
+		fmt.Fprintf(a.Stdout, "%q: new and changed sessions go out the next time you send, without asking\n", cfg.Projects[i].Name)
 	} else {
 		fmt.Fprintf(a.Stdout, "%q: new and changed sessions wait in the inbox until you approve them\n", cfg.Projects[i].Name)
 	}

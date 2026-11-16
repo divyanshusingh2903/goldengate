@@ -483,9 +483,9 @@ func nextLength(l string) string {
 func narrativeLabel(l string) string {
 	switch l {
 	case "short":
-		return "short (one paragraph) · new and changed sessions; Sync offers the rest"
+		return "short (one paragraph) · new and changed sessions; Send offers the rest"
 	case "detailed":
-		return "detailed (several paragraphs) · new and changed sessions; Sync offers the rest"
+		return "detailed (several paragraphs) · new and changed sessions; Send offers the rest"
 	}
-	return "standard (two to four paragraphs) · new and changed sessions; Sync offers the rest"
+	return "standard (two to four paragraphs) · new and changed sessions; Send offers the rest"
 }

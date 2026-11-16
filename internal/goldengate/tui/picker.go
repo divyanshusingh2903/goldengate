@@ -250,7 +250,7 @@ func (m *Model) onKeyProjects(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case " ", "x":
 		return m, m.shareToggle()
 	case "d":
-		return m, m.act(ActDeny, "deny")
+		return m, m.act(ActDeny, "block")
 	case "u":
 		return m, m.undo()
 	case "v":
@@ -466,7 +466,7 @@ func (m *Model) onKeySources(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 // shared at all, it shares the project with that source only.
 func (m *Model) toggleSource(r *Row, i int) tea.Cmd {
 	if r.State == Denied {
-		m.setStatus("this project is denied; share it first (space on the project)", true)
+		m.setStatus("this project is blocked; share it first (space on the project)", true)
 		return nil
 	}
 	var others []string
@@ -551,7 +551,7 @@ const (
 	viewLocal
 )
 
-var viewNames = [...]string{"All", "Shared", "To sync", "Not shared"}
+var viewNames = [...]string{"All", "Shared", "To send", "Not shared"}
 
 // inView reports whether a row belongs to a list view.
 func inView(v listView, r Row) bool {
@@ -610,7 +610,7 @@ func (m *Model) header(screenName string) string {
 	}
 	cur := map[screen]int{scrProjects: 1, scrPreview: 1, scrSync: 2, scrServer: 3, scrSettings: 4, scrAgents: 5}[m.scr]
 	parts := []string{brand, " "}
-	for i, name := range []string{"Projects", "Sync", "Server", "Settings", "Agents"} {
+	for i, name := range []string{"Projects", "Send", "Server", "Settings", "Agents"} {
 		n := i + 1
 		label := fmt.Sprintf("%d %s", n, name)
 		m.clickText(0, label, func(m *Model) tea.Cmd { return m.goTo(n) })
@@ -696,7 +696,7 @@ func (m *Model) projectHints() string {
 	if m.allShared(m.targets()) {
 		share = "unshare"
 	}
-	pairs := []string{"space", share, "p", "preview", "s", "sync", "f", "view", "/", "search", "d", "deny", "u", "undo", "t", "tree", "?", "help"}
+	pairs := []string{"space", share, "p", "preview", "s", "send", "f", "view", "/", "search", "d", "block", "u", "undo", "t", "tree", "?", "help"}
 	if p.rangeMode {
 		pairs = append([]string{"v", "end range"}, pairs...)
 	}
@@ -822,21 +822,21 @@ func (m *Model) rowStatus(it item) (string, lipgloss.Style) {
 			pending += d.Pending
 		}
 		if pending > 0 {
-			return fmt.Sprintf("▲ %d to sync", pending), m.th.Warn
+			return fmt.Sprintf("▲ %d to send", pending), m.th.Warn
 		}
 		return fmt.Sprintf("%d projects", len(rs)), m.th.Dim
 	}
 	switch r.State {
 	case Denied:
-		return "✕ denied", m.th.Bad
+		return "✕ blocked", m.th.Bad
 	case NotShared:
 		return "not shared", m.th.Dim
 	}
 	switch {
 	case r.Pending > 0:
-		return fmt.Sprintf("▲ %d to sync", r.Pending), m.th.Warn
+		return fmt.Sprintf("▲ %d to send", r.Pending), m.th.Warn
 	case r.Synced > 0:
-		return "✓ synced " + shortAge(m.now(), r.LastSync), m.th.Good
+		return "✓ sent " + shortAge(m.now(), r.LastSync), m.th.Good
 	}
 	return "nothing to send", m.th.Dim
 }
@@ -977,7 +977,7 @@ func (m *Model) cardLines(w, h, x0 int) []string {
 		case NotShared:
 			para(m.th.Dim, "○ Not shared yet. Tick a tool to share only its sessions from this project.")
 		case Denied:
-			para(m.th.Bad, "✕ Denied. Share the project first (space on it); then choose its tools here.")
+			para(m.th.Bad, "✕ Blocked. Share the project first (space on it); then choose its tools here.")
 		default:
 			para(m.th.Dim, "● Shared. Untick a tool to stop sending its sessions; the others are still sent.")
 		}
@@ -1038,7 +1038,7 @@ func (m *Model) cardLines(w, h, x0 int) []string {
 		add("")
 		field("Projects", fmt.Sprintf("%d, %d shared", len(rs), shared))
 		if pending > 0 {
-			field("To sync", m.th.Warn.Render(fmt.Sprintf("▲ %d sessions", pending)))
+			field("To send", m.th.Warn.Render(fmt.Sprintf("▲ %d sessions", pending)))
 		}
 		add("")
 		label := "Share folder"
@@ -1096,7 +1096,7 @@ func (m *Model) cardLines(w, h, x0 int) []string {
 		if r.Synced > 0 {
 			last = fmt.Sprintf("%s · %d on the server", relTime(m.now(), r.LastSync), r.Synced)
 		}
-		field("Synced", last)
+		field("Sent", last)
 	}
 	field("Level", m.snap.Level)
 	if r.Reason != "" && r.State != NotShared {
@@ -1108,7 +1108,7 @@ func (m *Model) cardLines(w, h, x0 int) []string {
 	switch r.State {
 	case Shared, Partial:
 		if r.Pending > 0 {
-			bs = append(bs, btn{m.th.ButtonGo, "s", "Sync now"})
+			bs = append(bs, btn{m.th.ButtonGo, "s", "Send now"})
 		}
 		bs = append(bs, btn{m.th.Button, "space", "Unshare"})
 	case Denied:
@@ -1167,12 +1167,12 @@ func (m *Model) syncState(r *Row, pv Preview, have bool) (string, string) {
 	}
 	switch r.State {
 	case Denied:
-		return m.th.Bad.Bold(true).Render("✕ Denied"),
-			"Never sent, even when a parent folder is shared. Share it to lift the denial."
+		return m.th.Bad.Bold(true).Render("✕ Blocked"),
+			"Never sent, even when a parent folder is shared. Share it to lift the block."
 	case NotShared:
 		d := "Nothing from this project leaves your machine."
 		if have && pv.Total > 0 {
-			d += " If you share it, the next sync sends " + sessions(pv.Total) + "."
+			d += " If you share it, the next send has " + sessions(pv.Total) + "."
 		}
 		return m.th.Dim.Bold(true).Render("○ Not shared"), d
 	}
@@ -1188,20 +1188,20 @@ func (m *Model) syncState(r *Row, pv Preview, have bool) (string, string) {
 	}
 	switch {
 	case r.Synced == 0 && r.Pending > 0:
-		return head + m.th.Warn.Render(" · never synced"),
-			"Not on the server yet. The next sync sends " + sessions(r.Pending) + "."
+		return head + m.th.Warn.Render(" · never sent"),
+			"Not on the server yet. The next send has " + sessions(r.Pending) + "."
 	case r.Pending > 0:
 		d := sessions(r.Pending) + " waiting: "
 		if have {
-			d += changeSummary(pv.Items) + " since the last sync."
+			d += changeSummary(pv.Items) + " since it was last sent."
 		} else {
-			d += "new or changed since the last sync."
+			d += "new or changed since it was last sent."
 		}
-		return head + m.th.Warn.Render(fmt.Sprintf(" · ▲ %d to sync", r.Pending)), d
+		return head + m.th.Warn.Render(fmt.Sprintf(" · ▲ %d to send", r.Pending)), d
 	case r.Synced > 0:
 		return head + m.th.Good.Render(" · up to date"), "The server has everything from this project."
 	}
-	return head, "No sessions in the sync window yet; new ones will go out on the next sync."
+	return head, "No sessions in the look-back window yet; new ones go out the next time you send."
 }
 
 // changeSummary says what kind of changes are waiting, e.g. "2 new, 1 changed".

@@ -238,7 +238,7 @@ func (b *tuiBackend) Apply(ctx context.Context, act tui.Action) (tui.ActionResul
 				}
 			}
 		}
-		notes = append(notes, fmt.Sprintf("denied %d", len(act.Keys)))
+		notes = append(notes, fmt.Sprintf("blocked %d", len(act.Keys)))
 	case tui.ActToggleSource:
 		if len(act.Keys) != 1 {
 			return tui.ActionResult{}, errors.New("choose one project to change its sources")
@@ -253,7 +253,7 @@ func (b *tuiBackend) Apply(ctx context.Context, act tui.Action) (tui.ActionResul
 		}
 		switch {
 		case m.Denied(key):
-			err = errors.New("this project is denied; share it first (space on the project)")
+			err = errors.New("this project is blocked; share it first (space on the project)")
 		case !anyShared:
 			// nothing here is shared yet: share the folder with this one source only
 			var allow func(*config.Config)
@@ -342,7 +342,7 @@ func (b *tuiBackend) allowEdit(cfg config.Config, m *selection.Matcher, keys []s
 			continue // the exact deny rule is lifted below
 		}
 		if m.Denied(a.localKey(k)) {
-			return nil, fmt.Errorf("%s is denied by a broader rule (%s); edit the config to change that", rule, m.Decide(a.localKey(k), "").Reason)
+			return nil, fmt.Errorf("%s is blocked by a broader rule (%s); edit the config to change that", rule, m.Decide(a.localKey(k), "").Reason)
 		}
 	}
 	*notes = append(*notes, fmt.Sprintf("sharing %d", len(keys)))
@@ -437,7 +437,7 @@ func (b *tuiBackend) removeEdit(cfg config.Config, m *selection.Matcher, keys []
 	}
 	msg := fmt.Sprintf("no longer sharing %d", len(keys))
 	if excluded > 0 {
-		msg += fmt.Sprintf(" (%d excluded with a deny rule because a broader rule shares them)", excluded)
+		msg += fmt.Sprintf(" (%d blocked, because a broader rule shares them)", excluded)
 	}
 	*notes = append(*notes, msg)
 	return func(c *config.Config) {
@@ -675,7 +675,7 @@ func (b *tuiBackend) Server(ctx context.Context) (tui.ServerInfo, error) {
 	}
 	ps, err := cl.ListProjects(tctx)
 	if err != nil {
-		info.Err = "the stored ingest token was refused: " + err.Error()
+		info.Err = "the stored upload token was refused: " + err.Error()
 		return info, nil
 	}
 	info.TokenOK = true

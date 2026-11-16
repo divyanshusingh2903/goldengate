@@ -45,7 +45,7 @@ func (m *Model) typing() bool {
 
 func (m *Model) quit() (tea.Model, tea.Cmd) {
 	if m.sy.phase == syncRunning {
-		m.modal = &modal{title: "Sync running", lines: []string{"A sync is in progress.", "Cancel it and quit?"},
+		m.modal = &modal{title: "Sending", lines: []string{"A send is in progress.", "Cancel it and quit?"},
 			yes: func(m *Model) tea.Cmd {
 				if m.sy.cancel != nil {
 					m.sy.cancel()

@@ -51,7 +51,7 @@ func (a *app) ingestClient(cfg config.Config) (*client.Client, error) {
 	}
 	tok, err := a.secretStore().Get(secretName(cfg.Server.URL))
 	if errors.Is(err, secrets.ErrNotFound) {
-		return nil, errors.New("no ingest token stored for this server: run `goldengate init` again")
+		return nil, errors.New("no upload token stored for this server: run `goldengate init` again")
 	}
 	if err != nil {
 		return nil, err
@@ -114,9 +114,9 @@ func (a *app) initCmd() *cobra.Command {
 		Long: `Connects this machine to a deployed goldengatebridge.
 
 With the admin secret (GOLDENGATE_ADMIN_TOKEN, --admin-token-stdin, or a hidden prompt) it
-creates an ingest token (kept in your OS keyring) and a read token (shown once, for
-your assistant). With --pair-code it exchanges a single-use code from
-'goldengatebridge pair' for the ingest token instead. The admin secret is kept in
+creates an upload token (kept in your OS keyring, used by this computer to send) and an
+assistant token (shown once, for your assistant to read with). With --pair-code it exchanges a single-use code from
+'goldengatebridge pair' for the upload token instead. The admin secret is kept in
 memory only and is never written to disk.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -178,7 +178,7 @@ func (a *app) connect(ctx context.Context, serverURL, pairCode, adminToken strin
 		}
 		in, err := ac.MintToken(ctx, "ingest", "goldengate@"+host, "")
 		if err != nil {
-			return connectResult{}, fmt.Errorf("could not create the ingest token (is the admin token right?): %w", err)
+			return connectResult{}, fmt.Errorf("could not create the upload token (is the admin token right?): %w", err)
 		}
 		// On a server that has no agents yet, the read token minted here is
 		// the first assistant's: it gets to see every project the user
@@ -187,7 +187,7 @@ func (a *app) connect(ctx context.Context, serverURL, pairCode, adminToken strin
 		before, listErr := ac.ListAgents(ctx)
 		rd, err := ac.MintToken(ctx, "read", "assistant", "")
 		if err != nil {
-			return connectResult{}, fmt.Errorf("could not create the read token: %w", err)
+			return connectResult{}, fmt.Errorf("could not create the assistant token: %w", err)
 		}
 		ingestSecret, res.ReadSecret = in.Secret, rd.Secret
 		if listErr == nil && len(before) == 0 {
@@ -199,7 +199,7 @@ func (a *app) connect(ctx context.Context, serverURL, pairCode, adminToken strin
 		}
 	}
 	if err := store.Set(secretName(serverURL), ingestSecret); err != nil {
-		return connectResult{}, fmt.Errorf("could not store the ingest token: %w", err)
+		return connectResult{}, fmt.Errorf("could not store the upload token: %w", err)
 	}
 	cfg.Server.URL = serverURL
 	if err := config.Save(a.cfgPath(), cfg); err != nil {
@@ -234,7 +234,7 @@ func (a *app) runInit(ctx context.Context, serverURL, pairCode string, stdinTok,
 	}
 	serverURL, readSecret, oauth := res.ServerURL, res.ReadSecret, res.OAuth
 	fmt.Fprintf(a.Stdout, "Server %s is up.\n", serverURL)
-	fmt.Fprintf(a.Stdout, "Ingest token stored in the %s. The admin token was not saved anywhere.\n", res.StoreKind)
+	fmt.Fprintf(a.Stdout, "Upload token stored in the %s. The admin token was not saved anywhere.\n", res.StoreKind)
 	if readSecret != "" {
 		fmt.Fprintf(a.Stdout, `
 Your assistant's read token (shown ONCE; it cannot be recovered, rotate it with 'goldengate token rotate read'):
@@ -250,7 +250,7 @@ For assistants that let you set a header, paste the URL and send the token as "A
 			fmt.Fprintln(a.Stdout, "What this assistant can see is set with `goldengate agents` (a project is visible to an assistant only once it is granted).")
 		}
 	} else {
-		fmt.Fprintf(a.Stdout, "\nCreate the assistant's read token on the server with:\n    goldengatebridge token create --scope read\n")
+		fmt.Fprintf(a.Stdout, "\nCreate the assistant token on the server with:\n    goldengatebridge token create --scope read\n")
 	}
 	if oauth {
 		fmt.Fprintf(a.Stdout, `
@@ -278,11 +278,13 @@ func (a *app) tokenCmd() *cobra.Command {
 	var grace time.Duration
 	var stdinTok bool
 	rotate := &cobra.Command{
-		Use:   "rotate read|ingest",
-		Short: "Mint a replacement token and revoke the old ones (needs the admin token)",
-		Long: `Mints a new token of the given scope, then revokes every other active token of that
-scope, optionally after --grace so a connector can be updated first. A new read token is
-shown once; a new ingest token replaces the stored one.`,
+		Use:   "rotate assistant|upload",
+		Short: "Replace a token and revoke the old ones (needs the admin token)",
+		Long: `Makes a new token of the given kind, then revokes every other active token of that
+kind, optionally after --grace so a connector can be updated first.
+
+  assistant   the token your assistant reads with. The new one is shown once.
+  upload      the token this computer sends with. The new one replaces the stored one.`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return a.rotate(cmd.Context(), args[0], grace, stdinTok)
@@ -295,8 +297,14 @@ shown once; a new ingest token replaces the stored one.`,
 }
 
 func (a *app) rotate(ctx context.Context, scope string, grace time.Duration, stdinTok bool) error {
+	switch scope { // the plain words, and the server's own names for them
+	case "assistant":
+		scope = "read"
+	case "upload":
+		scope = "ingest"
+	}
 	if scope != "read" && scope != "ingest" {
-		return fmt.Errorf("scope must be read or ingest, got %q", scope)
+		return fmt.Errorf("say assistant or upload, got %q", scope)
 	}
 	cfg, err := a.load()
 	if err != nil {
@@ -331,7 +339,7 @@ func (a *app) rotate(ctx context.Context, scope string, grace time.Duration, std
 	}
 	if scope == "ingest" {
 		if err := a.secretStore().Set(secretName(cfg.Server.URL), fresh.Secret); err != nil {
-			return fmt.Errorf("could not store the new ingest token (old tokens were left active): %w", err)
+			return fmt.Errorf("could not store the new upload token (old tokens were left active): %w", err)
 		}
 	}
 	revoked := 0
@@ -354,7 +362,7 @@ func (a *app) rotate(ctx context.Context, scope string, grace time.Duration, std
 	}
 	fmt.Fprintf(a.Stdout, "Created a new %s token and revoked %d old one(s) %s.\n", scope, revoked, when)
 	if scope == "read" {
-		fmt.Fprintf(a.Stdout, "\nNew read token (shown ONCE):\n\n    %s\n\nUpdate your assistant's connector (%s/mcp) with it.\n", fresh.Secret, cfg.Server.URL)
+		fmt.Fprintf(a.Stdout, "\nNew assistant token (shown ONCE):\n\n    %s\n\nUpdate your assistant's connector (%s/mcp) with it.\n", fresh.Secret, cfg.Server.URL)
 	}
 	return nil
 }
@@ -364,9 +372,10 @@ func (a *app) rotate(ctx context.Context, scope string, grace time.Duration, std
 func (a *app) purgeCmd() *cobra.Command {
 	var project string
 	cmd := &cobra.Command{
-		Use:   "purge --project PATH",
-		Short: "Delete one project's data from the server",
-		Args:  cobra.NoArgs,
+		Use:     "purge --project PATH",
+		Aliases: []string{"delete-from-server"},
+		Short:   "Delete one project's data from the server",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if project == "" {
 				return errors.New("--project is required")
@@ -397,7 +406,7 @@ func (a *app) purgeCmd() *cobra.Command {
 			}
 			fmt.Fprintf(a.Stdout, "deleted %d session(s) of %s from the server.\n", n, key)
 			if m, err := a.matcher(cfg); err == nil && m.Decide(a.localKey(project), "").Shared {
-				fmt.Fprintln(a.Stdout, "Note: this project is still shared, so the next sync uploads it again. Use `goldengate share remove` to stop sharing it.")
+				fmt.Fprintln(a.Stdout, "Note: this project is still shared, so the next send uploads it again. Use `goldengate share remove` to stop sharing it.")
 			}
 			return nil
 		},
@@ -426,7 +435,7 @@ func (a *app) doctorServer(ctx context.Context, cfg config.Config) int {
 	}
 	ps, err := cl.ListProjects(ctx)
 	if err != nil {
-		fmt.Fprintf(w, "server  FAIL  %s is up, but the stored ingest token was refused: %v\n", cfg.Server.URL, err)
+		fmt.Fprintf(w, "server  FAIL  %s is up, but the stored upload token was refused: %v\n", cfg.Server.URL, err)
 		return 1
 	}
 	fmt.Fprintf(w, "server  ok    %s (token ok, %d project(s) stored)\n", cfg.Server.URL, len(ps))

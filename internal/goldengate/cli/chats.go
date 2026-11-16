@@ -200,7 +200,7 @@ func (a *app) chatsShare(ctx context.Context, ids []string, project string) erro
 	var lines []string
 	for _, c := range picked {
 		if m.Denied(c.Head.Project) {
-			return fmt.Errorf("%s is matched by a deny rule; deny wins, so nothing from it can be shared", c.Head.Project)
+			return fmt.Errorf("%s is blocked (`share deny`); a block always wins, so nothing from it can be shared", c.Head.Project)
 		}
 		moved, err := cfg.ShareSession(project, c.Head.Project, c.ID)
 		if err != nil {
@@ -241,7 +241,7 @@ func (a *app) chatsShare(ctx context.Context, ids []string, project string) erro
 		fmt.Fprintf(a.Stdout, "%s: %s\n", name, l)
 	}
 	if cfg.Projects[i].Auto() && !hasApproveRule(cfg.Projects[i]) {
-		fmt.Fprintf(a.Stdout, "%q is at trust level auto: these conversations are sent on the next sync. Nothing else of their grouping is shared.\n", name)
+		fmt.Fprintf(a.Stdout, "%q is at trust level auto: these conversations go out the next time you send. Nothing else of their grouping is shared.\n", name)
 	} else {
 		fmt.Fprintln(a.Stdout, "Only these conversations are shared, nothing else of their grouping. They wait for your approval: `goldengate inbox`.")
 	}

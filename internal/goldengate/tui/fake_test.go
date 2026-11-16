@@ -62,7 +62,7 @@ type fakeBackend struct {
 	receipts                []Receipt
 	offerDecs               []string // "accept:id" or "dismiss:id"
 	editBegun, editFinished []string
-	stale                   int // synced sessions with heuristic summaries (a model is configured when > 0)
+	stale                   int // sent sessions with heuristic summaries (a model is configured when > 0)
 }
 
 func ago(d time.Duration) time.Time { return clock.Add(-d) }
@@ -85,7 +85,7 @@ func newFake() *fakeBackend {
 				Sources: []SourceInfo{{"claude-code", 8, false}}},
 			{Key: "/home/u/code/website", Label: "~/code/website", Sessions: 9, Last: ago(50 * time.Hour), Synced: 5, LastSync: ago(40 * time.Hour), State: Partial, Reason: "shared in project website", Project: "website",
 				Sources: []SourceInfo{{"claude-code", 5, true}, {"opencode", 4, false}}},
-			{Key: "/home/u/work/client-x", Label: "~/work/client-x", Sessions: 20, Last: ago(100 * time.Hour), State: Denied, Reason: "denied by ~/work/client-x",
+			{Key: "/home/u/work/client-x", Label: "~/work/client-x", Sessions: 20, Last: ago(100 * time.Hour), State: Denied, Reason: "blocked by ~/work/client-x",
 				Sources: []SourceInfo{{"claude-code", 20, false}}},
 			{Key: "/home/u/scratch/tmp", Label: "~/scratch/tmp", Sessions: 2, Last: ago(200 * time.Hour), State: NotShared, Reason: "not selected",
 				Sources: []SourceInfo{{"codex", 2, false}}},

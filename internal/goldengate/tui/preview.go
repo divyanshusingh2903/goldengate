@@ -220,7 +220,7 @@ func (m *Model) renderPreview(pv Preview, width int) string {
 			}
 		}
 		if len(it.Diff) > 0 && tracked {
-			b.WriteString("  " + m.th.Changed.Render("Since the last sync:") + "\n")
+			b.WriteString("  " + m.th.Changed.Render("Since it was last sent:") + "\n")
 			for _, d := range it.Diff {
 				st := m.th.Changed
 				switch {
@@ -279,7 +279,7 @@ func (m *Model) viewPreview() string {
 	case r != nil && (r.State == NotShared || r.State == Denied):
 		top += " · " + m.th.Dim.Render("not shared: this is what sharing it would send")
 	case r != nil && r.Synced == 0:
-		top += " · " + m.th.Warn.Render("never synced: everything here is new")
+		top += " · " + m.th.Warn.Render("never sent: everything here is new")
 	default:
 		if s := summarizeStatuses(pv.Items); s != "" {
 			top += " · " + s
@@ -290,6 +290,6 @@ func (m *Model) viewPreview() string {
 	}
 	f := frame{th: m.th, w: m.w, h: m.h, title: m.header("preview"), right: m.serverBadge(), top: top}
 	f.left = lines(m.pv.vp.View(), m.w-2, bodyHeight(m.h))
-	f.hint = m.statusLine(m.hints(m.w-2, "↑/↓", "scroll", "P", "paranoid", "r", "reload", "s", "sync", "esc", "back"))
+	f.hint = m.statusLine(m.hints(m.w-2, "↑/↓", "scroll", "P", "paranoid", "r", "reload", "s", "send", "esc", "back"))
 	return f.render()
 }

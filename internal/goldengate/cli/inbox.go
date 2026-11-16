@@ -63,7 +63,7 @@ A session that changes after you approved it comes back here.
 		RunE: func(c *cobra.Command, _ []string) error { return a.inboxList(c.Context()) }}
 	var all, suggested bool
 	var project string
-	approve := &cobra.Command{Use: "approve <session-id>... | --all | --suggested", Short: "Approve waiting sessions; the next sync sends them",
+	approve := &cobra.Command{Use: "approve <session-id>... | --all | --suggested", Short: "Approve waiting sessions; they go out the next time you send",
 		RunE: func(c *cobra.Command, args []string) error {
 			return a.inboxDecide(c.Context(), gsync.DecisionApproved, args, all, suggested, project)
 		}}

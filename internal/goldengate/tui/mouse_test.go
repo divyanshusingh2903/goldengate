@@ -102,8 +102,8 @@ func TestMouseWheelScrollsPreview(t *testing.T) {
 
 func TestCardExplainsSyncState(t *testing.T) {
 	h := newHarness(t, 120, 40)
-	h.key("down") // the worktree: shared, never synced
-	h.contains("never synced", "Not on the server yet. The next sync sends 2 sessions.")
+	h.key("down") // the worktree: shared, never sent
+	h.contains("never sent", "Not on the server yet. The next send has 2 sessions.")
 	h.key("down", "down") // vihayas: not shared
 	h.contains("○ Not shared", "Nothing from this project leaves your machine.", "[space Share]")
 	if strings.Contains(h.view(), "since the last sync") {

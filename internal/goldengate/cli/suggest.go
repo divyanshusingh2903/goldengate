@@ -203,7 +203,7 @@ func (a *app) projectSuggestions(ctx context.Context, cfg config.Config, st *gsy
 		folder, folderKey, n := label(f.Key), f.Key, f.Sessions
 		effect := []string{fmt.Sprintf("adds %s to project %q, which shares it", folder, p.Name)}
 		if p.Auto() && !hasApproveRule(p) {
-			effect = append(effect, fmt.Sprintf("the project is at trust level auto, so its %d session(s) are sent on the next sync", n))
+			effect = append(effect, fmt.Sprintf("the project is at trust level auto, so its %d session(s) go out the next time you send", n))
 		} else {
 			effect = append(effect, fmt.Sprintf("its %d session(s) then wait in the inbox for your approval; nothing is sent by accepting", n))
 		}
@@ -253,7 +253,7 @@ func (a *app) chatProjectOffer(cfg config.Config, key string, sessions int, dism
 		effect[0] = fmt.Sprintf("adds %s to your project %q, which shares all %d conversation(s) of it", key, target, sessions)
 	}
 	if i := cfg.ProjectIndex(name); i >= 0 && cfg.Projects[i].Auto() && !hasApproveRule(cfg.Projects[i]) {
-		effect = append(effect, "the project is at trust level auto, so they are sent on the next sync")
+		effect = append(effect, "the project is at trust level auto, so they go out the next time you send")
 	} else {
 		effect = append(effect, "they then wait in the inbox for your approval; nothing is sent by accepting")
 	}

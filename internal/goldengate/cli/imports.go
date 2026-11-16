@@ -232,7 +232,7 @@ func (a *app) importsCmd() *cobra.Command {
 			return w.Flush()
 		},
 	}, &cobra.Command{
-		Use: "remove <id>", Short: "Forget an archive (the file is left alone; conversations already sent stay on the server until you retract or purge them)", Args: cobra.ExactArgs(1),
+		Use: "remove <id>", Short: "Forget an archive (the file is left alone; conversations already sent stay on the server until you retract or delete them there)", Args: cobra.ExactArgs(1),
 		RunE: func(c *cobra.Command, args []string) error {
 			id, err := strconv.ParseInt(strings.TrimSpace(args[0]), 10, 64)
 			if err != nil {

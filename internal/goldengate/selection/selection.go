@@ -185,7 +185,7 @@ func (m *Matcher) Decide(projectKey, source string) Decision {
 	}
 	for _, r := range m.deny {
 		if r.virtual == virtual && r.matches(path) {
-			return Decision{Reason: "denied by " + r.raw}
+			return Decision{Reason: "blocked by " + r.raw}
 		}
 	}
 	for _, r := range m.sourceDeny {
@@ -197,11 +197,11 @@ func (m *Matcher) Decide(projectKey, source string) Decision {
 		if r.project != "" {
 			return Decision{Shared: true, Reason: "shared in project " + r.project}
 		}
-		return Decision{Shared: true, Reason: "allowed by " + r.raw}
+		return Decision{Shared: true, Reason: "shared by " + r.raw}
 	}
 	if virtual {
 		// Chat history is personal: it is shared only by an explicit rule, even when default = "allow".
-		return Decision{Reason: "chat projects need an explicit allow rule"}
+		return Decision{Reason: "chats are shared only when you share them by name"}
 	}
 	if m.defaultAllow {
 		return Decision{Shared: true, Reason: "default allow"}

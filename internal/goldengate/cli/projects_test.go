@@ -60,7 +60,7 @@ func TestProjectsCommandsLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	must("share", "deny", "~/projects/client-secret")
-	if out := must("projects", "list"); !strings.Contains(out, "~/projects/client-secret  [denied: a deny rule wins, nothing is sent]") {
+	if out := must("projects", "list"); !strings.Contains(out, "~/projects/client-secret  [blocked: a block always wins, nothing is sent]") {
 		t.Fatalf("deny beats membership and the list says so:\n%s", out)
 	}
 	if out := must("sync", "--dry-run"); strings.Contains(out, "TOPSECRET") {

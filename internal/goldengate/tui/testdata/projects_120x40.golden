@@ -1,21 +1,21 @@
-┌ goldengate [1 Projects] 2 Sync  3 Server  4 Settings  5 Agents  ───────────────────── ● connected bridge.example.com ┐
-│ [All 8]  Shared 4   To sync 3   Not shared 4                                                                         │
+┌ goldengate [1 Projects] 2 Send  3 Server  4 Settings  5 Agents  ───────────────────── ● connected bridge.example.com ┐
+│ [All 8]  Shared 4   To send 3   Not shared 4                                                                         │
 ├──────────────────────────────────────────────────────────┬───────────────────────────────────────────────────────────┤
 │ / search projects…                  sort recent · ▤ list │ pharmfindr                                                │
-│▌ [x] ~/code/pharmfindr              CC CX     ▲ 3 to sync│ ~/code/pharmfindr                                         │
-│  [x] …rmfindr/.claude/worktrees/fox    CC     ▲ 2 to sync│                                                           │
-│  [x] ~/code/forge                      CC     ▲ 1 to sync│ ● Shared · ▲ 3 to sync                                    │
-│  [ ] ~/code/vihayas                    CC      not shared│ 3 sessions waiting: 1 new, 1 changed since the last       │
-│  [~] ~/code/website                 CC OC    ✓ synced 40h│ sync.                                                     │
-│  [-] ~/work/client-x                   CC        ✕ denied│                                                           │
+│▌ [x] ~/code/pharmfindr              CC CX     ▲ 3 to send│ ~/code/pharmfindr                                         │
+│  [x] …rmfindr/.claude/worktrees/fox    CC     ▲ 2 to send│                                                           │
+│  [x] ~/code/forge                      CC     ▲ 1 to send│ ● Shared · ▲ 3 to send                                    │
+│  [ ] ~/code/vihayas                    CC      not shared│ 3 sessions waiting: 1 new, 1 changed since it was last    │
+│  [~] ~/code/website                 CC OC      ✓ sent 40h│ sent.                                                     │
+│  [-] ~/work/client-x                   CC       ✕ blocked│                                                           │
 │  [ ] ~/scratch/tmp                     CX      not shared│ Kind      code · coding-tool sessions                     │
 │  [ ] claude-ai:Chats                   AI      not shared│ Sessions  47 · CC Claude Code 41, CX Codex 6              │
 │                                                          │ Activity  2h ago                                          │
-│                                                          │ Synced    2h ago · 44 on the server                       │
+│                                                          │ Sent      2h ago · 44 on the server                       │
 │                                                          │ Level     summary                                         │
 │                                                          │ Rule      shared in project Pharmfindr                    │
 │                                                          │                                                           │
-│                                                          │ [s Sync now] [space Unshare] [p Preview] [e Sources]      │
+│                                                          │ [s Send now] [space Unshare] [p Preview] [e Sources]      │
 │                                                          │                                                           │
 │                                                          │ Recent sessions                                           │
 │                                                          │  CC Fix OAuth redirect mismatch · changed                 │
@@ -36,5 +36,5 @@
 │                                                          │                                                           │
 │                                                          │                                                           │
 ├──────────────────────────────────────────────────────────┴───────────────────────────────────────────────────────────┤
-│ space unshare  p preview  s sync  f view  / search  d deny  u undo  t tree  ? help                                   │
+│ space unshare  p preview  s send  f view  / search  d block  u undo  t tree  ? help                                  │
 └──────────────────────────────────────────────────────────────────────────────────────────────────────────────────────┘

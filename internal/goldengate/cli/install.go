@@ -87,7 +87,7 @@ func (a *app) scheduleSteps(every time.Duration, uninstall bool) ([]step, error)
 		}
 		service := "[Unit]\nDescription=Golden Gate: send approved sessions (goldengate sync --auto)\n\n" +
 			"[Service]\nType=oneshot\nExecStart=" + systemdQuote(exe) + " sync --auto\n"
-		timer := "[Unit]\nDescription=Golden Gate: run the unattended sync every " + strconv.Itoa(mins) + " minutes\n\n" +
+		timer := "[Unit]\nDescription=Golden Gate: run the background send every " + strconv.Itoa(mins) + " minutes\n\n" +
 			"[Timer]\nOnBootSec=5min\nOnUnitActiveSec=" + strconv.Itoa(mins) + "min\nPersistent=true\n\n[Install]\nWantedBy=timers.target\n"
 		return []step{
 			{path: svc, content: service}, {path: tmr, content: timer},

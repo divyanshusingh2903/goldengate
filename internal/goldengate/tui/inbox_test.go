@@ -32,8 +32,8 @@ func TestInboxScreenSnapshots(t *testing.T) {
 		h.golden(sz.name)
 	}
 	h := openInboxScreen(t, 120, 40)
-	h.contains("Sent, or queued for the next sync (2)", "Retracted: deleted from the server (1)", "changed since sent", "[REDACTED:aws-access-key]",
-		"Approving records your decision; the next sync sends it.")
+	h.contains("Sent, or queued for the next send (2)", "Retracted: deleted from the server (1)", "changed since sent", "[REDACTED:aws-access-key]",
+		"Approving records your decision; it goes out the next time you send.")
 }
 
 func TestInboxDecisionsOneSessionAtATime(t *testing.T) {
@@ -42,7 +42,7 @@ func TestInboxDecisionsOneSessionAtATime(t *testing.T) {
 		t.Fatalf("the cursor starts on the first waiting session, not a header: %+v", it)
 	}
 	h.key("a")
-	h.contains("approved \"Fix OAuth redirect mismatch\": the next sync sends it", "Waiting for your approval (1)")
+	h.contains("approved \"Fix OAuth redirect mismatch\": it goes out the next time you send", "Waiting for your approval (1)")
 	h.key("x") // now on the changed one
 	h.contains("excluded \"Add gRPC health checks", "Excluded: kept on this machine (2)")
 	h.lacks("Waiting for your approval")
