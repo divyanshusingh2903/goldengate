@@ -55,7 +55,7 @@ Non-goals
 - No multi-tenant hosted service. One deployment = one user (or one team that trusts each other).
 - No real-time streaming of in-progress sessions.
 - No agent write-back. Agents cannot add to, edit or delete shared memory, even on the user's request through the agent; the user does that in Golden Gate.
-- No scraping of claude.ai or ChatGPT. Chats arrive only through actions the user takes: the official data exports, and (if the share-link spike approves it) importing one conversation from a share URL the user created and pasted. Golden Gate never crawls, never uses the user's browser session or cookies, and never fetches anything the user did not hand it.
+- No scraping of claude.ai or ChatGPT, and no fetching of share links. Chats arrive only through actions the user takes with files they hand over: the official data exports. Golden Gate never crawls, never uses the user's browser session or cookies, and never requests a page from either service. Importing a conversation from a share URL was examined and rejected (see "Share-link import: spike result" in section 4).
 
 ## 2. Components
 
@@ -145,6 +145,19 @@ What was found on disk, and what the adapter (`adapters/cursor`, format version 
 - **Not listed.** Drafts, sub-agent conversations, and conversations without any message. A header of an unknown shape is skipped with a warning; a conversation whose bubbles are not version 3 is skipped rather than guessed at; single unreadable bubbles are dropped with a warning on the session.
 - **What is not read.** The same database holds sign-in state (`ItemTable`) and per-conversation encryption keys (`composerData:*`). The adapter opens it read-only and reads `composerHeaders`, the `bubbleId:*` rows and one version entry, nothing else; fixtures plant decoy secrets there and tests check they never surface.
 - **Open, to verify with real data:** how a failing shell command is recorded (to allow evidence), the file-editing tools, the `cursor-agent` CLI's own store, and the macOS and Windows locations.
+
+### Share-link import: spike result (issue #39, 2026-11-15)
+
+Question: can one conversation be imported reliably from a share URL the user created (`chatgpt.com/share/<id>`, `claude.ai/share/<id>`)? **Recommendation: do not build it.**
+
+- **Terms of service decide it.** Both services forbid what the feature would do, a program fetching a page and extracting the conversation:
+  - OpenAI Terms of Use (effective 2026-01-01), "What you cannot do": extracting data or Output automatically or programmatically is not allowed.
+  - Anthropic Consumer Terms (effective 2025-10-08), section 3: no crawling or scraping, and no access through automated means such as a bot or script, except with an API key or where Anthropic explicitly permits it.
+  Neither text makes an exception for a page the user created themselves, and neither mentions share links. This is a plain reading by the project, not legal advice.
+- **robots.txt** (fetched 2026-11-15) is not the obstacle and does not change the answer: chatgpt.com allows `/share/` for general crawlers while disallowing nearly everything else; claude.ai disallows `/api/*` for everyone and `/share/` for ad bots only. A robots file speaks to crawlers; the terms bind the user whose account made the link.
+- **Not established:** whether a share page is delivered as server-rendered HTML or JSON without a session, and which fields it carries (title, turns, timestamps, artifacts, project). Answering that means fetching share pages with a program, which is the thing the terms forbid, so it was not done. Both sites also sit behind bot protection, which Golden Gate will not work around.
+- **Reliability would be poor anyway:** an undocumented page format, changed without notice, behind bot protection, is the opposite of the versioned, fixture-tested formats the other sources have.
+- **What users have instead:** the official data exports (`import-claude-ai`, `import-chatgpt`), which carry every conversation with timestamps, and per-conversation selection inside an imported export (issue #41). Issue #40 (share-link import) should be closed as not planned. A browser extension (issue #43) is a different design, in which the user's own browser hands over a page they are looking at, and needs its own look at the same terms.
 
 ### Normalized model
 
