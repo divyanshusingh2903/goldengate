@@ -1,0 +1,12 @@
+:root {
+  --gg-orange: #D03A2B; --gg-bg: #EEF0EE; --gg-surface: #FFFFFF; --gg-line: #93A3AB;
+  --gg-ink: #13202A; --gg-dim: #4A5960; --gg-alarm: #B8165F;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --gg-orange: #F0563F; --gg-bg: #0D1821; --gg-surface: #132330; --gg-line: #233646; --gg-ink: #E5EBEE; --gg-dim: #8D9DA7; --gg-alarm: #F27EB2; }
+}
+body { margin: 0; background: var(--gg-bg); color: var(--gg-ink); font: 16px/1.5 system-ui, sans-serif; }
+main { max-width: 40rem; margin: 3rem auto; padding: 1.5rem; background: var(--gg-surface); border: 1px solid var(--gg-line); border-radius: 8px; }
+h1 { margin: 0 0 1rem; font-size: 1.4rem; color: var(--gg-orange); }
+#detail { color: var(--gg-dim); }
+.bad { color: var(--gg-alarm); }

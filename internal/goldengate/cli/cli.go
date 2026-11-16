@@ -60,9 +60,11 @@ type Deps struct {
 	// The installers (install-schedule, install-hook) run the scheduler's
 	// own tool, need the path of this binary, and depend on the operating
 	// system. Nil and empty mean the real ones.
-	RunCommand func(ctx context.Context, name string, args ...string) ([]byte, error)
-	Executable func() (string, error)
-	GOOS       string
+	// OpenBrowser opens a URL in the user's browser (goldengate ui).
+	OpenBrowser func(url string) error
+	RunCommand  func(ctx context.Context, name string, args ...string) ([]byte, error)
+	Executable  func() (string, error)
+	GOOS        string
 }
 
 // DefaultDeps wires the real process environment.
@@ -82,6 +84,7 @@ func DefaultDeps() Deps {
 		Hostname:    func() string { h, _ := os.Hostname(); return h },
 		EditFile:    defaultEditFile(os.Getenv),
 		Notify:      desktopNotify,
+		OpenBrowser: openBrowser,
 	}
 }
 
@@ -124,7 +127,7 @@ func New(d Deps) *cobra.Command {
 	root.SetOut(d.Stdout)
 	root.SetErr(d.Stderr)
 	root.PersistentFlags().StringVar(&a.configPath, "config", "", "config file (default: XDG config dir)")
-	root.AddCommand(a.syncCmd(), a.shareCmd(), a.projectsCmd(), a.chatsCmd(), a.rulesCmd(), a.receiptsCmd(), a.installScheduleCmd(), a.uninstallScheduleCmd(), a.hookCmd(false), a.hookCmd(true), a.agentsCmd(), a.inboxCmd(), a.sessionsCmd(), a.doctorCmd(), a.summarizerCmd(), a.initCmd(), a.tokenCmd(), a.purgeCmd(), a.importsCmd(), &cobra.Command{
+	root.AddCommand(a.syncCmd(), a.shareCmd(), a.projectsCmd(), a.uiCmd(), a.chatsCmd(), a.rulesCmd(), a.receiptsCmd(), a.installScheduleCmd(), a.uninstallScheduleCmd(), a.hookCmd(false), a.hookCmd(true), a.agentsCmd(), a.inboxCmd(), a.sessionsCmd(), a.doctorCmd(), a.summarizerCmd(), a.initCmd(), a.tokenCmd(), a.purgeCmd(), a.importsCmd(), &cobra.Command{
 		Use: "version", Short: "Print the version",
 		Run: func(*cobra.Command, []string) {
 			fmt.Fprintln(a.Stdout, "goldengate", Version, runtime.GOOS+"/"+runtime.GOARCH)

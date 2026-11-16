@@ -97,7 +97,7 @@ internal/
     adapters/             # one package per source tool (+ Adapter interface, registry)
       claudecode/ codex/ opencode/ cursor/ claudeai/ chatgpt/
     cli/ tui/             # cobra commands; Bubble Tea models, views, styles
-    webui/                # (planned, see 6.1) local web UI: loopback server, request checks, embedded assets
+    webui/                # local web UI (6.1): loopback server, request checks, JSON API, embedded assets
     client/ config/       # bridge HTTP client; TOML config, XDG paths
     discover/ project/    # find projects across adapters, group by folder
     selection/            # allow/deny rules, persistence, matching
@@ -460,7 +460,7 @@ Legend: `[x]` shared, `[ ]` not shared, `[~]` some sources shared, `[-]` denied.
 
 ### 6.1 Local web UI (`goldengate ui`): design and security model
 
-Status: designed here (issue #45), not built yet. The API comes with #46, the screens with #47 and #48. Nothing below exists in a release until those land.
+Status: the server, its security checks and the JSON API are built (issue #46, package `internal/goldengate/webui`, command `goldengate ui`). The screens are not: the page it serves today only proves the session works and says so; they come with #47 and #48.
 
 `goldengate ui` runs the same product in a browser, for people who do not live in a terminal. It is a second front end on `tui.Backend`, not a second implementation: every selection, preview, redaction, validation and send goes through the code the TUI and the commands already use, and through the single push path (`sync.Push`). It adds no capability. What it does add is a browser-facing surface on the laptop, so this section is mostly about keeping that surface closed.
 
@@ -511,7 +511,25 @@ The page can set a secret but can never read one. This holds for the ingest toke
 
 Summaries, titles, work-item keys and file names come from transcripts and can contain markup written by a web page or a README. The page treats every such string as text: it is inserted with `textContent`, never as HTML, and the CSP above forbids inline script, inline style and `eval`, so a string that slips through still cannot run. Links built from stored URLs are shown as text with an explicit "open" control, open with `rel="noopener noreferrer"`, and only `https:` is linkable.
 
-#### API shape (built in #46)
+#### API as built (#46)
+
+| Backend method | Endpoint |
+|---|---|
+| `Snapshot`, `Preview` | `GET /api/snapshot`, `GET /api/preview?key=&limit=` |
+| `Apply`, `Undo`, `DeleteRemote` | `POST /api/apply`, `/api/undo`, `/api/delete-remote` (the opaque handle stays in the server; the page gets an id that works once) |
+| `Plan`, `Sync` | `GET /api/plan`, `POST /api/sync`, then `GET /api/sync/<id>/events` (server-sent events: `sync` per `SyncEvent`, then one `end`), `POST /api/sync/<id>/cancel`. One run at a time. |
+| `Server`, `DeleteServerProject` | `GET /api/server`, `POST /api/server/delete-project` |
+| `Settings`, `SaveSettings`, `SetSummarizerKey`, `TestSummarizer`, `SummarizerModels` | `GET`/`POST /api/settings`, `POST /api/summarizer/key` (answers only `{"set": true}`), `POST /api/summarizer/test`, `GET /api/summarizer/models` |
+| `Detect`, `Init` | `GET /api/detect`, `POST /api/init` (returns the show-once assistant token) |
+| `Inbox`, `InboxDecide`, `OfferDecide`, `Receipts` | `GET /api/inbox`, `POST /api/inbox/decide`, `POST /api/offers/decide`, `GET /api/receipts` |
+| `EditBegin`, `EditFinish` | `POST /api/edit/begin` (returns the form's text and an id), `POST /api/edit/finish` (text back, or cancel) |
+| `Agents`, `ApplyGrants`, `AgentView`, `RevokeAgentToken` | `POST /api/admin` (the admin secret, verified, then held in memory), `POST /api/admin/forget`, `GET /api/agents`, `POST /api/agents/grants`, `GET /api/agents/view`, `POST /api/agents/revoke-token`. Without the secret these answer 401 `admin_required`. |
+
+JSON bodies use the `tui` types with their Go field names. A backend error is a 422 with `{"error", "message"}`; a failed security check is a bare status with no body. The contract test drives the terminal UI's own fake backend through every endpoint (`tui/webapi_test.go`); the security tests listed at the end of this section are in `webui/security_test.go`.
+
+Not built from this section yet: content-hashed asset paths with `immutable` caching (assets are served as they are), and the optional request log.
+
+#### API shape (as designed in #45)
 
 - One endpoint per `tui.Backend` method under `/api/`, `GET` for reads and `POST` for anything that changes state or contacts the server. The JSON types are the `tui` types, so the TUI's fake backend drives the contract tests.
 - Sync progress: `POST /api/sync` starts a run and returns its id; `GET /api/sync/<id>/events` streams `SyncEvent`s as server-sent events over the same checks. One run at a time, cancelled when the stream's owner asks or the process ends.
@@ -565,7 +583,7 @@ Tests that #46 must include (the "security checks" its issue refers to): a wrong
 
 ```
 goldengate                      # open TUI
-goldengate ui [--no-open] [--port N]   # (planned, see 6.1) the same product in a browser, on loopback only
+goldengate ui [--no-open] [--port N]   # the local web server and API (6.1), on loopback only; the screens are not built yet
 goldengate init [--server URL] [--pair-code CODE]   # first-run wizard; headless via flags/env (see 7.1)
 goldengate sync [--dry-run] [--project PATH] [--since 7d] [--source codex]
 goldengate share add|remove|list
