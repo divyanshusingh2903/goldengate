@@ -12,7 +12,7 @@ This file lets any Claude Code session (or person) pick up the Product v2 work w
 _Last updated 2026-11-15. Update this section whenever a row in the queue changes._
 
 **Progress:** 23 of 31 scheduled issues done (plus 2 stretch). Phases 1 (Foundations), 2 (Per-agent access) and 3 (Inbox and curation) are complete.
-**Next up:** #39 Spike: share-link import, size S, planned Nov 27. Its dependency #17 is done. Phase 4 (work items, rules and automation) is complete: #21, #35, #36, #45, #31, #33, #34, #32 and #22.
+**In progress:** #39 Spike: share-link import, size S, planned Nov 27. **Next up:** #41 Per-conversation sharing for chats. Phase 4 (work items, rules and automation) is complete: #21, #35, #36, #45, #31, #33, #34, #32 and #22.
 
 ### Done
 
@@ -63,6 +63,7 @@ Supporting changes (not queue issues):
 - **Upgrade order (#19)**: upgrade the server before the client. A server with #19 accepts old clients, but an older server rejects payloads from a newer client (unknown fields). In the server tables the `project` column holds a project id (for data stored before ids, the old key).
 - **Per-agent access, as it stands after phase 2**: grants are enforced in every MCP tool (#25). On an upgraded server `Default` keeps the projects it could see at upgrade time and is not granted later ones; on a fresh install `goldengate init` sets `Default` to see every shared project. Not built yet: creating, renaming or removing agents and minting tokens from the TUI (CLI only), and deleting an OAuth application from the client side. "View as agent" is computed on the laptop from what that computer synced, so it does not list sessions synced from another computer. The web UI (#48) should reuse the four agents methods on `tui.Backend`.
 - **Decision made by the user for #20 (2026-11-14)**: a project shared from now on waits in the inbox (manual first). Reviewing and pressing Send on the TUI Sync screen is the approval; `goldengate sync`, hooks and timers send only approved sessions. Auto-approve is a per-project switch. The TUI inbox list (`i`) came with #29. Since #31 this is the project's trust level (`trust`: ask, suggest, auto); `auto_approve` is read from old files and not written.
+- **Share-link import (#39, #40)**: the spike recommends not building it: both services' terms forbid programmatic extraction and neither exempts a page the user created (DESIGN.md section 4, "Share-link import: spike result"). #40 is therefore not to be started; closing it as not planned is the user's call. #43 (browser extension spike, stretch) listed #40 as its dependency and would need the same terms question answered first. Whether share pages are server-rendered, and which fields they carry, was deliberately not tested.
 - **Cursor adapter (#44)**: built against Cursor 3.30 on Linux from the user's own dummy conversations (read-only chat and search sessions). Source `cursor` is new in payloads and the config is `version = 4` (the old default source list gains `cursor` once), so the upgrade order below applies again. Open, each needing a real conversation to verify: a failing shell command (Cursor stores no exit code, so shell results are not evidence and Cursor work items are `mentioned` only), a file edit (edits are not mapped, `FilesTouched` is empty), a commit or pull request made from Cursor, the `cursor-agent` CLI's store, and the macOS and Windows data locations. A follow-up issue should cover these once such conversations exist.
 - **Project suggestions (#22)**: `cli/suggest.go`, on the shared offer mechanism of #32 (`offer`, `allOffers`, `decideOffer`; the TUI and later the web UI see both kinds in `Inbox.Offers`). The unit is an unshared folder, not a single session, and no unshared session is read, in line with the user's #31 decision. Not built: the issue's third signal (chat title or content mentions a project, model only), suggestions for chat groupings, and matching work-item keys found inside unshared sessions. Remote and branch signals need `enrich.git = true`, which has no command or TUI setting (config file only).
 - **Rule offers (#32)**: computed in `cli/offers.go` from sent sessions minus rule-sent ones (threshold 5 from one folder or chat grouping within 30 days), shown in `goldengate inbox`, `rules offers|accept|dismiss` and the TUI inbox (`o`); `tui.Inbox.Offers` and `Backend.OfferDecide` are ready for the web UI (#48). Only one kind of offer exists: approve by folder. Sessions sent before receipts existed, or by a project that used to be automatic, count as sent by hand, so such a project may get an offer after being switched to ask.
@@ -143,7 +144,7 @@ Status values: `todo`, `in progress`, `in review`, `blocked`, `done`. Size: S ab
 | 21 | #32 Suggest rules from manual choices | S | #31 | Nov 25 | done | #88 |
 | 22 | #22 Suggest projects (inbox only) | M | #18, #20, #21 | Nov 25 | done | #90 |
 | 23 | #44 Cursor adapter: spike, then build | L | | Nov 26 | done | #92 |
-| 24 | #39 Spike: share-link import | S | #17 | Nov 27 | todo | |
+| 24 | #39 Spike: share-link import | S | #17 | Nov 27 | in progress | |
 | 25 | #41 Per-conversation sharing for chats | M | #18, #29 | Nov 27 | todo | |
 | 26 | #42 Incremental export re-import | S | #20 | Nov 27 | todo | |
 | 27 | #40 Share-link import | M | #39, #20 | Nov 28 | todo | |
@@ -206,3 +207,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-15: #22 done (#90). Roadmap page updated. Next: #44.
 - 2026-11-15: #44 spike and build: Cursor was not installed; the user installed 3.30 and made dummy conversations. Found: conversations in `globalStorage/state.vscdb` (`composerHeaders`, `bubbleId:*` rows), prompts of sidebar conversations only in `~/.cursor/projects/*/agent-transcripts`, no exit code for shell calls. Built a read-only adapter (tag `CU`), synthetic SQL fixtures in `testdata/cursor/3.30`, golden tests.
 - 2026-11-15: #44 done (#92). Roadmap page updated. Next: #39.
+- 2026-11-15: #39 spike done: read both services' terms and robots.txt; recommendation is do not build share-link import; DESIGN.md non-goal updated. No code.
