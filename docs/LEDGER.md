@@ -11,8 +11,8 @@ This file lets any Claude Code session (or person) pick up the Product v2 work w
 
 _Last updated 2026-11-15. Update this section whenever a row in the queue changes._
 
-**Progress:** 23 of 31 scheduled issues done (plus 2 stretch). Phases 1 (Foundations), 2 (Per-agent access) and 3 (Inbox and curation) are complete.
-**In progress:** #39 Spike: share-link import, size S, planned Nov 27. **Next up:** #41 Per-conversation sharing for chats. Phase 4 (work items, rules and automation) is complete: #21, #35, #36, #45, #31, #33, #34, #32 and #22.
+**Progress:** 24 of 31 scheduled issues done (plus 2 stretch). Phases 1 (Foundations), 2 (Per-agent access) and 3 (Inbox and curation) are complete.
+**Next up:** #41 Per-conversation sharing for chats, size M, planned Nov 27. Its dependencies #18 and #29 are done. **Blocked:** #40 Share-link import: the #39 spike recommends not building it; whether to close it as not planned is the user's call. Phase 4 (work items, rules and automation) is complete: #21, #35, #36, #45, #31, #33, #34, #32 and #22.
 
 ### Done
 
@@ -41,6 +41,7 @@ _Last updated 2026-11-15. Update this section whenever a row in the queue change
 | #32 | Rule offers from repeated manual choices: exact rule, what it would have matched, yes or not now (remembered); CLI inbox, `rules offers`, TUI inbox | #88 | 2026-11-15 |
 | #22 | Project suggestions for folders that are in no project, with the reason (worktree, same remote, issue branch), accepted in one action; no unshared session is read | #90 | 2026-11-15 |
 | #44 | Cursor source adapter (3.30, Linux): conversations from the state database, prompts of sidebar conversations from transcripts, tag `CU`; work items mentioned only (no exit code recorded) | #92 | 2026-11-15 |
+| #39 | Spike: share-link import. Recommendation: do not build (both services' terms forbid programmatic extraction); non-goal updated | #94 | 2026-11-15 |
 
 Supporting changes (not queue issues):
 
@@ -50,7 +51,7 @@ Supporting changes (not queue issues):
 | First `pr-template` check (unblocked the `main` ruleset); later replaced | #52 | 2026-11-14 |
 | The user's stricter `pr-template` check (Checklist with every item ticked; skips Dependabot) | #9 | 2026-11-14 |
 | This ledger, then its checklist rule, status section and roadmap sync | #54, #56, #57, #58 | 2026-11-14 |
-| Ledger status updates between issues (#49 done; phase 2 complete; refresh; phase 3 complete; #21 done; #35 done; #36 done; #45 done; #31 done; #33 done; #34 done; #32 done; #22 done; #44 done) | #61, #68, #69, #73, #75, #77, #79, #81, #83, #85, #87, #89, #91, #93 | 2026-11-15 |
+| Ledger status updates between issues (#49 done; phase 2 complete; refresh; phase 3 complete; #21 done; #35 done; #36 done; #45 done; #31 done; #33 done; #34 done; #32 done; #22 done; #44 done; #39 done) | #61, #68, #69, #73, #75, #77, #79, #81, #83, #85, #87, #89, #91, #93, #95 | 2026-11-15 |
 
 ### Open loose ends
 
@@ -144,10 +145,10 @@ Status values: `todo`, `in progress`, `in review`, `blocked`, `done`. Size: S ab
 | 21 | #32 Suggest rules from manual choices | S | #31 | Nov 25 | done | #88 |
 | 22 | #22 Suggest projects (inbox only) | M | #18, #20, #21 | Nov 25 | done | #90 |
 | 23 | #44 Cursor adapter: spike, then build | L | | Nov 26 | done | #92 |
-| 24 | #39 Spike: share-link import | S | #17 | Nov 27 | in progress | |
+| 24 | #39 Spike: share-link import | S | #17 | Nov 27 | done | #94 |
 | 25 | #41 Per-conversation sharing for chats | M | #18, #29 | Nov 27 | todo | |
 | 26 | #42 Incremental export re-import | S | #20 | Nov 27 | todo | |
-| 27 | #40 Share-link import | M | #39, #20 | Nov 28 | todo | |
+| 27 | #40 Share-link import | M | #39, #20 | Nov 28 | blocked | |
 | 28 | #23 Plain words in UI and docs | S | #17 | Nov 28 | todo | |
 | 29 | #46 HTTP JSON API over `tui.Backend` | M | #45 | Nov 29 | todo | |
 | 30 | #47 Web UI v1: the TUI flow in a browser | L | #46 | Nov 29–30 | todo | |
@@ -208,3 +209,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-15: #44 spike and build: Cursor was not installed; the user installed 3.30 and made dummy conversations. Found: conversations in `globalStorage/state.vscdb` (`composerHeaders`, `bubbleId:*` rows), prompts of sidebar conversations only in `~/.cursor/projects/*/agent-transcripts`, no exit code for shell calls. Built a read-only adapter (tag `CU`), synthetic SQL fixtures in `testdata/cursor/3.30`, golden tests.
 - 2026-11-15: #44 done (#92). Roadmap page updated. Next: #39.
 - 2026-11-15: #39 spike done: read both services' terms and robots.txt; recommendation is do not build share-link import; DESIGN.md non-goal updated. No code.
+- 2026-11-15: #39 done (#94). #40 set to blocked: the spike says do not build; the user decides whether to close it. Roadmap page updated. Next: #41.
