@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"iter"
 	"os"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -144,6 +145,78 @@ func (a *Adapter) load(path string) (*index, error) {
 	a.total += ix.bytes
 	a.cache[path] = ix
 	return ix, nil
+}
+
+// Delta says what one archive holds that the archives already registered
+// with the adapter do not.
+type Delta struct {
+	Total int // conversations in the archive
+	// New conversations are in no registered archive. Changed ones are, with
+	// different content, and this archive's version is at least as recent.
+	// Same ones are identical. Older ones differ but a registered archive
+	// has a more recent version, so this one is not used.
+	New, Changed, Same, Older int
+	Skipped                   int            // entries in an unknown shape
+	NewByGrouping             map[string]int // the new conversations, per grouping
+}
+
+// Adds reports whether registering the archive would bring anything in.
+func (d Delta) Adds() bool { return d.New+d.Changed > 0 }
+
+// Compare validates and indexes the archive at path and compares it,
+// conversation by conversation, with the archives the adapter was built
+// over (path itself is left out of that set). Conversations are matched by
+// id and compared by content, so the same export saved under another name
+// adds nothing.
+func (a *Adapter) Compare(path string) (Delta, error) {
+	ix, err := a.load(path)
+	if err != nil {
+		return Delta{}, err
+	}
+	have := map[string]element{}
+	for _, p := range a.paths {
+		if p == path {
+			continue
+		}
+		old, err := a.load(p)
+		if err != nil {
+			continue // a registered archive that is gone holds nothing to compare with
+		}
+		for id, e := range old.elems {
+			if cur, dup := have[id]; !dup || !e.head.Updated.Before(cur.head.Updated) {
+				have[id] = e
+			}
+		}
+	}
+	d := Delta{Total: len(ix.elems), Skipped: ix.skipped, NewByGrouping: map[string]int{}}
+	for id, e := range ix.elems {
+		old, known := have[id]
+		switch {
+		case !known:
+			d.New++
+			d.NewByGrouping[e.head.Project]++
+		case sameJSON(e.raw, old.raw):
+			d.Same++
+		case e.head.Updated.Before(old.head.Updated):
+			d.Older++
+		default:
+			d.Changed++
+		}
+	}
+	return d, nil
+}
+
+// sameJSON reports whether two conversation elements hold the same data,
+// whatever the key order or spacing a product wrote them with.
+func sameJSON(a, b []byte) bool {
+	if bytes.Equal(a, b) {
+		return true
+	}
+	var x, y any
+	if json.Unmarshal(a, &x) != nil || json.Unmarshal(b, &y) != nil {
+		return false
+	}
+	return reflect.DeepEqual(x, y)
 }
 
 // Summary describes an archive for the import command.

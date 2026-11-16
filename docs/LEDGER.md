@@ -214,3 +214,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-15: #39 done (#94). #40 set to blocked: the spike says do not build; the user decides whether to close it. Roadmap page updated. Next: #41.
 - 2026-11-15: #41 implemented: chats are shared by conversation (`sessions` on a project member, `goldengate chats`), chat projects are suggested as named projects, the inbox counts unassigned conversations, and whole-grouping shares keep working unchanged.
 - 2026-11-15: #41 done (#96). Roadmap page updated. Next: #42.
+- 2026-11-15: #42 implemented: importing an export compares it with the registered ones (by conversation id and data), reports new, changed and already-imported conversations, does not register an export that adds nothing, and records what each export brought in for `goldengate imports list`.

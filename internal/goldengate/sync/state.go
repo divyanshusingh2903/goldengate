@@ -50,6 +50,7 @@ CREATE TABLE IF NOT EXISTS receipt_items(
   rule_id TEXT NOT NULL DEFAULT '', why TEXT NOT NULL DEFAULT '', retracted_at INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY(receipt_id, source, session_id));
 CREATE INDEX IF NOT EXISTS receipt_items_session ON receipt_items(source, session_id);
+CREATE TABLE IF NOT EXISTS import_stats(import_id INTEGER PRIMARY KEY, total INTEGER NOT NULL, added INTEGER NOT NULL, changed INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS offers_dismissed(key TEXT PRIMARY KEY, dismissed_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS imports(
   id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT NOT NULL, path TEXT NOT NULL, added_at INTEGER NOT NULL, UNIQUE(source, path));
@@ -264,6 +265,12 @@ type Import struct {
 	Source  string
 	Path    string
 	AddedAt time.Time
+	// What the archive brought in when it was registered: how many
+	// conversations it holds, how many of them were new and how many were a
+	// newer version of one already imported. Counted is false for archives
+	// registered before this was recorded.
+	Total, Added, Changed int
+	Counted               bool
 }
 
 // AddImport remembers an archive. Adding the same one again is a no-op.
@@ -274,9 +281,21 @@ func (s *State) AddImport(ctx context.Context, source, path string, now time.Tim
 	return nil
 }
 
+// RecordImport notes what a registered archive added at the time: total
+// conversations, new ones, and changed ones. An earlier note for the same
+// archive is kept, so re-running an import does not rewrite history.
+func (s *State) RecordImport(ctx context.Context, source, path string, total, added, changed int) error {
+	if _, err := s.db.ExecContext(ctx, `INSERT OR IGNORE INTO import_stats(import_id, total, added, changed)
+		SELECT id, ?, ?, ? FROM imports WHERE source=? AND path=?`, total, added, changed, source, path); err != nil {
+		return fmt.Errorf("state: record import: %w", err)
+	}
+	return nil
+}
+
 // ListImports returns the registered archives, oldest first.
 func (s *State) ListImports(ctx context.Context) ([]Import, error) {
-	rows, err := s.db.QueryContext(ctx, `SELECT id, source, path, added_at FROM imports ORDER BY id`)
+	rows, err := s.db.QueryContext(ctx, `SELECT i.id, i.source, i.path, i.added_at, s.total, s.added, s.changed
+		FROM imports i LEFT JOIN import_stats s ON s.import_id = i.id ORDER BY i.id`)
 	if err != nil {
 		return nil, fmt.Errorf("state: list imports: %w", err)
 	}
@@ -285,10 +304,14 @@ func (s *State) ListImports(ctx context.Context) ([]Import, error) {
 	for rows.Next() {
 		var i Import
 		var at int64
-		if err := rows.Scan(&i.ID, &i.Source, &i.Path, &at); err != nil {
+		var total, added, changed sql.NullInt64
+		if err := rows.Scan(&i.ID, &i.Source, &i.Path, &at, &total, &added, &changed); err != nil {
 			return nil, fmt.Errorf("state: list imports: %w", err)
 		}
 		i.AddedAt = time.Unix(at, 0)
+		if total.Valid {
+			i.Total, i.Added, i.Changed, i.Counted = int(total.Int64), int(added.Int64), int(changed.Int64), true
+		}
 		out = append(out, i)
 	}
 	return out, rows.Err()
@@ -298,6 +321,9 @@ func (s *State) ListImports(ctx context.Context) ([]Import, error) {
 func (s *State) RemoveImport(ctx context.Context, id int64) (bool, error) {
 	res, err := s.db.ExecContext(ctx, `DELETE FROM imports WHERE id=?`, id)
 	if err != nil {
+		return false, fmt.Errorf("state: remove import: %w", err)
+	}
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM import_stats WHERE import_id=?`, id); err != nil {
 		return false, fmt.Errorf("state: remove import: %w", err)
 	}
 	n, _ := res.RowsAffected()
