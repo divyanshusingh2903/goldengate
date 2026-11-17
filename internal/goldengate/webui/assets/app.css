@@ -57,6 +57,9 @@ input[type="text"], input[type="password"], input[type="search"], input[type="ur
   background: var(--surface); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; width: 100%; max-width: 34rem;
 }
 textarea { min-height: 6rem; }
+textarea.tall { min-height: 24rem; max-width: none; }
+td.changed { background: var(--sunk); }
+ul { margin: 6px 0; padding-left: 1.2rem; }
 label { display: block; margin: 10px 0 2px; font-weight: 600; }
 label.check { display: flex; gap: 8px; align-items: baseline; font-weight: 400; margin: 4px 0; }
 .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }

@@ -237,7 +237,7 @@ func (a *app) runInit(ctx context.Context, serverURL, pairCode string, stdinTok,
 	fmt.Fprintf(a.Stdout, "Upload token stored in the %s. The admin token was not saved anywhere.\n", res.StoreKind)
 	if readSecret != "" {
 		fmt.Fprintf(a.Stdout, `
-Your assistant's read token (shown ONCE; it cannot be recovered, rotate it with 'goldengate token rotate read'):
+Your assistant token (shown ONCE; it cannot be recovered, rotate it with 'goldengate token rotate assistant'):
 
     %s
 

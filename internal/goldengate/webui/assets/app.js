@@ -9,8 +9,11 @@ import * as preview from "/assets/preview.js";
 import * as send from "/assets/send.js";
 import * as server from "/assets/server.js";
 import * as settings from "/assets/settings.js";
+import * as inbox from "/assets/inbox.js";
+import * as receipts from "/assets/receipts.js";
+import * as agents from "/assets/agents.js";
 
-const screens = { setup, projects, preview, send, server, settings };
+const screens = { setup, projects, preview, send, server, settings, inbox, receipts, agents };
 const main = document.getElementById("main");
 const statusEl = document.getElementById("status");
 const nav = document.getElementById("nav");
@@ -31,15 +34,19 @@ const app = {
   },
   async go(name, params) {
     for (const b of nav.querySelectorAll("button")) {
-      if (b.dataset.screen === name || (name === "preview" && b.dataset.screen === "projects")) b.setAttribute("aria-current", "page");
+      if (b.dataset.screen === name || (name === "preview" && b.dataset.screen === "projects") || (name === "receipts" && b.dataset.screen === "inbox")) b.setAttribute("aria-current", "page");
       else b.removeAttribute("aria-current");
     }
     app.say(""); // feedback belongs to the screen it was given on
-    fill(main, h("p", { class: "dim" }, "Loading…"));
+    // Each visit draws into its own element: an action that finishes after
+    // you moved on redraws the screen you left, which is no longer shown.
+    const view = h("div");
+    fill(main, view);
+    fill(view, h("p", { class: "dim" }, "Loading…"));
     try {
-      await screens[name].render(main, app, params || {});
+      await screens[name].render(view, app, params || {});
     } catch (e) {
-      fill(main, h("p", { class: "bad" }, String(e.message || e)));
+      fill(view, h("p", { class: "bad" }, String(e.message || e)));
     }
     main.focus();
   },
