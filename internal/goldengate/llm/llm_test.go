@@ -148,3 +148,48 @@ func TestOpenAICompatibleTurnsReasoningOffAsFarAsAllowed(t *testing.T) {
 		t.Errorf("OpenAI's reasoning models take max_completion_tokens: %v", limits)
 	}
 }
+
+// Gemini rejects an unsupported reasoning value with a bare "invalid argument"
+// that does not name the field; the client still steps down.
+func TestAGenericBadRequestStillStepsReasoningDown(t *testing.T) {
+	var efforts []any
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var b map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&b)
+		efforts = append(efforts, b["reasoning_effort"])
+		if b["reasoning_effort"] != nil {
+			w.WriteHeader(http.StatusBadRequest)
+			_, _ = w.Write([]byte("[{\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"Request contains an invalid argument.\",\n    \"status\": \"INVALID_ARGUMENT\"\n  }\n}\n]"))
+			return
+		}
+		_, _ = w.Write([]byte(`{"choices":[{"finish_reason":"stop","message":{"content":"{}"}}]}`))
+	}))
+	defer ts.Close()
+	c, _ := New(ProviderGemini, ts.URL, "k", "m")
+	if _, err := c.JSON(context.Background(), "s", "u", map[string]any{}); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(efforts, []any{"none", "minimal", nil}) {
+		t.Errorf("none, minimal, then the default: %v", efforts)
+	}
+}
+
+// A request the endpoint refuses whatever the reasoning setting ends in one
+// readable line with the provider's own message, not a block of JSON.
+func TestARefusalIsOneLineWithTheProvidersMessage(t *testing.T) {
+	calls := 0
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		calls++
+		w.WriteHeader(http.StatusBadRequest)
+		_, _ = w.Write([]byte("[{\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"Request contains an invalid argument.\",\n    \"status\": \"INVALID_ARGUMENT\"\n  }\n}\n]"))
+	}))
+	defer ts.Close()
+	c, _ := New(ProviderGemini, ts.URL, "k", "m")
+	_, err := c.JSON(context.Background(), "s", "u", map[string]any{})
+	if err == nil || err.Error() != "llm: gemini: Bad Request: Request contains an invalid argument." {
+		t.Errorf("got %v", err)
+	}
+	if calls != 3 {
+		t.Errorf("each reasoning setting is tried once: %d calls", calls)
+	}
+}
