@@ -11,8 +11,8 @@ This file lets any Claude Code session (or person) pick up the Product v2 work w
 
 _Last updated 2026-11-16. Update this section whenever a row in the queue changes._
 
-**Progress:** 29 of 31 scheduled issues done (plus 2 stretch). Phases 1 (Foundations), 2 (Per-agent access) and 3 (Inbox and curation) are complete.
-**In progress:** #48 Web UI: inbox, agents, receipts, size M, planned Nov 30: the last open issue of the queue besides #40, which is blocked. **Blocked:** #40 Share-link import: the #39 spike recommends not building it; whether to close it as not planned is the user's call. Phase 4 (work items, rules and automation) is complete: #21, #35, #36, #45, #31, #33, #34, #32 and #22.
+**Progress:** 30 of 31 scheduled issues done (plus 2 stretch). Phases 1 (Foundations), 2 (Per-agent access) and 3 (Inbox and curation) are complete.
+**Nothing is next:** every issue of the queue is done except #40. **Blocked:** #40 Share-link import: the #39 spike recommends not building it; whether to close it as not planned is the user's call. Phase 4 (work items, rules and automation) is complete: #21, #35, #36, #45, #31, #33, #34, #32 and #22.
 
 ### Done
 
@@ -47,6 +47,7 @@ _Last updated 2026-11-16. Update this section whenever a row in the queue change
 | #23 | Plain words in the UI, help and docs (send, blocked, upload and assistant token, delete from the server, grouping); compatible aliases; TUI goldens refreshed | #100 | 2026-11-16 |
 | #46 | Local web server and JSON API over `tui.Backend` on loopback, with the security checks of DESIGN 6.1; `goldengate ui`; contract and security tests | #102 | 2026-11-16 |
 | #47 | Web UI v1: Setup, Projects, Preview, Send, Server and Settings in the browser, as plain ES modules on the local API | #104 | 2026-11-16 |
+| #48 | Web UI: Inbox, Receipts and Agents in the browser, on the same local API | #106 | 2026-11-16 |
 
 Supporting changes (not queue issues):
 
@@ -164,7 +165,7 @@ Status values: `todo`, `in progress`, `in review`, `blocked`, `done`. Size: S ab
 | 28 | #23 Plain words in UI and docs | S | #17 | Nov 28 | done | #100 |
 | 29 | #46 HTTP JSON API over `tui.Backend` | M | #45 | Nov 29 | done | #102 |
 | 30 | #47 Web UI v1: the TUI flow in a browser | L | #46 | Nov 29–30 | done | #104 |
-| 31 | #48 Web UI: inbox, agents, receipts | M | #47, #20, #26, #33 | Nov 30 | in progress | |
+| 31 | #48 Web UI: inbox, agents, receipts | M | #47, #20, #26, #33 | Nov 30 | done | #106 |
 | — | #38 Tracker lookups, opt-in per tracker (stretch) | M | #21 | after Nov 30 | todo | |
 | — | #43 Spike: browser extension (stretch) | S | #40 | after Nov 30 | todo | |
 
@@ -233,3 +234,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-16: #47 implemented: the web UI's first screens (Setup, Projects, Preview, Send, Server, Settings) as plain ES modules on the #46 API; tried end to end in a real browser against a local server. A trial upload token landed in the OS keyring during that test and was removed again.
 - 2026-11-16: #47 done (#104). Roadmap page updated. Next: #48.
 - 2026-11-16: #48 implemented: Inbox, Receipts and Agents in the web UI, tried end to end in a real browser against a local server; each screen visit now draws into its own element. The trial's upload token was removed from the OS keyring again.
+- 2026-11-16: #48 done (#106). Roadmap page updated. The queue is finished except #40, which is blocked on the user's decision.
