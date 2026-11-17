@@ -142,7 +142,8 @@ func (b *tuiBackend) Snapshot(ctx context.Context) (tui.Snapshot, error) {
 		shared := 0
 		for _, src := range names {
 			d := s.Matcher.Decide(p.Key, src)
-			row.Sources = append(row.Sources, tui.SourceInfo{Name: src, Sessions: p.Sources[src], Shared: d.Shared})
+			row.Sources = append(row.Sources, tui.SourceInfo{Name: src, Sessions: p.Sources[src], Shared: d.Shared,
+				OffEverywhere: len(cfg.Share.IncludeSources) > 0 && !slices.Contains(cfg.Share.IncludeSources, src)})
 			perSource[src] += p.Sources[src]
 			if d.Shared {
 				shared++
@@ -244,6 +245,11 @@ func (b *tuiBackend) Apply(ctx context.Context, act tui.Action) (tui.ActionResul
 			return tui.ActionResult{}, errors.New("choose one project to change its sources")
 		}
 		key := act.Keys[0]
+		if len(cfg.Share.IncludeSources) > 0 && !slices.Contains(cfg.Share.IncludeSources, act.Source) {
+			// a per-project choice cannot override the global switch; saying
+			// "sent again" here would be untrue
+			return tui.ActionResult{}, fmt.Errorf("%s is turned off for every project in Settings → Sources; turn it on there first", pretty(act.Source))
+		}
 		rule := selection.SourceRule(act.Source, a.ruleFor(key))
 		anyShared := false
 		for _, src := range append([]string{act.Source}, act.Others...) {

@@ -28,6 +28,9 @@ type SourceInfo struct {
 	Name     string
 	Sessions int
 	Shared   bool // whether this source is shared for this project
+	// OffEverywhere: the tool is turned off for every project (Settings →
+	// Sources), so no choice on this project can send it.
+	OffEverywhere bool
 }
 
 // Row is one project as the picker shows it.

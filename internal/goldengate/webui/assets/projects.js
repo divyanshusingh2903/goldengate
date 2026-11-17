@@ -159,9 +159,10 @@ export async function render(main, app) {
     if ((r.Sources || []).length && r.State !== BLOCKED) {
       put(detail, h("h2", null, "Tools"), h("p", { class: "dim" }, "Choose which tools' sessions of this project are shared."));
       for (const s of r.Sources) {
-        const cb = h("input", { type: "checkbox", checked: !!s.Shared });
+        const cb = h("input", { type: "checkbox", checked: !!s.Shared, disabled: !!s.OffEverywhere });
         cb.addEventListener("change", () => act({ Kind: TOGGLE, Keys: [r.Key], Source: s.Name, Others: others.filter((n) => n !== s.Name) }, "changed"));
-        put(detail, h("label", { class: "check" }, cb, tag(s.Name), `${s.Name} (${plural(s.Sessions, "session")})`));
+        put(detail, h("label", { class: "check" }, cb, tag(s.Name), `${s.Name} (${plural(s.Sessions, "session")})`,
+          s.OffEverywhere ? h("span", { class: "warn" }, " · off for every project in Settings") : null));
       }
     }
     const name = h("input", { type: "text", value: r.Project || "", "aria-label": "Project name", placeholder: "Project name" });

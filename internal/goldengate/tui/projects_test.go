@@ -50,7 +50,7 @@ func TestNavigationClampsAndScrolls(t *testing.T) {
 	be := newFake()
 	for i := 0; i < 60; i++ {
 		be.rows = append(be.rows, Row{Key: fmt.Sprintf("/home/u/many/p%02d", i), Label: fmt.Sprintf("~/many/p%02d", i), Sessions: 1, Last: ago(time.Duration(300+i) * time.Hour), State: NotShared,
-			Sources: []SourceInfo{{"claude-code", 1, false}}})
+			Sources: []SourceInfo{{"claude-code", 1, false, false}}})
 	}
 	h := newHarnessWith(t, be, 80, 24)
 	h.key("up", "k")
@@ -386,7 +386,7 @@ func TestMouse(t *testing.T) {
 
 func TestSourceEditorSharesOnlyThatSource(t *testing.T) {
 	be := newFake()
-	be.rows[2].Sources = []SourceInfo{{"claude-code", 8, false}, {"codex", 3, false}} // vihayas: not shared
+	be.rows[2].Sources = []SourceInfo{{"claude-code", 8, false, false}, {"codex", 3, false, false}} // vihayas: not shared
 	h := newHarnessWith(t, be, 100, 30)
 	h.key("down", "down", "down", "e")
 	h.contains("○ Not shared yet.", "Tick a tool to share only", "not sent")
@@ -399,7 +399,7 @@ func TestSourceEditorSharesOnlyThatSource(t *testing.T) {
 
 func TestSourceEditorOnDeniedProject(t *testing.T) {
 	be := newFake()
-	be.rows[4].Sources = append(be.rows[4].Sources, SourceInfo{"codex", 1, false}) // client-x: denied
+	be.rows[4].Sources = append(be.rows[4].Sources, SourceInfo{"codex", 1, false, false}) // client-x: denied
 	h := newHarnessWith(t, be, 100, 30)
 	h.key("end")
 	for h.m.pk.cursor > 0 {
