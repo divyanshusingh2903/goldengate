@@ -52,12 +52,12 @@ const DefaultTheme = "goldengate-light"
 // Presets are the selectable color schemes, after the editor themes of the
 // same names.
 var Presets = map[string]Palette{
-	// Golden Gate's own colors (docs/brand/BRAND.md): International Orange
-	// on night bay or fog.
-	"goldengate-dark": {Dark: true, Bg: "#09131B", Fg: "#E5EBEE", Surface: "#132330", Sel: "#1B3446", Line: "#2A4256", Dim: "#8D9DA7",
+	// Golden Gate's own colors (docs/brand/BRAND.md), the same as the web UI
+	// and the project's web pages: International Orange on night or fog.
+	"goldengate-dark": {Dark: true, Bg: "#070809", Fg: "#E9EBED", Surface: "#131518", Sel: "#1D2227", Line: "#26292E", Dim: "#8F969C",
 		Accent: "#7FBADB", Good: "#72C59A", Warn: "#E8B652", Bad: "#F27EB2", Brand: "#F0563F", Chat: "#B9A0E6"},
-	"goldengate-light": {Bg: "#F8F9F8", Fg: "#13202A", Surface: "#DCE8F0", Sel: "#C6DDEE", Line: "#93A3AB", Dim: "#4A5960",
-		Accent: "#0B5F94", Good: "#137A44", Warn: "#B05A00", Bad: "#B8165F", Brand: "#D03A2B", Chat: "#6A35C2"},
+	"goldengate-light": {Bg: "#F8F9F8", Fg: "#13202A", Surface: "#E3E7E5", Sel: "#D9E6EE", Line: "#CBD2D0", Dim: "#56656D",
+		Accent: "#1F5E80", Good: "#2D6A4A", Warn: "#965F00", Bad: "#9B1D5A", Brand: "#C0362C", Chat: "#6A35C2"},
 	"github-dark": {Dark: true, Bg: "#0d1117", Fg: "#e6edf3", Surface: "#21262d", Sel: "#1f3049", Line: "#30363d", Dim: "#8b949e",
 		Accent: "#58a6ff", Good: "#3fb950", Warn: "#d29922", Bad: "#f85149", Brand: "#f0883e", Chat: "#bc8cff"},
 	"github-light": {Bg: "#ffffff", Fg: "#1f2328", Surface: "#eaeef2", Sel: "#ddf4ff", Line: "#d0d7de", Dim: "#59636e",

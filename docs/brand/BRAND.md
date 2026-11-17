@@ -22,27 +22,32 @@ the user feel **in control of what crosses**. Everything below follows from that
 
 ## 2. Color
 
-Painted from the bridge. The TUI theme (`internal/goldengate/tui/theme.go`) will follow these tokens.
+Painted from the bridge. The project's web pages are the reference; the web UI (`internal/goldengate/webui/assets/app.css`) and the TUI theme (`goldengate-light` and `goldengate-dark` in `internal/goldengate/tui/theme.go`) use these exact values.
 
 | Token | Name | Light | Dark | Use |
 |---|---|---|---|---|
-| `--gg-orange` | International Orange | `#D03A2B` | `#F0563F` | the mark, primary button, links. Identity only |
+| `--gg-orange` | International Orange | `#C0362C` | `#F0563F` | the mark, primary button, links. Identity only |
 | `--gg-on-orange` | | `#FFFFFF` | `#1B0703` | text on orange |
-| `--gg-bg` | Fog / Night bay | `#EEF0EE` | `#0D1821` | page ground |
-| `--gg-surface` | Surface | `#FFFFFF` | `#132330` | cards, code |
-| `--gg-sunk` | | `#DCE8F0` | `#0A131A` | selected tabs, insets |
-| `--gg-line` | Cable line | `#93A3AB` | `#233646` | borders |
-| `--gg-ink` | Ink | `#13202A` | `#E5EBEE` | text, marks, redaction bars |
-| `--gg-dim` | Marine layer | `#4A5960` | `#8D9DA7` | secondary text |
-| `--gg-pacific` | Pacific | `#0B5F94` | `#7FBADB` | focus ring, keys |
-| `--gg-cypress` | Cypress | `#137A44` | `#72C59A` | shared, healthy, added |
-| `--gg-headland` | Headland | `#B05A00` | `#E8B652` | partial, pending, changed |
-| `--gg-alarm` | Alarm | `#B8165F` | `#F27EB2` | failures; denied glyph only |
+| `--gg-bg` | Fog / Night | `#EEF0EE` | `#0A0B0D` | page ground |
+| `--gg-surface` | Surface | `#FFFFFF` | `#131518` | cards, code |
+| `--gg-sunk` | | `#E3E7E5` | `#050607` | selected tabs, insets |
+| `--gg-line` | Cable line | `#CBD2D0` | `#26292E` | borders and rules (decorative) |
+| `--gg-ink` | Ink | `#13202A` | `#E9EBED` | text, marks, redaction bars |
+| `--gg-dim` | Marine layer | `#56656D` | `#8F969C` | secondary text |
+| `--gg-pacific` | Pacific | `#1F5E80` | `#7FBADB` | focus ring, keys |
+| `--gg-cypress` | Cypress | `#2D6A4A` | `#72C59A` | shared, healthy, added |
+| `--gg-headland` | Headland | `#965F00` | `#E8B652` | partial, pending, changed |
+| `--gg-alarm` | Alarm | `#9B1D5A` | `#F27EB2` | failures; denied glyph only |
 | `--gg-twilight` | Twilight | `#6A35C2` | `#B9A0E6` | chat-source tags (a kind, never a state) |
-| `--gg-term-bg` | | `#F8F9F8` | `#09131B` | terminal background |
-| `--gg-term-cur` | | `#C6DDEE` | `#1B3446` | TUI cursor row |
+| `--gg-term-bg` | | `#F8F9F8` | `#070809` | terminal background |
+| `--gg-term-cur` | | `#D9E6EE` | `#1D2227` | TUI cursor row |
+
+In the TUI, chips, keys and buttons are filled one step off `--gg-term-bg`: `--gg-sunk` in light, `--gg-surface` in dark.
+
+| `--gg-field` | | `#7D8A90` | `#646B73` | input and checkbox edges (3:1 against surface) |
 
 Rules
+- `--gg-line` is too faint to outline a control on its own; form fields use `--gg-field`.
 - International Orange is the bridge's own paint. It never means warning or error.
 - Redaction is an ink bar (ink on ink), not red text.
 - Denied is a decision: Alarm on the glyph only, the row stays in ink.
@@ -131,7 +136,10 @@ text, so it reads without color; the color says the kind.
 ## 6. Layout and motion
 
 - Single column up to 72ch for prose; 1120px max for hero and feature grids.
-- 8px spacing scale. Radius 8px (cards), 4px (kbd, chips). 1px borders, no shadows.
+- 8px spacing scale. Square edges: radius 0 for cards, buttons, inputs, tables and dialogs; 4px only for small marks (kbd, source tags, chips, the theme toggle).
+- Cards, tables and dialogs take a 3px double rule in `--gg-line`; dividers and controls take 1px. A page or screen title sits on the same double rule. No shadows.
+- One orange action per view; everything else is a plain button (surface, 1px line, ink).
+- Dark is a neutral night (`#0A0B0D`), not navy.
 - Motion: on the project page the cable draws itself once (under 2s) and fog drifts
   slowly through the towers. Nothing else moves. Respect `prefers-reduced-motion`.
 
