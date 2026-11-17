@@ -2,7 +2,7 @@
 // Approving only records the approval; it goes out the next time you send.
 
 import { api } from "/assets/api.js";
-import { h, fill, put, when, plural, ask } from "/assets/dom.js";
+import { h, fill, put, when, plural, ask, tag } from "/assets/dom.js";
 
 const CONFLICT = "edit needs review";
 
@@ -52,7 +52,7 @@ export async function render(main, app) {
       const plain = items.filter((it) => it.State !== CONFLICT);
       put(main, h("div", { class: "row" },
         h("strong", null, project || "(no project)"), h("span", { class: "dim" }, plural(items.length, "session")),
-        plain.length > 1 ? h("button", { type: "button", onclick: decide(app, main, plain, "approve", `approved ${plural(plain.length, "session")}: they go out the next time you send`) }, `Approve all ${plain.length}`) : null));
+        plain.length > 1 ? h("button", { type: "button", class: "primary", onclick: decide(app, main, plain, "approve", `approved ${plural(plain.length, "session")}: they go out the next time you send`) }, `Approve all ${plain.length}`) : null));
       put(main, table(app, main, items));
     }
   }
@@ -98,7 +98,7 @@ function row(app, main, it, withProject) {
       h("button", { type: "button", onclick: decide(app, main, [it], "keep-edit", `kept your version of "${title}"`) }, "Keep my version"),
       h("button", { type: "button", onclick: decide(app, main, [it], "drop-edit", `"${title}" uses the new summary`) }, "Use the new summary"));
   } else {
-    if (!kept && it.State !== "sent" && it.State !== "queued") actions.push(h("button", { type: "button", class: "primary", onclick: decide(app, main, [it], "approve", `approved "${title}": it goes out the next time you send`) }, "Approve"));
+    if (!kept && it.State !== "sent" && it.State !== "queued") actions.push(h("button", { type: "button", onclick: decide(app, main, [it], "approve", `approved "${title}": it goes out the next time you send`) }, "Approve"));
     if (!kept) actions.push(h("button", { type: "button", onclick: decide(app, main, [it], "exclude", `excluded "${title}": it stays on this computer`) }, "Exclude"));
     if (!kept) actions.push(h("button", { type: "button", onclick: () => edit(app, main, it) }, "Edit summary"));
     if (kept) actions.push(h("button", { type: "button", onclick: decide(app, main, [it], "reset", `decision removed: "${title}" is judged afresh`) }, "Undo"));
@@ -114,7 +114,7 @@ function row(app, main, it, withProject) {
     }
   }
   return h("tr", null,
-    h("td", null, h("span", { class: "tag" }, it.Source), " ", title, it.Note ? h("div", { class: "dim" }, "Your rules: " + it.Note) : null,
+    h("td", null, tag(it.Source), " ", title, it.Note ? h("div", { class: "dim" }, "Your rules: " + it.Note) : null,
       it.State === CONFLICT ? h("div", { class: "warn" }, "This session changed after you edited its summary. It is held until you decide.") : null),
     withProject ? h("td", null, it.Project) : null,
     h("td", null, state), h("td", null, when(it.Updated)), h("td", null, h("div", { class: "row" }, actions)));

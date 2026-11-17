@@ -2,7 +2,7 @@
 // admin secret, which the local server keeps in memory for this run only.
 
 import { api } from "/assets/api.js";
-import { h, fill, put, when, plural, ask } from "/assets/dom.js";
+import { h, fill, put, when, plural, ask, tag } from "/assets/dom.js";
 
 let pending = []; // grant changes chosen but not applied yet
 
@@ -134,7 +134,7 @@ async function view(main, app, a) {
     (v.Sessions || []).length ? h("table", null,
       h("thead", null, h("tr", null, h("th", null, "Project"), h("th", null, "Session"), h("th", null, "Updated"))),
       h("tbody", null, v.Sessions.map((s) => h("tr", null, h("td", null, s.Project),
-        h("td", null, h("span", { class: "tag" }, s.Source), " ", s.Title, s.Abstract ? h("div", { class: "dim" }, s.Abstract) : null), h("td", null, when(s.Updated)))))) : h("p", { class: "dim" }, "None in the last 5 days."),
+        h("td", null, tag(s.Source), " ", s.Title, s.Abstract ? h("div", { class: "dim" }, s.Abstract) : null), h("td", null, when(s.Updated)))))) : h("p", { class: "dim" }, "None in the last 5 days."),
     h("h2", null, `Work items (${(v.Work || []).length})`),
     (v.Work || []).length ? h("table", null,
       h("thead", null, h("tr", null, h("th", null, "Project"), h("th", null, "Kind"), h("th", null, "Key"), h("th", null, "Status"))),
