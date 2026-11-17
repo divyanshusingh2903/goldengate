@@ -311,7 +311,12 @@ func TestThePagesScriptsAllExistAndAreServed(t *testing.T) {
 		}
 		return nil
 	})
-	if len(seen) < 8 {
+	for _, screen := range []string{"inbox", "receipts", "agents"} {
+		if !seen["/assets/"+screen+".js"] {
+			t.Errorf("the %s screen is not imported", screen)
+		}
+	}
+	if len(seen) < 11 {
 		t.Fatalf("expected the screens to be imported, found %v", seen)
 	}
 	for path := range seen {
@@ -328,6 +333,39 @@ func TestThePagesScriptsAllExistAndAreServed(t *testing.T) {
 	for _, want := range []string{`<script type="module" src="/assets/app.js"></script>`, `<nav id="nav"`, `role="status"`, `<main id="main"`} {
 		if !strings.Contains(string(page), want) {
 			t.Errorf("the page lacks %s", want)
+		}
+	}
+}
+
+// Every API path a screen calls is one the server routes: a screen cannot
+// ship pointing at an endpoint that does not exist.
+func TestEveryPathTheScreensCallIsServed(t *testing.T) {
+	c, _ := start(t, webui.Options{})
+	paths := regexp.MustCompile("[\"`](/api/[a-z/-]+)")
+	called := map[string]bool{}
+	_ = fs.WalkDir(webui.AssetFS, "assets", func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() || !strings.HasSuffix(path, ".js") {
+			return err
+		}
+		b, _ := fs.ReadFile(webui.AssetFS, path)
+		for _, m := range paths.FindAllStringSubmatch(string(b), -1) {
+			called[strings.TrimSuffix(m[1], "/")] = true
+		}
+		return nil
+	})
+	for _, want := range []string{"/api/inbox", "/api/inbox/decide", "/api/edit/begin", "/api/edit/finish", "/api/offers/decide", "/api/receipts", "/api/admin", "/api/admin/forget", "/api/agents", "/api/agents/view", "/api/agents/grants", "/api/agents/revoke-token"} {
+		if !called[want] {
+			t.Errorf("no screen calls %s", want)
+		}
+	}
+	for path := range called {
+		if path == "/api/sync" { // also the prefix of /api/sync/{id}/events, built at run time
+			continue
+		}
+		// 404 means no route; 405 means the route exists under the other method.
+		get, _ := c.Do("GET", path, nil, nil)
+		if get.StatusCode == http.StatusNotFound {
+			t.Errorf("a screen calls %s, which the server does not route", path)
 		}
 	}
 }

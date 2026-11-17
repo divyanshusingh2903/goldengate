@@ -460,7 +460,7 @@ Legend: `[x]` shared, `[ ]` not shared, `[~]` some sources shared, `[-]` denied.
 
 ### 6.1 Local web UI (`goldengate ui`): design and security model
 
-Status: the server, its security checks and the JSON API are built (issue #46, package `internal/goldengate/webui`, command `goldengate ui`). The first set of screens is built too (#47): Setup, Projects, Preview, Send, Server and Settings, the same flow as the terminal UI. Inbox, agents and receipts come with #48; until then those are in the terminal UI and the commands.
+Status: the server, its security checks and the JSON API are built (issue #46, package `internal/goldengate/webui`, command `goldengate ui`). The screens are built too: Setup, Projects, Preview, Send, Server and Settings, the same flow as the terminal UI (#47), and Inbox, Receipts and Agents (#48).
 
 `goldengate ui` runs the same product in a browser, for people who do not live in a terminal. It is a second front end on `tui.Backend`, not a second implementation: every selection, preview, redaction, validation and send goes through the code the TUI and the commands already use, and through the single push path (`sync.Push`). It adds no capability. What it does add is a browser-facing surface on the laptop, so this section is mostly about keeping that surface closed.
 
@@ -529,7 +529,7 @@ JSON bodies use the `tui` types with their Go field names. A backend error is a 
 
 Not built from this section yet: content-hashed asset paths with `immutable` caching (assets are served as they are), and the optional request log.
 
-#### Screens as built (#47)
+#### Screens as built (#47, #48)
 
 The page is plain ES modules under `webui/assets`: `app.js` (launch, session, navigation), `api.js` (the only code that calls the API; it holds the request token in memory and reads the event stream with `fetch`, because `EventSource` cannot send the token), `dom.js` (element helpers), and one module per screen.
 
@@ -542,7 +542,13 @@ The page is plain ES modules under `webui/assets`: `app.js` (launch, session, na
 
 Rules the page keeps: every screen has a line saying what leaves the computer and when; session text is placed as text only (no HTML strings anywhere, which a test checks); colours come from the brand tokens with light and dark, and every state also has a glyph or a word; everything is a native button, input or link, so it works from the keyboard; layouts collapse to one column at phone width. Reloading the page ends its session on purpose (the request token lives in memory); pasting a fresh link into the same tab restarts it.
 
-Not in this version: multi-select of projects, renaming a project, the "paranoid" preview, theme presets beyond light and dark, and the keyboard shortcuts of the terminal UI.
+- **Inbox** (#48): offers first (the question, why, and everything a yes changes; "Yes" or "Not now"), then the sessions waiting for approval grouped by project with one "Approve all" per group, then Excluded, Sent or queued, and Retracted. Per session: Approve, Exclude, Edit summary, Undo, and Retract behind a confirmation. A session that changed after its summary was edited is held, with "Edit again", "Keep my version" and "Use the new summary". Editing shows the summary's form as text in the page: the form file stays with the local server, only its text travels to the page and back. Approving sends nothing; the screen says so and links to Send.
+- **Receipts** (#48): each automatic send with its sessions, the rule that sent each one, and Retract per session.
+- **Agents** (#48): asks for the admin secret first (held in the local server's memory for the run, never sent back, "Forget the admin secret" drops it). Then the grid of projects by agents with a first row for "every project": ticking stages a change, a review card lists the changes in words, and nothing is applied until Apply. Per agent: what it sees, its tokens with Revoke behind a confirmation, and "View as", the same laptop-built view as the terminal UI.
+
+Each visit to a screen draws into its own element, so an action that finishes after the user moved on cannot replace the screen now shown.
+
+Not in this version: moving a session to another project from the inbox (no front end has it: a session's project follows from its folder or chat grouping), adding, renaming or removing an agent and creating its token (commands only, as in the terminal UI), changing trust and rules (commands only), multi-select of projects, renaming a project, the "paranoid" preview, theme presets beyond light and dark, and the keyboard shortcuts of the terminal UI.
 
 #### API shape (as designed in #45)
 
