@@ -473,7 +473,7 @@ func (m *Model) runSummarizerTest() tea.Cmd {
 
 func (m *Model) onTestDone(msg testDoneMsg) {
 	if msg.err != nil {
-		m.st.test = "✗ " + msg.err.Error()
+		m.st.test = "✗ " + strings.Join(strings.Fields(msg.err.Error()), " ") // one line, whatever the provider sent
 		return
 	}
 	m.st.test = "✓ " + msg.res

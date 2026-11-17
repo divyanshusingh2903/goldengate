@@ -36,6 +36,9 @@ func (o *OpenAI) Name() string { return o.provider + ":" + o.model }
 // reasoningSteps turn thinking off as far as each endpoint allows: "none"
 // where it is accepted, else "minimal", else the provider's default (the
 // field left out). An endpoint that rejects a value moves to the next one.
+// Any 400 counts as a rejection while a value is sent: Gemini answers an
+// unsupported value with a bare "Request contains an invalid argument", so
+// the message cannot be relied on to name the field.
 var reasoningSteps = []string{"none", "minimal", ""}
 
 // JSON implements Client with response_format json_schema.
@@ -72,7 +75,7 @@ func (o *OpenAI) JSON(ctx context.Context, system, user string, schema map[strin
 		if err != nil {
 			return nil, err
 		}
-		if status == http.StatusBadRequest && reasoningSteps[step] != "" && strings.Contains(strings.ToLower(string(raw)), "reasoning") {
+		if status == http.StatusBadRequest && reasoningSteps[step] != "" {
 			step++ // this endpoint does not take that reasoning setting: try the next
 			o.mu.Lock()
 			o.reasoning = step
@@ -134,11 +137,27 @@ func (o *OpenAI) content(raw []byte) ([]byte, error) {
 	return []byte(c.Message.Content), nil
 }
 
-// snippet is the start of an error body, for messages.
+// snippet is an error body as one short line, for messages: the provider's
+// own error message when the body is the usual JSON shape ({"error":
+// {"message": …}}, or Gemini's list of those), else the start of the body.
 func snippet(raw []byte) string {
 	msg := strings.TrimSpace(string(raw))
-	if len(msg) > 200 {
-		msg = msg[:200] + "…"
+	type apiErr struct {
+		Error struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	var one apiErr
+	var list []apiErr
+	switch {
+	case json.Unmarshal(raw, &one) == nil && one.Error.Message != "":
+		msg = one.Error.Message
+	case json.Unmarshal(raw, &list) == nil && len(list) > 0 && list[0].Error.Message != "":
+		msg = list[0].Error.Message
+	}
+	msg = strings.Join(strings.Fields(msg), " ")
+	if r := []rune(msg); len(r) > 200 {
+		msg = string(r[:200]) + "…"
 	}
 	return msg
 }
