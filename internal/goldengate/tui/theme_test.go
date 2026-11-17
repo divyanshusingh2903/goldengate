@@ -2,6 +2,9 @@ package tui
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -102,5 +105,43 @@ func TestLongDropdownsScroll(t *testing.T) {
 	h.click("model-55")
 	if s := h.be.saved[len(h.be.saved)-1].Summarize; s.Model != "model-55" {
 		t.Fatalf("a visible item is clickable: %+v", s)
+	}
+}
+
+// Golden Gate's own presets use the same colours as the web UI (both follow
+// docs/brand/BRAND.md), so the terminal and the browser look alike.
+func TestGoldenGatePresetsMatchTheWebUI(t *testing.T) {
+	css, err := os.ReadFile(filepath.Join("..", "webui", "assets", "app.css"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	block := func(selector string) map[string]string {
+		s := string(css)
+		i := strings.Index(s, selector+" {")
+		if i < 0 {
+			t.Fatalf("app.css has no %q block", selector)
+		}
+		body := s[i+len(selector)+2:]
+		body = body[:strings.Index(body, "}")]
+		vars := map[string]string{}
+		for _, m := range regexp.MustCompile(`--([a-z-]+):\s*(#[0-9A-Fa-f]{6})`).FindAllStringSubmatch(body, -1) {
+			vars[m[1]] = strings.ToUpper(m[2])
+		}
+		return vars
+	}
+	// The terminal's chip fill is one step off its background: sunk on fog,
+	// surface on night (where sunk is darker than the background).
+	chip := map[string]string{"goldengate-light": "sunk", "goldengate-dark": "surface"}
+	for name, sel := range map[string]string{"goldengate-light": ":root", "goldengate-dark": `:root[data-theme="dark"]`} {
+		v, p := block(sel), Presets[name]
+		for field, pair := range map[string][2]string{
+			"Bg": {p.Bg, v["term-bg"]}, "Fg": {p.Fg, v["ink"]}, "Surface": {p.Surface, v[chip[name]]}, "Line": {p.Line, v["line"]},
+			"Dim": {p.Dim, v["dim"]}, "Accent": {p.Accent, v["pacific"]}, "Good": {p.Good, v["cypress"]}, "Warn": {p.Warn, v["headland"]},
+			"Bad": {p.Bad, v["alarm"]}, "Brand": {p.Brand, v["orange"]}, "Chat": {p.Chat, v["twilight"]},
+		} {
+			if !strings.EqualFold(pair[0], pair[1]) {
+				t.Errorf("%s %s is %s in the terminal theme but %s in the web UI", name, field, pair[0], pair[1])
+			}
+		}
 	}
 }

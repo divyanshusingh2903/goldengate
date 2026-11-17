@@ -8,9 +8,9 @@
 
 <p align="center">
   <a href="https://github.com/divyanshusingh2903/goldengate/actions/workflows/ci.yml"><img src="https://github.com/divyanshusingh2903/goldengate/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
-  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-D03A2B" alt="License: Apache-2.0"></a>
-  <img src="https://img.shields.io/badge/go-1.26-0B5F94" alt="Go 1.26">
-  <img src="https://img.shields.io/badge/status-pre--release%20(M4)-B05A00" alt="Status: pre-release (M4)">
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-C0362C" alt="License: Apache-2.0"></a>
+  <img src="https://img.shields.io/badge/go-1.26-1F5E80" alt="Go 1.26">
+  <img src="https://img.shields.io/badge/status-pre--release%20(M4)-965F00" alt="Status: pre-release (M4)">
 </p>
 
 <p align="center">
