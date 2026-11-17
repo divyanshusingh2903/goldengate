@@ -2,7 +2,7 @@
 // and why. Any of it can be taken back.
 
 import { api } from "/assets/api.js";
-import { h, fill, put, plural, ask } from "/assets/dom.js";
+import { h, fill, put, plural, ask, tag } from "/assets/dom.js";
 
 export async function render(main, app) {
   const receipts = await api("/api/receipts");
@@ -21,7 +21,7 @@ export async function render(main, app) {
       h("table", null,
         h("thead", null, h("tr", null, h("th", null, "Session"), h("th", null, "Project"), h("th", null, "Sent because"), h("th", null, ""))),
         h("tbody", null, items.map((it) => h("tr", null,
-          h("td", null, h("span", { class: "tag" }, it.Source), " ", it.Title || it.ID),
+          h("td", null, tag(it.Source), " ", it.Title || it.ID),
           h("td", null, it.Project),
           h("td", null, it.Why || ""),
           h("td", null, it.Retracted ? h("span", { class: "dim" }, "✕ retracted") : h("button", {

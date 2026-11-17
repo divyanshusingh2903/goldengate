@@ -275,6 +275,11 @@ func TestThePageIsSelfContained(t *testing.T) {
 		if err != nil || d.IsDir() {
 			return err
 		}
+		// Only what the browser runs or lays out: font files and their
+		// licences are data, and their metadata may name a web address.
+		if !strings.HasSuffix(path, ".html") && !strings.HasSuffix(path, ".css") && !strings.HasSuffix(path, ".js") {
+			return nil
+		}
 		b, _ := fs.ReadFile(webui.AssetFS, path)
 		text := string(b)
 		for _, bad := range []string{"http://", "https://", "//cdn", "innerHTML", "eval(", "document.write", "onclick=", "<style", "style=\""} {
@@ -366,6 +371,36 @@ func TestEveryPathTheScreensCallIsServed(t *testing.T) {
 		get, _ := c.Do("GET", path, nil, nil)
 		if get.StatusCode == http.StatusNotFound {
 			t.Errorf("a screen calls %s, which the server does not route", path)
+		}
+	}
+}
+
+// The page's typefaces and mark are its own files, served with their types,
+// and each embedded font travels with its licence.
+func TestThePagesFontsAndMarkAreServed(t *testing.T) {
+	c, _ := start(t, webui.Options{})
+	css, err := fs.ReadFile(webui.AssetFS, "assets/app.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	urls := regexp.MustCompile(`url\("(/assets/[a-z0-9/.-]+)"\)`).FindAllStringSubmatch(string(css), -1)
+	if len(urls) < 5 {
+		t.Fatalf("expected the five font faces in app.css, found %d", len(urls))
+	}
+	check := func(path, want string) {
+		res, body := c.Do("GET", path, nil, nil)
+		if res.StatusCode != 200 || res.Header.Get("Content-Type") != want || len(body) == 0 {
+			t.Errorf("%s: %d %q, want %q", path, res.StatusCode, res.Header.Get("Content-Type"), want)
+		}
+	}
+	for _, m := range urls {
+		check(m[1], "font/woff2")
+	}
+	check("/assets/mark.svg", "image/svg+xml")
+	for _, face := range []string{"federo", "josefin-sans", "ibm-plex-mono"} {
+		lic, err := fs.ReadFile(webui.AssetFS, "assets/fonts/LICENSE-"+face+".txt")
+		if err != nil || !strings.Contains(string(lic), "SIL Open Font License") {
+			t.Errorf("%s has no licence beside it: %v", face, err)
 		}
 	}
 }

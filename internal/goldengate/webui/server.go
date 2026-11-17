@@ -19,6 +19,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"mime"
 	"net"
 	"net/http"
 	"strconv"
@@ -162,6 +163,10 @@ func (s *Server) hostOK(host string) bool {
 func (s *Server) originOK(r *http.Request) bool {
 	return r.Header.Get("Origin") == "http://"+r.Host
 }
+
+// The page's own fonts. Go's built-in type table has no entry for WOFF2, and
+// with nosniff the type must be right.
+func init() { _ = mime.AddExtensionType(".woff2", "font/woff2") }
 
 func securityHeaders(h http.Header, api bool) {
 	h.Set("Content-Security-Policy", "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; font-src 'self'; connect-src 'self'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'")

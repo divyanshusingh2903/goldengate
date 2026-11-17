@@ -2,7 +2,7 @@
 // send would take.
 
 import { api } from "/assets/api.js";
-import { h, clear, when, plural, ask, put, fill } from "/assets/dom.js";
+import { h, clear, when, plural, ask, put, fill, tag } from "/assets/dom.js";
 
 const NOT = 0, SHARED = 1, PARTIAL = 2, BLOCKED = 3;
 const ALLOW = 0, REMOVE = 1, DENY = 2, TOGGLE = 3, SETPROJECT = 4;
@@ -19,8 +19,10 @@ function stateText(r) {
   return ["shared", "good"];
 }
 
+// box is the state glyph. The terminal UI uses brackets; the web uses the
+// round glyphs of docs/brand, always next to a word that says the same.
 function box(r) {
-  return { [NOT]: "[ ]", [SHARED]: "[x]", [PARTIAL]: "[~]", [BLOCKED]: "[-]" }[r.State];
+  return { [NOT]: ["○", "none"], [SHARED]: ["●", "good"], [PARTIAL]: ["◐", "warn"], [BLOCKED]: ["✕", "bad"] }[r.State];
 }
 
 // card says in words what happens to the project.
@@ -78,8 +80,9 @@ export async function render(main, app) {
       onclick: () => { ui.selected = r.Key; drawList(); drawDetail(); },
       ondblclick: () => app.go("preview", { key: r.Key, label: r.Label }),
     },
-    h("span", { class: "mono", title: ["not shared", "shared", "some tools shared", "blocked"][r.State] }, box(r)),
-    h("span", { class: "where" }, r.Label, r.Project && r.Project !== r.Label ? h("span", { class: "dim" }, ` · ${r.Project}`) : null),
+    h("span", { class: "glyph " + box(r)[1], title: ["not shared", "shared", "some tools shared", "blocked"][r.State] }, box(r)[0]),
+    h("span", { class: "where" }, r.Label, r.Project && r.Project !== r.Label ? h("span", { class: "dim" }, ` · ${r.Project}`) : null,
+      (r.Sources || []).length ? h("span", { class: "tags" }, (r.Sources || []).map((s) => tag(s.Name))) : null),
     h("span", { class: "state " + cls }, text)));
   };
 
@@ -158,7 +161,7 @@ export async function render(main, app) {
       for (const s of r.Sources) {
         const cb = h("input", { type: "checkbox", checked: !!s.Shared });
         cb.addEventListener("change", () => act({ Kind: TOGGLE, Keys: [r.Key], Source: s.Name, Others: others.filter((n) => n !== s.Name) }, "changed"));
-        put(detail, h("label", { class: "check" }, cb, `${s.Name} (${plural(s.Sessions, "session")})`));
+        put(detail, h("label", { class: "check" }, cb, tag(s.Name), `${s.Name} (${plural(s.Sessions, "session")})`));
       }
     }
     const name = h("input", { type: "text", value: r.Project || "", "aria-label": "Project name", placeholder: "Project name" });
@@ -174,7 +177,8 @@ export async function render(main, app) {
   fill(main, 
     h("h1", null, "Projects"),
     h("p", { class: "leaves" }, "Sharing a project selects it; nothing is sent from this screen. Sessions leave this computer only when you review them and press Send."),
-    h("div", { class: "row chips" }, chip("all", "All"), chip("shared", "Shared"), chip("tosend", "To send"), chip("notshared", "Not shared"),
+    h("div", { class: "row" },
+      h("div", { class: "chips", role: "group", "aria-label": "Show" }, chip("all", "All"), chip("shared", "Shared"), chip("tosend", "To send"), chip("notshared", "Not shared")),
       h("label", { class: "check" }, treeBox, "Show as folders"),
       h("button", {
         type: "button",
@@ -184,7 +188,10 @@ export async function render(main, app) {
     h("div", { class: "row" }, search),
     h("div", { class: "split" }, list, detail),
     (snap.Warnings || []).map((w) => h("p", { class: "warn" }, "⚠ " + w)),
-    h("p", { class: "dim" }, "[x] shared   [ ] not shared   [~] some tools shared   [-] blocked. Double-click a project to preview it."),
+    h("p", { class: "legend dim" },
+      h("span", null, h("span", { class: "glyph good" }, "●"), " shared"), h("span", null, h("span", { class: "glyph none" }, "○"), " not shared"),
+      h("span", null, h("span", { class: "glyph warn" }, "◐"), " some tools shared"), h("span", null, h("span", { class: "glyph bad" }, "✕"), " blocked"),
+      h("span", null, "Double-click a project to preview it.")),
   );
   void shown;
   drawList();

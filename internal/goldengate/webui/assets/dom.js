@@ -51,6 +51,17 @@ export function when(iso) {
   return `${Math.round(m / 1440)}d ago`;
 }
 
+// tag is a session's source as the terminal UI shows it ("CC", "GPT"): text
+// that reads without colour; the colour says whether it is code or chat.
+const SOURCES = {
+  "claude-code": ["CC", "code"], codex: ["CX", "code"], opencode: ["OC", "code"], cursor: ["CU", "code"],
+  "claude-ai": ["AI", "chat"], chatgpt: ["GPT", "chat"],
+};
+export function tag(source) {
+  const [short, kind] = SOURCES[source] || [String(source || "?").toUpperCase().slice(0, 3), "code"];
+  return h("span", { class: `tag ${kind}`, title: source }, short);
+}
+
 export function plural(n, one, many) {
   return `${n} ${n === 1 ? one : many || one + "s"}`;
 }

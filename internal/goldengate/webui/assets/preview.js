@@ -1,7 +1,7 @@
 // Preview: exactly what would be sent for one project, redactions marked.
 
 import { api } from "/assets/api.js";
-import { h, when, plural, marked, put, fill } from "/assets/dom.js";
+import { h, when, plural, marked, put, fill, tag } from "/assets/dom.js";
 
 export async function render(main, app, params) {
   if (!params.key) { app.go("projects"); return; }
@@ -22,7 +22,7 @@ export async function render(main, app, params) {
   for (const it of items) {
     const status = { new: "new", changed: "changed since it was last sent", unchanged: "already sent, unchanged" }[it.Status] || it.Status;
     put(main, h("section", { class: "card" },
-      h("h2", null, h("span", { class: "tag" }, it.Source), " ", status, when(it.Updated) ? ` · ${when(it.Updated)}` : ""),
+      h("h2", null, tag(it.Source), " ", status, when(it.Updated) ? ` · ${when(it.Updated)}` : ""),
       (it.Diff || []).length ? h("div", null, h("p", { class: "dim" }, "Since it was last sent:"), h("pre", null, it.Diff.join("\n"))) : null,
       h("pre", null, marked(it.JSON || ""))));
   }

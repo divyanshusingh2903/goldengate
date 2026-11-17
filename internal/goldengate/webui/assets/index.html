@@ -4,12 +4,13 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Golden Gate</title>
+<link rel="icon" type="image/svg+xml" href="/assets/mark.svg">
 <link rel="stylesheet" href="/assets/app.css">
 </head>
 <body>
 <a class="skip" href="#main">Skip to content</a>
 <header class="bar">
-  <span class="brand">Golden Gate</span>
+  <span class="brand"><svg viewBox="0 0 64 48" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 4V44M44 4V44"/><path d="M2 34Q14 30 20 6Q32 46 44 6Q50 30 62 34"/></svg>Golden Gate</span>
   <nav id="nav" aria-label="Screens" hidden>
     <button type="button" data-screen="projects">Projects</button>
     <button type="button" data-screen="inbox">Inbox</button>
@@ -20,7 +21,7 @@
     <button type="button" data-screen="setup">Setup</button>
   </nav>
   <span id="badge" class="badge"></span>
-  <button type="button" id="theme" class="quiet" aria-label="Switch between light and dark">◐</button>
+  <button type="button" id="theme" class="quiet" aria-label="Switch between light and dark"><span class="to-dark">Dark</span><span class="to-light">Light</span></button>
 </header>
 <p id="status" class="status" role="status" aria-live="polite"></p>
 <main id="main" tabindex="-1"><p>Connecting…</p></main>
