@@ -232,6 +232,45 @@ func TestBackendToggleSourceKeepsTheRestShared(t *testing.T) {
 	}
 }
 
+// A tool turned off for every project in Settings cannot be turned back on
+// for one project: the editor says so instead of claiming it is sent again.
+func TestBackendToggleSourceSaysWhenTheToolIsOffInSettings(t *testing.T) {
+	l := newLaptop(t)
+	be := backend(l)
+	ctx := context.Background()
+	s, _ := be.Snapshot(ctx)
+	demo := rowOf(t, s, "~/projects/demo")
+	_, _ = be.Apply(ctx, tui.Action{Kind: tui.ActAllow, Keys: []string{demo.Key}})
+	st, err := be.Settings(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for i := range st.Sources {
+		if st.Sources[i].Name == "claude-code" {
+			st.Sources[i].Enabled = false
+		}
+	}
+	st.Sources = append(st.Sources, tui.SourceStatus{Name: "codex", Enabled: true}) // one tool must stay on
+	if err := be.SaveSettings(ctx, st); err != nil {
+		t.Fatal(err)
+	}
+	s, _ = be.Snapshot(ctx)
+	r := rowOf(t, s, "~/projects/demo")
+	var cc *tui.SourceInfo
+	for i := range r.Sources {
+		if r.Sources[i].Name == "claude-code" {
+			cc = &r.Sources[i]
+		}
+	}
+	if cc == nil || cc.Shared || !cc.OffEverywhere {
+		t.Fatalf("claude-code is off everywhere: %+v", r.Sources)
+	}
+	_, err = be.Apply(ctx, tui.Action{Kind: tui.ActToggleSource, Keys: []string{demo.Key}, Source: "claude-code"})
+	if err == nil || !strings.Contains(err.Error(), "Settings") {
+		t.Errorf("the toggle points to Settings: %v", err)
+	}
+}
+
 func TestBackendToggleSourceOnUnsharedProjectSharesOnlyIt(t *testing.T) {
 	l := newLaptop(t)
 	be := backend(l)
