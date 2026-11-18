@@ -68,6 +68,9 @@ type Snapshot struct {
 	Server   string // URL, "" when none is configured
 	FirstRun bool   // no config exists yet
 	Warnings []string
+	// Notices are things to say once, such as where the upload token is
+	// kept when there is no OS keyring.
+	Notices []string
 	// Summarizer names who writes summaries: "" for the local rules, else
 	// "<provider>:<model>".
 	Summarizer string

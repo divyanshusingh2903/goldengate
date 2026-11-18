@@ -379,6 +379,21 @@ func TestSnapshotErrorIsShown(t *testing.T) {
 	h.contains("could not read your projects: config: parse error")
 }
 
+// A notice from the backend is said once in the status line (#118).
+func TestSnapshotNoticeShownOnce(t *testing.T) {
+	be := newFake()
+	be.snapshotFn = func() (Snapshot, error) {
+		return Snapshot{Rows: be.rows, Notices: []string{"no OS keyring available"}}, nil
+	}
+	h := newHarnessWith(t, be, 100, 30)
+	h.contains("note: no OS keyring available")
+	h.m.setStatus("", false)
+	h.send(snapshotMsg{snap: Snapshot{Rows: be.rows, Notices: []string{"no OS keyring available"}}})
+	if strings.Contains(h.m.status, "keyring") {
+		t.Errorf("notice repeated: %q", h.m.status)
+	}
+}
+
 func TestEmptyStateGuidesTheUser(t *testing.T) {
 	be := newFake()
 	be.rows = nil

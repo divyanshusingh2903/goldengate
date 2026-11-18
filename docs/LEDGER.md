@@ -185,8 +185,8 @@ Found on 2026-11-17 by driving the TUI, the web UI and the CLI against a local s
 | B3 | #114 CLI share of a parent leaves child projects tombstoned | S | | Nov 17 | done | #127 |
 | B4 | #115 MCP recent_activity text under the wrong project | S | | Nov 17 | done | #128 |
 | B5 | #116 Projects screen counts excluded sessions as to send | S | | Nov 17 | done | #129 |
-| B6 | #117 TUI setup: Esc from a preview leaves setup | S | | Nov 17 | in progress | |
-| B7 | #118 TUI: no-keyring warning printed over the interface | S | | Nov 17 | todo | |
+| B6 | #117 TUI setup: Esc from a preview leaves setup | S | | Nov 17 | done | #130 |
+| B7 | #118 TUI: no-keyring warning printed over the interface | S | | Nov 17 | in progress | |
 | B8 | #119 Held edit conflicts: sync silent, TUI approve claims they go | S | | Nov 17 | todo | |
 | B9 | #120 TUI view-as: colour codes cut mid-sequence | S | | Nov 17 | todo | |
 | B10 | #121 TUI search matches the hidden home directory | S | | Nov 17 | todo | |
@@ -264,3 +264,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-17: #114 done (#127): `share add` and `projects add` lift the tombstones of every project they start sharing. #115 in progress.
 - 2026-11-17: #115 done (#128): recent_activity's text lists each session under its own project. #116 in progress.
 - 2026-11-17: #116 done (#129): excluded and retracted sessions are not counted as to send. #117 in progress.
+- 2026-11-17: #117 done (#130): Esc from a preview opened in setup goes back to setup. #118 in progress.

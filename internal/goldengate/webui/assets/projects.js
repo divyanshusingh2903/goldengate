@@ -189,6 +189,7 @@ export async function render(main, app) {
     h("div", { class: "row" }, search),
     h("div", { class: "split" }, list, detail),
     (snap.Warnings || []).map((w) => h("p", { class: "warn" }, "⚠ " + w)),
+    (snap.Notices || []).map((w) => h("p", { class: "warn" }, "Note: " + w)),
     h("p", { class: "legend dim" },
       h("span", null, h("span", { class: "glyph good" }, "●"), " shared"), h("span", null, h("span", { class: "glyph none" }, "○"), " not shared"),
       h("span", null, h("span", { class: "glyph warn" }, "◐"), " some tools shared"), h("span", null, h("span", { class: "glyph bad" }, "✕"), " blocked"),

@@ -32,7 +32,11 @@ func (a *app) secretStore() secrets.Store {
 	if a.SecretStore == nil {
 		return &secrets.Memory{}
 	}
-	return a.SecretStore(a.dirs().State, func(msg string) { fmt.Fprintln(a.Stderr, "warning:", msg) })
+	warn := func(msg string) { fmt.Fprintln(a.Stderr, "warning:", msg) }
+	if a.secretWarn != nil {
+		warn = a.secretWarn
+	}
+	return a.SecretStore(a.dirs().State, warn)
 }
 
 // secretName keys the ingest token by server host, so two servers can coexist.
