@@ -3,13 +3,16 @@ package sync
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
-	"github.com/divyanshusingh2903/goldengate/internal/goldengate/summarize"
 	"os"
 	"path/filepath"
+	gosync "sync"
 	"time"
 
-	_ "modernc.org/sqlite" // pure-Go SQLite driver (no CGO)
+	"github.com/divyanshusingh2903/goldengate/internal/goldengate/summarize"
+	"modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
 )
 
 // State is the local sync database: what was pushed, and which projects have
@@ -78,15 +81,56 @@ func OpenState(path string) (*State, error) {
 	if path == ":memory:" {
 		db.SetMaxOpenConns(1) // each :memory: connection is its own database
 	}
-	if _, err := db.ExecContext(context.Background(), schema); err != nil {
-		_ = db.Close()
-		return nil, fmt.Errorf("state: schema: %w", err)
-	}
-	if err := migrateState(context.Background(), db); err != nil {
+	if err := prepareState(db); err != nil {
 		_ = db.Close()
 		return nil, err
 	}
 	return &State{db: db}, nil
+}
+
+// prepareMu serializes creating and upgrading the schema inside this process:
+// the web UI opens the state database once per request, and two requests on
+// a first run would otherwise both switch a new file to WAL at once (#140).
+var prepareMu gosync.Mutex
+
+// prepareTimeout bounds how long opening waits for another process (the
+// terminal UI, a background sync) that holds the database while it does the same.
+const prepareTimeout = 10 * time.Second
+
+// prepareState creates the schema and runs the migrations. SQLite answers
+// SQLITE_BUSY at once, without waiting on busy_timeout, when two connections
+// race to change the journal mode or to upgrade a read lock to a write lock;
+// that is retried until prepareTimeout.
+func prepareState(db *sql.DB) error {
+	prepareMu.Lock()
+	defer prepareMu.Unlock()
+	ctx := context.Background()
+	deadline := time.Now().Add(prepareTimeout)
+	wait := 10 * time.Millisecond
+	for {
+		err := func() error {
+			if _, err := db.ExecContext(ctx, schema); err != nil {
+				return fmt.Errorf("state: schema: %w", err)
+			}
+			return migrateState(ctx, db)
+		}()
+		if err == nil || !isBusy(err) || time.Now().After(deadline) {
+			return err
+		}
+		time.Sleep(wait)
+		wait = min(wait*2, 200*time.Millisecond)
+	}
+}
+
+// isBusy reports whether err is SQLite's "database is locked" or "table is
+// locked", in any of their extended forms.
+func isBusy(err error) bool {
+	var se *sqlite.Error
+	if !errors.As(err, &se) {
+		return false
+	}
+	code := se.Code() & 0xff
+	return code == sqlite3.SQLITE_BUSY || code == sqlite3.SQLITE_LOCKED
 }
 
 // migrateState upgrades state databases created before payloads were kept.

@@ -13,7 +13,8 @@ _Last updated 2026-11-17. Update this section whenever a row in the queue change
 
 **Progress:** 30 of 31 scheduled issues done (plus 2 stretch). Phases 1 (Foundations), 2 (Per-agent access) and 3 (Inbox and curation) are complete.
 **Bug fixes from the end-to-end test** (#112–#124, PRs #125–#137) are all done; the report is `docs/TEST-REPORT.md`, with small observations left for later.
-**Nothing is next:** every issue of the queue is done except #40. **Blocked:** #40 Share-link import: the #39 spike recommends not building it; whether to close it as not planned is the user's call. Phase 4 (work items, rules and automation) is complete: #21, #35, #36, #45, #31, #33, #34, #32 and #22.
+**Web UI restyle** (#139, PR #141) is done; #140 (state database concurrent first open) is in progress.
+**Nothing else is next:** every issue of the queue is done except #40. **Blocked:** #40 Share-link import: the #39 spike recommends not building it; whether to close it as not planned is the user's call. Phase 4 (work items, rules and automation) is complete: #21, #35, #36, #45, #31, #33, #34, #32 and #22.
 
 ### Done
 
@@ -201,7 +202,8 @@ The web UI takes the finalized app design (sidebar, page heads, framed cards, dr
 
 | # | Issue | Size | After | Planned | Status | PR |
 |---|---|---|---|---|---|---|
-| R1 | #139 Restyle the web UI to the finalized app design | L | #48 | Nov 18 | in review | |
+| R1 | #139 Restyle the web UI to the finalized app design | L | #48 | Nov 18 | done | #141 |
+| R2 | #140 State database: concurrent first open fails with SQLITE_BUSY | S | | Nov 18 | in review | |
 
 ## Log
 
@@ -281,4 +283,5 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-17: #122 done (#135): web UI warnings show the ~ form and wrap at phone width. #123 in progress.
 - 2026-11-17: #123 done (#136): the web UI's Settings say where the summarizer key really is.
 - 2026-11-17: #124 done (#137): upload token, assistant token, shared, and the install commands in the TUI. Every bug from the end-to-end test is fixed; report in `docs/TEST-REPORT.md`.
-- 2026-11-17: #139 implemented: the web UI takes the finalized app design (sidebar with counts, Overview, page heads and cards, inbox tabs with multi-select and a session drawer, send stepper with progress, stat cards on Server, rows with switches in Settings, a card per agent). Walked in a real browser against a local `goldengatebridge` with synthetic sessions: setup, share, inbox select and approve, drawer edit and Esc cancel, review and send, server, agents (grant staged and discarded, view as), settings, preview, receipts; light and dark; no sideways scroll at 375px. Found #140 (concurrent first open of the state database fails with SQLITE_BUSY); the page's first calls are sequential until it is fixed.
+- 2026-11-17: #139 implemented: the web UI takes the finalized app design (sidebar with counts, Overview, page heads and cards, inbox tabs with multi-select and a session drawer, send stepper with progress, stat cards on Server, rows with switches in Settings, a card per agent). Walked in a real browser against a local `goldengatebridge` with synthetic sessions: setup, share, inbox select and approve, drawer edit and Esc cancel, review and send, server, agents (grant staged and discarded, view as), settings, preview, receipts; light and dark; no sideways scroll at 375px. Found #140 (concurrent first open of the state database fails with SQLITE_BUSY).
+- 2026-11-18: #140 fixed: opening the state database serializes creating the schema inside the process and retries SQLITE_BUSY for up to 10 s (another process doing the same); a test opens a new database from eight goroutines at once, 20 rounds. The web UI loads its first calls in parallel again.
