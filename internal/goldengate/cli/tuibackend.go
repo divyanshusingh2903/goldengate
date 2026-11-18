@@ -379,8 +379,18 @@ func (b *tuiBackend) setProjectEdit(cfg config.Config, m *selection.Matcher, key
 	if len(keys) == 0 {
 		return nil, errors.New("choose a project folder first")
 	}
+	// Only what is not shared yet gets shared. Sharing a folder again would
+	// switch its tools back on (allowEdit lifts the folder's source rules),
+	// and a folder that is already shared keeps the tools it had off when
+	// it moves into a project (#113).
+	var unshared []string
+	for _, k := range keys {
+		if !m.Decide(b.a.localKey(k), "").Shared {
+			unshared = append(unshared, k)
+		}
+	}
 	var ignored []string
-	share, err := b.allowEdit(cfg, m, keys, &ignored)
+	share, err := b.allowEdit(cfg, m, unshared, &ignored)
 	if err != nil {
 		return nil, err
 	}

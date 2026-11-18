@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -18,6 +19,7 @@ import (
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/adapters/codex"
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/adapters/export/exporttest"
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/adapters/opencode"
+	"github.com/divyanshusingh2903/goldengate/internal/goldengate/tui"
 	"github.com/divyanshusingh2903/goldengate/internal/model"
 )
 
@@ -309,5 +311,47 @@ func TestUnsharingChatProject(t *testing.T) {
 	}
 	if !strings.Contains(m.out.String(), "1 project(s) un-shared") {
 		t.Errorf("un-sharing a chat project:\n%s", m.out)
+	}
+}
+
+// Putting a shared folder into a project keeps the tools that were switched
+// off for it (#113).
+func TestProjectMoveKeepsToolsSwitchedOff(t *testing.T) {
+	m := newMulti(t)
+	if err := m.run("share", "add", "~/projects/demo", "--auto-approve"); err != nil {
+		t.Fatalf("%v\n%s", err, m.errOut)
+	}
+	a := &app{Deps: m.deps}
+	b := a.tuiBackend()
+	ctx := context.Background()
+	key := "/home/user/projects/demo"
+	if _, err := b.Apply(ctx, tui.Action{Kind: tui.ActToggleSource, Keys: []string{key}, Source: "codex", Others: []string{"claude-code", "opencode"}}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := b.Apply(ctx, tui.Action{Kind: tui.ActSetProject, Keys: []string{key}, Project: "Demo"}); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := a.load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	i := cfg.ProjectIndex("Demo")
+	if i < 0 {
+		t.Fatalf("project not created: %+v", cfg.Projects)
+	}
+	var excluded []string
+	for _, mb := range cfg.Projects[i].Members {
+		excluded = append(excluded, mb.ExcludeSources...)
+	}
+	if !slices.Contains(excluded, "codex") {
+		t.Errorf("codex switched back on by the move: members %+v", cfg.Projects[i].Members)
+	}
+	if err := m.run("sync", "--dry-run"); err != nil {
+		t.Fatalf("%v\n%s", err, m.errOut)
+	}
+	for _, p := range m.payloads() {
+		if p.Source == "codex" {
+			t.Errorf("codex session would be sent after the move")
+		}
 	}
 }
