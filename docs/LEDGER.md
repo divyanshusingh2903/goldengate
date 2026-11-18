@@ -188,8 +188,8 @@ Found on 2026-11-17 by driving the TUI, the web UI and the CLI against a local s
 | B6 | #117 TUI setup: Esc from a preview leaves setup | S | | Nov 17 | done | #130 |
 | B7 | #118 TUI: no-keyring warning printed over the interface | S | | Nov 17 | done | #131 |
 | B8 | #119 Held edit conflicts: sync silent, TUI approve claims they go | S | | Nov 17 | done | #132 |
-| B9 | #120 TUI view-as: colour codes cut mid-sequence | S | | Nov 17 | in progress | |
-| B10 | #121 TUI search matches the hidden home directory | S | | Nov 17 | todo | |
+| B9 | #120 TUI view-as: colour codes cut mid-sequence | S | | Nov 17 | done | #133 |
+| B10 | #121 TUI search matches the hidden home directory | S | | Nov 17 | in progress | |
 | B11 | #122 Web UI warnings: home path, overflow at phone width | S | | Nov 17 | todo | |
 | B12 | #123 Web UI settings: wrong API key store label | S | | Nov 17 | todo | |
 | B13 | #124 UI words: ingest/read token, "sent" for shared, hook text | S | | Nov 17 | todo | |
@@ -267,3 +267,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-17: #117 done (#130): Esc from a preview opened in setup goes back to setup. #118 in progress.
 - 2026-11-17: #118 done (#131): the no-keyring warning is a notice in the TUI and web UI instead of a line over the screen. #119 in progress.
 - 2026-11-17: #119 done (#132): sync says when edited sessions are held; the TUI no longer approves them.
+- 2026-11-17: #120 done (#133): view-as lines are cut by visible width.
