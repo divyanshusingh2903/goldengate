@@ -141,6 +141,12 @@ func (s *Syncer) PendingCounts(ctx context.Context) (map[string]int, error) {
 			} else if dead {
 				continue
 			}
+			// excluded and retracted sessions are never sent, so they are not to send (#116)
+			if dec, decided, err := s.State.Decision(ctx, ref.Source, ref.ID); err != nil {
+				return nil, err
+			} else if decided && dec.Blocks() {
+				continue
+			}
 			prev, seen, err := s.State.Get(ctx, ref.Source, ref.ID)
 			if err != nil {
 				return nil, err
