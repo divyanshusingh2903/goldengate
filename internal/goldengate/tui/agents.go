@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"github.com/charmbracelet/x/ansi"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/textinput"
@@ -688,7 +689,8 @@ func (m *Model) viewAsAgent(w, bh int) ([]string, string) {
 			add(m.th.Dim.Render("none"))
 		}
 		for _, s := range v.Sessions {
-			add(clip(fmt.Sprintf("  %s %s  %s  %s", m.tag(s.Source), fit(clip(s.Project, 18), 18), relTime(m.now(), s.Updated), m.highlight(s.Title)), w-2))
+			// styled text is cut by its visible width, never inside a colour code (#120)
+			add(ansi.Truncate(fmt.Sprintf("  %s %s  %s  %s", m.tag(s.Source), fit(clip(s.Project, 18), 18), relTime(m.now(), s.Updated), m.highlight(s.Title)), w-2, "…"))
 			if s.Abstract != "" {
 				add(m.th.Dim.Render(clip("      "+s.Abstract, w-4)))
 			}
@@ -699,7 +701,7 @@ func (m *Model) viewAsAgent(w, bh int) ([]string, string) {
 			add(m.th.Dim.Render("none"))
 		}
 		for _, wi := range v.Work {
-			add(clip(fmt.Sprintf("  %s %s [%s]  %s", wi.Kind, m.highlight(wi.Key), wi.Status, wi.Project), w-2))
+			add(ansi.Truncate(fmt.Sprintf("  %s %s [%s]  %s", wi.Kind, m.highlight(wi.Key), wi.Status, wi.Project), w-2, "…"))
 		}
 	}
 	ag.scroll = max(min(ag.scroll, len(all)-bh), 0)
