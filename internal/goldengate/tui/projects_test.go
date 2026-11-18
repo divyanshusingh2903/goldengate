@@ -104,6 +104,17 @@ func TestFuzzyFilter(t *testing.T) {
 	h.contains("Nothing matches the search.")
 }
 
+// The search matches what is shown (~/...), not the hidden home directory (#121).
+func TestSearchIgnoresHiddenHomeDirectory(t *testing.T) {
+	h := newHarness(t, 100, 30)
+	h.key("/")
+	h.typeText("homeu") // only in /home/u/..., never on screen
+	if n := len(h.m.items()); n != 0 {
+		t.Errorf("%d projects matched letters of the hidden home directory", n)
+	}
+	h.contains("Nothing matches the search.")
+}
+
 func TestFuzzyScore(t *testing.T) {
 	if _, ok := fuzzyScore("xyz", "~/code/app"); ok {
 		t.Error("not a subsequence")

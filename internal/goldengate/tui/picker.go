@@ -94,7 +94,9 @@ func (m *Model) items() []item {
 		if !inView(m.pk.view, r) {
 			continue
 		}
-		sc, ok := fuzzyScore(m.pk.query, r.Label+" "+r.Key)
+		// match what is on screen: the ~ form and the project name, never the
+		// hidden home directory of the absolute path (#121)
+		sc, ok := fuzzyScore(m.pk.query, r.Label+" "+r.Project)
 		if !ok {
 			continue
 		}
