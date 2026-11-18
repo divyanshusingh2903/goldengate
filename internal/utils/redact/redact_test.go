@@ -84,6 +84,32 @@ func TestPaths(t *testing.T) {
 	}
 }
 
+// A folder name that looks random must not split a path: the whole path is
+// dropped (outside the project) or made relative (inside it), and nothing
+// after the random-looking part leaks (#112).
+func TestPathWithRandomLookingFolder(t *testing.T) {
+	odd := "Xk29fQpL7mZt4RwB8nVc3HyJ6sDg1eAa" // looks high-entropy on its own
+	root := "/tmp/" + odd + "/home/alice/code/app"
+	r, _ := New(Options{ProjectRoot: root})
+	out, c := r.String("config at " + root + "/.env and /var/" + odd + "/clientname/private/notes.md")
+	if !strings.Contains(out, "config at .env") {
+		t.Errorf("path in the project not made relative: %q", out)
+	}
+	for _, leak := range []string{odd, "clientname", "private", "notes.md", "alice", "/home"} {
+		if strings.Contains(out, leak) {
+			t.Errorf("%q leaked: %q", leak, out)
+		}
+	}
+	if c["path"] != 1 || c["high-entropy"] != 0 {
+		t.Errorf("want one path redaction and no entropy hit, got %v", c)
+	}
+	// a secret inside a project path is still caught once the path is relative
+	key := j("AKIA", "IOSFODNN7EXAMPLE")
+	if out, _ := r.String("wrote " + root + "/keys/" + key + ".txt"); strings.Contains(out, key) {
+		t.Errorf("secret in a relative path survived: %q", out)
+	}
+}
+
 func TestExtraPatternAndBadPattern(t *testing.T) {
 	r, err := New(Options{ExtraPattern: []string{`ACME-\d{4}`}})
 	if err != nil {

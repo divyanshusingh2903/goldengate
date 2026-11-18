@@ -167,6 +167,12 @@ func (r *Redactor) String(s string) (string, Counts) {
 	if s == "" {
 		return s, counts
 	}
+	// Paths go first: a folder name that looks random would otherwise be
+	// replaced by the entropy pass and split the path in two, and the part
+	// after it would no longer be recognised as a path and would leave as it
+	// is. Inside the project a path becomes relative, and the passes below
+	// still catch a secret in what is left of it.
+	s = r.scrubPaths(s, counts)
 	for _, ru := range r.rules {
 		s = applyRule(s, ru, counts)
 	}
@@ -177,7 +183,6 @@ func (r *Redactor) String(s string) (string, Counts) {
 		counts["high-entropy"]++
 		return fmt.Sprintf(marker, "high-entropy")
 	})
-	s = r.scrubPaths(s, counts)
 	return s, counts
 }
 

@@ -174,6 +174,26 @@ Status values: `todo`, `in progress`, `in review`, `blocked`, `done`. Size: S ab
 
 **Safe to reorder:** rows with an empty "After" column (#37, #49, #21, #35, #44) can move earlier if a session is blocked on something else.
 
+### Bug fixes from end-to-end testing
+
+Found on 2026-11-17 by driving the TUI, the web UI and the CLI against a local server with synthetic sessions (report: `docs/TEST-REPORT.md`). One branch and PR each, in this order; none depends on another.
+
+| # | Issue | Size | After | Planned | Status | PR |
+|---|---|---|---|---|---|---|
+| B1 | #112 Redaction: a random-looking folder splits a path | S | | Nov 17 | in progress | |
+| B2 | #113 Moving a partly shared folder into a project re-enables its tools | S | | Nov 17 | todo | |
+| B3 | #114 CLI share of a parent leaves child projects tombstoned | S | | Nov 17 | todo | |
+| B4 | #115 MCP recent_activity text under the wrong project | S | | Nov 17 | todo | |
+| B5 | #116 Projects screen counts excluded sessions as to send | S | | Nov 17 | todo | |
+| B6 | #117 TUI setup: Esc from a preview leaves setup | S | | Nov 17 | todo | |
+| B7 | #118 TUI: no-keyring warning printed over the interface | S | | Nov 17 | todo | |
+| B8 | #119 Held edit conflicts: sync silent, TUI approve claims they go | S | | Nov 17 | todo | |
+| B9 | #120 TUI view-as: colour codes cut mid-sequence | S | | Nov 17 | todo | |
+| B10 | #121 TUI search matches the hidden home directory | S | | Nov 17 | todo | |
+| B11 | #122 Web UI warnings: home path, overflow at phone width | S | | Nov 17 | todo | |
+| B12 | #123 Web UI settings: wrong API key store label | S | | Nov 17 | todo | |
+| B13 | #124 UI words: ingest/read token, "sent" for shared, hook text | S | | Nov 17 | todo | |
+
 ## Log
 
 Newest last. One line per event: date, what happened, PR or issue.
@@ -238,3 +258,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-16: #48 done (#106). Roadmap page updated. The queue is finished except #40, which is blocked on the user's decision.
 - 2026-11-16: Web UI restyled to the project's web pages (fonts, mark, square double-rule surfaces, neutral dark theme, round state glyphs, short source tags), at the user's request; tried in a browser in light, dark and at phone width.
 - 2026-11-16: BRAND.md and the terminal's Golden Gate presets moved to the same values as the site and the web UI, with a test that keeps them together.
+- 2026-11-17: End-to-end test of the TUI, web UI and CLI against a local server with synthetic sessions; 13 bugs filed (#112–#124) and queued as bug fixes. #112 in progress.
