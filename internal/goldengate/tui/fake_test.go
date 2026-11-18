@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/divyanshusingh2903/goldengate/internal/goldengate/llm"
 	"github.com/divyanshusingh2903/goldengate/internal/model"
 )
 
@@ -318,7 +319,21 @@ func (f *fakeBackend) DeleteServerProject(_ context.Context, label string) error
 func (f *fakeBackend) Settings(context.Context) (Settings, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return Settings{Level: f.level, Since: f.since, Sources: append([]SourceStatus(nil), f.sources...), ExtraPatterns: append([]string(nil), f.patterns...), EnrichGit: f.git, Theme: f.theme, Summarize: f.summ}, nil
+	return Settings{Level: f.level, Since: f.since, Sources: append([]SourceStatus(nil), f.sources...), ExtraPatterns: append([]string(nil), f.patterns...), EnrichGit: f.git, Theme: f.theme, Summarize: f.summarize()}, nil
+}
+
+// summarize adds every provider's key state, as the real backend does.
+func (f *fakeBackend) summarize() SummarizeSettings {
+	s := f.summ
+	s.Providers = nil
+	for _, p := range llm.Providers {
+		src := "none"
+		if f.keys[p.ID] != "" {
+			src = "keyring"
+		}
+		s.Providers = append(s.Providers, ProviderKey{ID: p.ID, Title: p.Title, DefaultModel: p.Model, DefaultURL: p.BaseURL, KeyOptional: p.KeyOptional, KeySource: src})
+	}
+	return s
 }
 
 func (f *fakeBackend) SaveSettings(_ context.Context, s Settings) error {

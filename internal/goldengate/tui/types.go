@@ -253,6 +253,19 @@ type SummarizeSettings struct {
 	// ("" means standard) or "detailed".
 	Length    string
 	KeySource string // where the API key comes from: "keyring", "$ANTHROPIC_API_KEY", "none" (read-only)
+	// Providers lists every model provider with its defaults and where its
+	// key comes from, so a front end can show a stored key before the
+	// provider is chosen (read-only; ignored by SaveSettings).
+	Providers []ProviderKey
+}
+
+// ProviderKey is one summarizer provider as a settings screen shows it.
+type ProviderKey struct {
+	ID, Title    string
+	DefaultModel string
+	DefaultURL   string // the endpoint used when BaseURL is empty
+	KeyOptional  bool   // a local server usually needs no key
+	KeySource    string // as SummarizeSettings.KeySource, for this provider
 }
 
 // ToolStatus is a detected coding tool, for the wizard.
