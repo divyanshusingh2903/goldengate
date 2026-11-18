@@ -180,8 +180,8 @@ Found on 2026-11-17 by driving the TUI, the web UI and the CLI against a local s
 
 | # | Issue | Size | After | Planned | Status | PR |
 |---|---|---|---|---|---|---|
-| B1 | #112 Redaction: a random-looking folder splits a path | S | | Nov 17 | in progress | |
-| B2 | #113 Moving a partly shared folder into a project re-enables its tools | S | | Nov 17 | todo | |
+| B1 | #112 Redaction: a random-looking folder splits a path | S | | Nov 17 | done | #125 |
+| B2 | #113 Moving a partly shared folder into a project re-enables its tools | S | | Nov 17 | in progress | |
 | B3 | #114 CLI share of a parent leaves child projects tombstoned | S | | Nov 17 | todo | |
 | B4 | #115 MCP recent_activity text under the wrong project | S | | Nov 17 | todo | |
 | B5 | #116 Projects screen counts excluded sessions as to send | S | | Nov 17 | todo | |
@@ -259,3 +259,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-16: Web UI restyled to the project's web pages (fonts, mark, square double-rule surfaces, neutral dark theme, round state glyphs, short source tags), at the user's request; tried in a browser in light, dark and at phone width.
 - 2026-11-16: BRAND.md and the terminal's Golden Gate presets moved to the same values as the site and the web UI, with a test that keeps them together.
 - 2026-11-17: End-to-end test of the TUI, web UI and CLI against a local server with synthetic sessions; 13 bugs filed (#112–#124) and queued as bug fixes. #112 in progress.
+- 2026-11-17: #112 done (#125): paths are scrubbed before the high-entropy pass. #113 in progress.
