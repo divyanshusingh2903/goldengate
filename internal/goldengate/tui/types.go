@@ -345,6 +345,9 @@ type Backend interface {
 	AgentView(ctx context.Context, admin, agentID string) (AgentView, error)
 	// RevokeAgentToken revokes one of an agent's read tokens.
 	RevokeAgentToken(ctx context.Context, admin, tokenID string) error
+	// MintAgentToken creates a new read token for one agent and changes
+	// nothing else. Its secret is returned once; the server keeps a hash.
+	MintAgentToken(ctx context.Context, admin, agentID string) (NewAgentToken, error)
 }
 
 // Inbox decisions for InboxDecide.
@@ -438,6 +441,12 @@ type AgentInfo struct {
 	Tokens      []AgentToken
 	Clients     []string  // OAuth applications connected as this agent
 	LastUsed    time.Time // newest use of any of its tokens; zero: never
+}
+
+// NewAgentToken is an assistant token just made: Secret is shown once and
+// can never be read back. URL is the connector address to use it with.
+type NewAgentToken struct {
+	ID, Secret, URL string
 }
 
 // AgentToken is a read token of an agent (never the secret).

@@ -2,7 +2,7 @@
 // admin secret, which the local server keeps in memory for this run only.
 
 import { api } from "/assets/api.js";
-import { h, fill, put, when, plural, ask, tag, head, card, cardBody, note, empty, table } from "/assets/dom.js";
+import { h, fill, put, when, plural, ask, tag, head, card, cardBody, note, empty, table, drawer } from "/assets/dom.js";
 
 let pending = []; // grant changes chosen but not applied yet
 
@@ -98,8 +98,42 @@ function agentCard(main, app, a) {
             try { await api("/api/agents/revoke-token", { TokenID: t.ID }); app.say(`revoked ${t.ID}`); } catch (e) { app.say(String(e.message || e), true); }
             render(main, app);
           },
-}, "Revoke")))) : h("p", { class: "hint" }, "No tokens.")),
-    h("div", { class: "card-foot" }, h("button", { type: "button", class: "sm", onclick: () => view(main, app, a) }, `View as ${a.Name}`)));
+}, "Revoke")))) : h("p", { class: "hint" }, "No tokens yet: make one with New token.")),
+    h("div", { class: "card-foot" },
+      h("button", { type: "button", class: "sm", onclick: () => view(main, app, a) }, `View as ${a.Name}`),
+      h("button", { type: "button", class: "sm primary", onclick: () => newToken(main, app, a) }, "New token")));
+}
+
+// newToken makes one more assistant token for an agent and shows it once.
+// Nothing else changes: its other tokens and this computer's upload token stay.
+async function newToken(main, app, a) {
+  if (!await ask(`New token for ${a.Name}?`, ["It is shown once, here; the server keeps only a hash, so it cannot be found again.", `${a.Name}'s other tokens keep working. Nothing else changes.`], "Make the token")) return;
+  let t;
+  try {
+    t = await api("/api/agents/new-token", { AgentID: a.ID });
+  } catch (e) {
+    app.say(String(e.message || e), true);
+    return;
+  }
+  app.say(`made ${t.ID} for ${a.Name}: copy it now, it is shown once`);
+  const copyBtn = (label, value) => {
+    const b = h("button", { type: "button", class: "sm" }, label);
+    b.addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(value); b.textContent = "Copied"; } catch { b.textContent = "Select the text and copy it"; }
+      setTimeout(() => { b.textContent = label; }, 1500);
+    });
+    return b;
+  };
+  const d = drawer(`Assistant token for ${a.Name}`, [h("span", { class: "badge warn" }, "▲ shown once")], () => render(main, app));
+  put(d.body,
+    h("p", null, "Copy it into the assistant's connector now. When this panel closes it is gone; if it is lost, make another."),
+    h("div", { class: "secret" }, h("code", null, t.Secret), copyBtn("Copy token", t.Secret)),
+    h("dl", { class: "kv" },
+      h("dt", null, "Connector URL"), h("dd", null, h("code", null, t.URL), " ", copyBtn("Copy", t.URL)),
+      h("dt", null, "Header"), h("dd", null, h("code", null, "Authorization: Bearer <token>")),
+      h("dt", null, "Token id"), h("dd", { class: "mono" }, t.ID)),
+    h("p", { class: "hint" }, `It reads only what ${a.Name} is granted. Revoke it any time from this screen.`));
+  put(d.foot, h("button", { type: "button", class: "primary", onclick: () => d.close() }, "I have copied it"));
 }
 
 function askSecret(main, app) {

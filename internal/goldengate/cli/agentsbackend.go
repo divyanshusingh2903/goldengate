@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/client"
@@ -129,6 +130,37 @@ func (b *tuiBackend) RevokeAgentToken(ctx context.Context, admin, tokenID string
 		return err
 	}
 	return agentsErr(ac.RevokeToken(ctx, tokenID, 0))
+}
+
+// MintAgentToken implements tui.Backend: `goldengate agents token` for one
+// agent, labelled with its name. Nothing else changes, this computer's
+// upload token included.
+func (b *tuiBackend) MintAgentToken(ctx context.Context, admin, agentID string) (tui.NewAgentToken, error) {
+	ctx, cancel := context.WithTimeout(ctx, 15*time.Second)
+	defer cancel()
+	ac, err := b.adminClient(admin)
+	if err != nil {
+		return tui.NewAgentToken{}, err
+	}
+	info, err := b.Agents(ctx, admin)
+	if err != nil {
+		return tui.NewAgentToken{}, err
+	}
+	label := ""
+	for _, a := range info.Agents {
+		if a.ID == agentID {
+			label = a.Name
+		}
+	}
+	if label == "" {
+		return tui.NewAgentToken{}, errors.New("that agent no longer exists")
+	}
+	m, err := ac.MintAgentToken(ctx, agentID, label, "")
+	if err != nil {
+		return tui.NewAgentToken{}, agentsErr(err)
+	}
+	cfg, _ := b.a.load()
+	return tui.NewAgentToken{ID: m.ID, Secret: m.Secret, URL: strings.TrimRight(cfg.Server.URL, "/") + "/mcp"}, nil
 }
 
 // AgentView implements tui.Backend. The admin secret cannot read work data

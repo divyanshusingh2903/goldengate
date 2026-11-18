@@ -225,7 +225,29 @@ func TestAgentDetailsAndTokenRevoke(t *testing.T) {
 	}
 	h.contains("revoked tok_bbbb2222", "Read tokens (1)")
 	h.key("esc", "right", "d")
-	h.contains("Claude desktop", "OAuth applications: Claude", "Sees: Forge, Website", "Last used: never", "none: create one with")
+	h.contains("Claude desktop", "OAuth applications: Claude", "Sees: Forge, Website", "Last used: never", "none: press N to make one")
+}
+
+// A new assistant token for one agent, from its details: asked first, shown
+// once, and forgotten when the details are left (#151).
+func TestAgentNewToken(t *testing.T) {
+	h := openAgentsGrid(t, 100, 30)
+	h.key("right", "d", "N")
+	h.contains("New assistant token", "Make a new assistant token for ChatGPT?")
+	h.key("n")
+	if len(h.be.ag.minted) != 0 {
+		t.Fatal("a new token is asked for first")
+	}
+	h.key("N", "y")
+	if len(h.be.ag.minted) != 1 || h.be.ag.minted[0] != "agt_gpt" {
+		t.Fatalf("one token for the agent shown: %v", h.be.ag.minted)
+	}
+	h.contains("shown only now", fakeNewToken, "https://bridge.example.com/mcp", "Read tokens (3)")
+	h.checkGeometry(100, 30)
+	h.key("esc", "d")
+	if strings.Contains(h.view(), fakeNewToken) {
+		t.Fatal("the token is shown once: leaving the details forgets it")
+	}
 }
 
 func TestAgentsMouse(t *testing.T) {

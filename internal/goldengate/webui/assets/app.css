@@ -431,3 +431,6 @@ thead th.num { font: 500 0.7rem var(--mono); }
 .tokens small { display: block; color: var(--faint); font-size: 0.8rem; }
 @media (max-width: 760px) { .pitem .tags { display: none; } .pitem .state { min-width: 0; } }
 .drawer .sv-title { display: none; }
+/* a secret shown once: whole, selectable, never clipped */
+.secret { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px 14px; background: var(--term-bg); border: 1px solid var(--orange); }
+.secret code { flex: 1 1 18rem; min-width: 0; font: 500 0.9rem var(--mono); overflow-wrap: anywhere; user-select: all; }
