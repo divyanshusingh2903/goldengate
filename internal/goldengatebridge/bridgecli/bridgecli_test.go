@@ -49,11 +49,12 @@ func TestServeRefusesToStartUnsafe(t *testing.T) {
 		args []string
 		want string
 	}{
-		"no credentials":     {nil, []string{"--addr", "127.0.0.1:0"}, "without credentials"},
-		"weak admin secret":  {map[string]string{"GOLDENGATE_ADMIN_TOKEN": "hunter2"}, []string{"--addr", "127.0.0.1:0"}, "too short"},
-		"plain http, public": {map[string]string{"GOLDENGATE_ADMIN_TOKEN": goodSecret}, []string{"--addr", "0.0.0.0:0"}, "plain HTTP"},
-		"cert without key":   {map[string]string{"GOLDENGATE_ADMIN_TOKEN": goodSecret}, []string{"--addr", "127.0.0.1:0", "--tls-cert", "x"}, "together"},
-		"PORT forces public": {map[string]string{"GOLDENGATE_ADMIN_TOKEN": goodSecret, "PORT": "8080"}, nil, "plain HTTP"},
+		"no credentials":           {nil, []string{"--addr", "127.0.0.1:0"}, "without credentials"},
+		"weak admin secret":        {map[string]string{"GOLDENGATE_ADMIN_TOKEN": "hunter2"}, []string{"--addr", "127.0.0.1:0"}, "too short"},
+		"plain http, public":       {map[string]string{"GOLDENGATE_ADMIN_TOKEN": goodSecret}, []string{"--addr", "0.0.0.0:0"}, "plain HTTP"},
+		"cert without key":         {map[string]string{"GOLDENGATE_ADMIN_TOKEN": goodSecret}, []string{"--addr", "127.0.0.1:0", "--tls-cert", "x"}, "together"},
+		"oauth by env needs a url": {map[string]string{"GOLDENGATE_ADMIN_TOKEN": goodSecret, "GOLDENGATE_OAUTH": "true"}, []string{"--addr", "127.0.0.1:0"}, "--oauth needs --public-url"},
+		"PORT forces public":       {map[string]string{"GOLDENGATE_ADMIN_TOKEN": goodSecret, "PORT": "8080"}, nil, "plain HTTP"},
 	}
 	for name, c := range cases {
 		x := newH(t)
