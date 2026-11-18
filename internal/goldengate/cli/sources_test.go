@@ -412,3 +412,32 @@ func TestSecretWarningIsANoticeInTheUI(t *testing.T) {
 		t.Errorf("CLI warning missing: %q", m.errOut)
 	}
 }
+
+// Settings report the file fallback as where a stored key is (#123).
+func TestSettingsKeySourceIsTheFileFallback(t *testing.T) {
+	m := newMulti(t)
+	dir := t.TempDir()
+	m.deps.SecretStore = func(string, func(string)) secrets.Store {
+		return &secrets.File{Path: filepath.Join(dir, "secrets.json")}
+	}
+	if err := m.run("share", "add", "~/projects/demo"); err != nil {
+		t.Fatal(err)
+	}
+	a := &app{Deps: m.deps}
+	b := a.tuiBackend()
+	ctx := context.Background()
+	st, err := b.Settings(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	st.Summarize.Provider, st.Summarize.Model = "anthropic", "claude-haiku-5-5"
+	if err := b.SaveSettings(ctx, st); err != nil {
+		t.Fatal(err)
+	}
+	if err := b.SetSummarizerKey(ctx, "anthropic", "sk-test-not-real"); err != nil {
+		t.Fatal(err)
+	}
+	if st, _ = b.Settings(ctx); st.Summarize.KeySource != "file" {
+		t.Errorf("key source = %q, want file", st.Summarize.KeySource)
+	}
+}

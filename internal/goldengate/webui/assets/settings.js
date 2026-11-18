@@ -10,6 +10,13 @@ const PROVIDERS = [
   ["opencode", "OpenCode Zen"], ["ollama", "Ollama (on this computer)"], ["custom", "Custom OpenAI-compatible endpoint"],
 ];
 
+// keyText says where the summarizer's API key is, as the backend reports it.
+function keyText(src) {
+  if (!src || src === "none") return "No key is set.";
+  if (src === "file") return "A key is set, in a file on this computer that only you can read but that is not encrypted (there is no keyring).";
+  return `A key is set (${src}).`;
+}
+
 function select(id, options, value) {
   return h("select", { id }, options.map(([v, label]) => h("option", { value: v, selected: v === value }, label)));
 }
@@ -31,7 +38,8 @@ export async function render(main, app) {
   const baseURL = h("input", { type: "url", id: "set-base", value: sum.BaseURL || "", placeholder: "leave empty for the provider's own address" });
   const length = select("set-length", [["short", "Short: one paragraph"], ["", "Standard: two to four paragraphs"], ["detailed", "Detailed: several paragraphs"]], sum.Length === "standard" ? "" : (sum.Length || ""));
   const key = h("input", { type: "password", id: "set-key", autocomplete: "off", placeholder: "paste a key to store it" });
-  const keyState = h("span", { class: "dim" }, sum.KeySource && sum.KeySource !== "none" ? `A key is set (${sum.KeySource}).` : "No key is set.");
+  const keyState = h("span", { class: "dim" }, keyText(sum.KeySource));
+  const showKey = async () => { keyState.textContent = keyText(((await api("/api/settings")).Summarize || {}).KeySource); };
   const modelNote = h("p", { class: "leaves" });
   const modelFields = h("div", null);
 
@@ -71,19 +79,19 @@ export async function render(main, app) {
     h("label", { for: "set-base" }, "Endpoint address"), baseURL,
     h("label", { for: "set-length" }, "Narrative length"), length,
     h("label", { for: "set-key" }, "API key"), key,
-    h("p", { class: "dim" }, "A key you store goes into this computer's keyring. It is never shown again and never sent to your server. ", keyState),
+    h("p", { class: "dim" }, "A key you store stays on this computer: in its keyring, or in a file only you can read when there is no keyring. It is never shown again and never sent to your server. ", keyState),
     h("div", { class: "row" },
       h("button", {
         type: "button",
         onclick: async () => {
           if (!key.value) { app.say("Paste a key first.", true); return; }
-          try { await api("/api/summarizer/key", { Provider: provider.value, Key: key.value }); key.value = ""; keyState.textContent = "A key is set (keyring)."; app.say("Key stored."); } catch (e) { app.say(String(e.message || e), true); }
+          try { await api("/api/summarizer/key", { Provider: provider.value, Key: key.value }); key.value = ""; await showKey(); app.say("Key stored."); } catch (e) { app.say(String(e.message || e), true); }
         },
       }, "Store key"),
       h("button", {
         type: "button",
         onclick: async () => {
-          try { await api("/api/summarizer/key", { Provider: provider.value, Key: "" }); keyState.textContent = "No key is set."; app.say("Key removed."); } catch (e) { app.say(String(e.message || e), true); }
+          try { await api("/api/summarizer/key", { Provider: provider.value, Key: "" }); await showKey(); app.say("Key removed."); } catch (e) { app.say(String(e.message || e), true); }
         },
       }, "Remove key"),
       h("button", {
