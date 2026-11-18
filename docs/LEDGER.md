@@ -186,8 +186,8 @@ Found on 2026-11-17 by driving the TUI, the web UI and the CLI against a local s
 | B4 | #115 MCP recent_activity text under the wrong project | S | | Nov 17 | done | #128 |
 | B5 | #116 Projects screen counts excluded sessions as to send | S | | Nov 17 | done | #129 |
 | B6 | #117 TUI setup: Esc from a preview leaves setup | S | | Nov 17 | done | #130 |
-| B7 | #118 TUI: no-keyring warning printed over the interface | S | | Nov 17 | in progress | |
-| B8 | #119 Held edit conflicts: sync silent, TUI approve claims they go | S | | Nov 17 | todo | |
+| B7 | #118 TUI: no-keyring warning printed over the interface | S | | Nov 17 | done | #131 |
+| B8 | #119 Held edit conflicts: sync silent, TUI approve claims they go | S | | Nov 17 | in progress | |
 | B9 | #120 TUI view-as: colour codes cut mid-sequence | S | | Nov 17 | todo | |
 | B10 | #121 TUI search matches the hidden home directory | S | | Nov 17 | todo | |
 | B11 | #122 Web UI warnings: home path, overflow at phone width | S | | Nov 17 | todo | |
@@ -265,3 +265,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-17: #115 done (#128): recent_activity's text lists each session under its own project. #116 in progress.
 - 2026-11-17: #116 done (#129): excluded and retracted sessions are not counted as to send. #117 in progress.
 - 2026-11-17: #117 done (#130): Esc from a preview opened in setup goes back to setup. #118 in progress.
+- 2026-11-17: #118 done (#131): the no-keyring warning is a notice in the TUI and web UI instead of a line over the screen. #119 in progress.

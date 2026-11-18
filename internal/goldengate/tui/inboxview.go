@@ -221,6 +221,9 @@ func (m *Model) onKeyInbox(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case !ok:
 		case it.State == "sent" || it.State == "queued":
 			m.setStatus("Nothing to approve: this session is already "+it.State+".", false)
+		case it.State == InboxStateConflict:
+			// approving would not release it: the edit decides what is sent (#119)
+			m.setStatus("Held: this session changed after you edited its summary. e: edit again · K: keep your version · D: use the new one", false)
 		default:
 			return m, m.inboxDecide(it, InboxApprove, "approved \""+title+"\": it goes out the next time you send")
 		}
