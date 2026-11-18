@@ -13,7 +13,8 @@ _Last updated 2026-11-17. Update this section whenever a row in the queue change
 
 **Progress:** 30 of 31 scheduled issues done (plus 2 stretch). Phases 1 (Foundations), 2 (Per-agent access) and 3 (Inbox and curation) are complete.
 **Bug fixes from the end-to-end test** (#112–#124, PRs #125–#137) are all done; the report is `docs/TEST-REPORT.md`, with small observations left for later.
-**Nothing is next:** every issue of the queue is done except #40. **Blocked:** #40 Share-link import: the #39 spike recommends not building it; whether to close it as not planned is the user's call. Phase 4 (work items, rules and automation) is complete: #21, #35, #36, #45, #31, #33, #34, #32 and #22.
+**Web UI restyle** (#139, PR #141) is done; #140 (state database concurrent first open) is in progress.
+**Nothing else is next:** every issue of the queue is done except #40. **Blocked:** #40 Share-link import: the #39 spike recommends not building it; whether to close it as not planned is the user's call. Phase 4 (work items, rules and automation) is complete: #21, #35, #36, #45, #31, #33, #34, #32 and #22.
 
 ### Done
 
@@ -201,7 +202,8 @@ The web UI takes the finalized app design (sidebar, page heads, framed cards, dr
 
 | # | Issue | Size | After | Planned | Status | PR |
 |---|---|---|---|---|---|---|
-| R1 | #139 Restyle the web UI to the finalized app design | L | #48 | Nov 18 | in review | |
+| R1 | #139 Restyle the web UI to the finalized app design | L | #48 | Nov 18 | done | #141 |
+| R2 | #140 State database: concurrent first open fails with SQLITE_BUSY | S | | Nov 18 | in progress | |
 
 ## Log
 
