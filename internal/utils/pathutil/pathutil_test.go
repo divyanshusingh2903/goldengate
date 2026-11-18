@@ -3,6 +3,7 @@ package pathutil
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -26,6 +27,21 @@ func TestExpandHomeAndScrub(t *testing.T) {
 	}
 	if got := Scrub(home, home); got != "~" {
 		t.Errorf("got %q", got)
+	}
+}
+
+func TestScrubText(t *testing.T) {
+	home := filepath.Join(string(filepath.Separator), "home", "u")
+	in := "cursor: unknown shape in " + filepath.Join(home, ".config", "Cursor", "state.vscdb") + "; " + filepath.Join(string(filepath.Separator), "home", "u2", "x")
+	got := ScrubText(in, home)
+	if strings.Contains(got, home+string(filepath.Separator)) || !strings.Contains(got, "~/") {
+		t.Errorf("home directory not scrubbed: %q", got)
+	}
+	if !strings.Contains(got, filepath.Join(string(filepath.Separator), "home", "u2")) {
+		t.Errorf("another user's directory must be left alone: %q", got)
+	}
+	if ScrubText("x", "") != "x" {
+		t.Error("no home, no change")
 	}
 }
 

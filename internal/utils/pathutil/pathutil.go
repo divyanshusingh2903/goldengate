@@ -104,6 +104,16 @@ func Scrub(p, home string) string {
 	return p
 }
 
+// ScrubText replaces the home directory with "~" wherever a path under it
+// appears in free text, such as a warning shown to the user.
+func ScrubText(s, home string) string {
+	h := strings.TrimSuffix(home, string(filepath.Separator))
+	if h == "" {
+		return s
+	}
+	return strings.ReplaceAll(s, h+string(filepath.Separator), "~/")
+}
+
 // IsVirtualKey reports whether a project key names a non-folder project such as
 // "claude-ai:Chats" or "chatgpt:Chats". Windows drive letters ("C:\\x") are not virtual.
 func IsVirtualKey(k string) bool {

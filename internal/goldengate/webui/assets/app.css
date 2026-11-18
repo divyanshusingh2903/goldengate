@@ -103,7 +103,7 @@ p { margin: 8px 0; }
 main > p, .card > p { max-width: 72ch; }
 .dim { color: var(--dim); }
 .good { color: var(--cypress); }
-.warn { color: var(--headland); }
+.warn { color: var(--headland); overflow-wrap: anywhere; }
 .bad { color: var(--alarm); }
 /* What leaves this computer, and when: said on every screen */
 .leaves { max-width: 72ch; margin: 16px 0; padding: 12px 16px 10px; border-left: 3px solid var(--orange); background: var(--surface); }

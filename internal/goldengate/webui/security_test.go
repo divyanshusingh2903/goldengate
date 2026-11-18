@@ -297,6 +297,19 @@ func TestThePageIsSelfContained(t *testing.T) {
 	}
 }
 
+// Warnings name long paths with no break points; they wrap instead of
+// pushing the page wider than a phone screen (#122).
+func TestWarningsWrapLongWords(t *testing.T) {
+	b, err := fs.ReadFile(webui.AssetFS, "assets/app.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	rule := regexp.MustCompile(`(?m)^\.warn \{[^}]*\}`).FindString(string(b))
+	if !strings.Contains(rule, "overflow-wrap: anywhere") {
+		t.Errorf(".warn must wrap long words: %q", rule)
+	}
+}
+
 // Every script the page imports is one of its own embedded files, served as
 // JavaScript, and the page starts from app.js.
 func TestThePagesScriptsAllExistAndAreServed(t *testing.T) {

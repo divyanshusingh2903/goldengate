@@ -180,9 +180,15 @@ func (b *tuiBackend) Snapshot(ctx context.Context) (tui.Snapshot, error) {
 		}
 		snap.Rows = append(snap.Rows, row)
 	}
-	snap.Warnings = res.Warnings
+	// warnings and notices name files; show them in the ~ form like every
+	// other path (#122)
+	for _, w := range res.Warnings {
+		snap.Warnings = append(snap.Warnings, pathutil.ScrubText(w, a.Home))
+	}
 	b.mu.Lock()
-	snap.Notices = slices.Clone(b.notices)
+	for _, n := range b.notices {
+		snap.Notices = append(snap.Notices, pathutil.ScrubText(n, a.Home))
+	}
 	b.mu.Unlock()
 	if c := a.summarizer(cfg); c != nil {
 		snap.Summarizer = c.Name()
