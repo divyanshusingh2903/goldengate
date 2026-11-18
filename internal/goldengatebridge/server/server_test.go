@@ -626,6 +626,34 @@ func TestMCPToolsOverStatelessJSON(t *testing.T) {
 	}
 }
 
+// Sessions of one project are listed under its heading in the text, even
+// when newest-first order interleaves projects (#115).
+func TestRecentActivityTextGroupsByProject(t *testing.T) {
+	e := newEnv(t)
+	var ps []model.SessionPayload
+	for i, pr := range []string{"~/alpha", "~/beta", "~/alpha", "~/beta"} {
+		p := payload(fmt.Sprintf("g%d", i), pr, fmt.Sprintf("Work %d in %s", i, pr[2:]))
+		p.UpdatedAt = now.Add(-time.Duration(i) * time.Minute)
+		ps = append(ps, p)
+	}
+	e.ingestOK(ps...)
+	_, txt := call(t, e.mcpSession(e.read), "recent_activity", nil)
+	if strings.Count(txt, "## ") != 2 {
+		t.Fatalf("want one heading per project:\n%s", txt)
+	}
+	for _, pr := range []string{"alpha", "beta"} {
+		head := strings.Index(txt, "## ~/"+pr)
+		next := strings.Index(txt[head+3:], "## ")
+		block := txt[head:]
+		if next >= 0 {
+			block = txt[head : head+3+next]
+		}
+		if strings.Count(block, " in "+pr) != 2 {
+			t.Errorf("%s's heading must hold both its sessions:\n%s", pr, block)
+		}
+	}
+}
+
 func TestMCPPaginationCursor(t *testing.T) {
 	e := newEnv(t)
 	var ps []model.SessionPayload

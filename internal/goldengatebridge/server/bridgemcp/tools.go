@@ -502,7 +502,6 @@ func (s *srv) recentActivity(ctx context.Context, req *mcp.CallToolRequest, in R
 	}
 	idx := map[string]int{}
 	now := s.Now()
-	lines := []string{"Window: " + w.label}
 	for _, r := range recs {
 		v := viewOf(r, false)
 		i, ok := idx[v.ProjectID]
@@ -510,10 +509,17 @@ func (s *srv) recentActivity(ctx context.Context, req *mcp.CallToolRequest, in R
 			i = len(out.Projects)
 			idx[v.ProjectID] = i
 			out.Projects = append(out.Projects, ProjectActivity{Project: v.Project, ProjectID: v.ProjectID})
-			lines = append(lines, "## "+clean(v.Project))
 		}
 		out.Projects[i].Sessions = append(out.Projects[i].Sessions, v)
-		lines = append(lines, sessionLines(now, v, false)...)
+	}
+	// the text follows the grouping: sessions of one project sit under its
+	// heading even when the newest-first order interleaves projects (#115)
+	lines := []string{"Window: " + w.label}
+	for _, p := range out.Projects {
+		lines = append(lines, "## "+clean(p.Project))
+		for _, v := range p.Sessions {
+			lines = append(lines, sessionLines(now, v, false)...)
+		}
 	}
 	if len(recs) == 0 {
 		lines = append(lines, "(no shared activity in "+w.label+"; "+windowHint+")")
