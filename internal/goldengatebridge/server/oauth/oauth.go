@@ -847,30 +847,50 @@ func (p *Provider) handleRevoke(w http.ResponseWriter, r *http.Request) {
 
 const consentHTML = `{{define "page-head"}}<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Golden Gate</title><style>
-body{font:16px/1.5 system-ui,sans-serif;max-width:34rem;margin:3rem auto;padding:0 1rem;color:#1b1b1f;background:#fafafa}
-@media (prefers-color-scheme:dark){body{color:#e6e6ea;background:#16161a}.box{background:#202026;border-color:#3a3a44}input[type=password]{background:#16161a;color:inherit;border-color:#555}}
-.box{border:1px solid #d6d6dc;border-radius:10px;padding:1rem 1.25rem;background:#fff;margin:1rem 0}
-code{word-break:break-all}.err{color:#b00020;font-weight:600}
-input[type=password],input[type=text]{width:100%;padding:.6rem;font-size:1rem;border:1px solid #999;border-radius:6px;box-sizing:border-box}
-fieldset{border:1px solid #d6d6dc;border-radius:10px;margin:1rem 0;padding:.5rem 1.25rem}fieldset p{margin:.4rem 0}small{opacity:.75}
-button{font-size:1rem;padding:.6rem 1.1rem;border-radius:6px;border:1px solid #888;cursor:pointer}
-button.go{background:#1a5fb4;color:#fff;border-color:#1a5fb4}
-</style></head><body>{{end}}
+/* Brand tokens (docs/brand/BRAND.md). The page loads nothing, so the display and text faces apply only where installed. */
+:root{color-scheme:light dark;--orange:#C0362C;--on-orange:#fff;--bg:#EEF0EE;--surface:#fff;--sunk:#E3E7E5;--line:#CBD2D0;--field:#7D8A90;--ink:#13202A;--dim:#56656D;--pacific:#1F5E80;--headland:#965F00;--alarm:#9B1D5A}
+@media (prefers-color-scheme:dark){:root{--orange:#F0563F;--on-orange:#1B0703;--bg:#0A0B0D;--surface:#131518;--sunk:#1B1E22;--line:#26292E;--field:#646B73;--ink:#E9EBED;--dim:#8F969C;--pacific:#7FBADB;--headland:#E8B652;--alarm:#F27EB2}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:400 17px/1.6 "Josefin Sans",system-ui,sans-serif}
+main{max-width:40rem;margin:0 auto;padding:2rem 1rem 4rem}
+.brand{display:flex;align-items:center;gap:.6rem;font:400 1.3rem/1 "Federo","Josefin Sans",system-ui,sans-serif;letter-spacing:.02em;margin-bottom:2rem}
+.brand svg{width:2.2rem;height:auto;color:var(--orange)}
+h1{font:400 2rem/1.15 "Federo","Josefin Sans",system-ui,sans-serif;letter-spacing:.02em;margin:0 0 1.25rem;padding-bottom:.6rem;border-bottom:3px double var(--line)}
+.box,fieldset{background:var(--surface);border:3px double var(--line);border-radius:0;padding:1rem 1.25rem;margin:1.25rem 0}
+.box p,fieldset p{margin:.5rem 0}
+legend{padding:0 .4rem;font-weight:600}
+dl{margin:.75rem 0;display:grid;grid-template-columns:minmax(0,1fr);gap:.1rem}
+dt{color:var(--dim)}dd{margin:0;min-width:0}
+code{font:500 .86rem/1.4 "IBM Plex Mono",ui-monospace,Menlo,monospace;overflow-wrap:anywhere}
+.warn{border-left:4px solid var(--headland);padding-left:.8rem;margin:1rem 0 .25rem}
+.err{border-left:4px solid var(--alarm);padding-left:.8rem;font-weight:600}
+label{font-weight:600}
+input[type=password],input[type=text]{width:100%;padding:.65rem .75rem;font:inherit;color:var(--ink);background:var(--surface);border:1px solid var(--field);border-radius:0}
+input[type=text]{width:auto;min-width:0;max-width:100%}
+input[type=radio],input[type=checkbox]{accent-color:var(--pacific);width:1rem;height:1rem;vertical-align:-.15rem}
+:focus-visible{outline:2px solid var(--pacific);outline-offset:2px}
+small{color:var(--dim);font-size:.9rem}
+.actions{display:flex;flex-wrap:wrap;gap:.75rem;margin-top:1.25rem}
+button{font:600 1rem "Josefin Sans",system-ui,sans-serif;padding:.65rem 1.25rem;border-radius:0;border:1px solid var(--line);background:var(--surface);color:var(--ink);cursor:pointer}
+button:hover{border-color:var(--field)}
+button.go{background:var(--orange);border-color:var(--orange);color:var(--on-orange)}
+.foot{margin-top:1.5rem;color:var(--dim)}
+</style></head><body><main><div class="brand"><svg viewBox="0 0 64 48" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 4V44M44 4V44"/><path d="M2 34Q14 30 20 6Q32 46 44 6Q50 30 62 34"/></svg>Golden Gate</div>{{end}}
 {{define "consent"}}{{template "page-head"}}
 <h1>Connect an application?</h1>
 <div class="box"><p><strong>{{.ClientName}}</strong> wants read-only access to the summaries of the projects you share through <strong>{{.Server}}</strong>.</p>
-<p>After approval it will be sent to:<br><code>{{.RedirectURI}}</code></p>
-<p>Only approve if you just started this connection yourself, from your assistant, and you recognize <strong>{{.RedirectHost}}</strong>.</p></div>
+<dl><dt>After approval it will be sent to</dt><dd><code>{{.RedirectURI}}</code></dd></dl>
+<p class="warn">Only approve if you just started this connection yourself, from your assistant, and you recognize <strong>{{.RedirectHost}}</strong>.</p></div>
 {{if .Error}}<p class="err">{{.Error}}</p>{{end}}
 <form method="post" action="/oauth/authorize">
 <input type="hidden" name="tx" value="{{.Tx}}">
 <p><label for="secret">Admin secret (proves you own this server)</label></p>
 <p><input id="secret" type="password" name="secret" autocomplete="current-password" autofocus></p>
-<p><button class="go" type="submit" name="decision" value="approve">Approve read-only access</button>
-<button type="submit" name="decision" value="deny" formnovalidate>Deny</button></p>
+<div class="actions"><button class="go" type="submit" name="decision" value="approve">Approve read-only access</button>
+<button type="submit" name="decision" value="deny" formnovalidate>Deny</button></div>
 </form>
-<p><small>You can revoke this later with <code>goldengatebridge oauth clients delete</code>. It can never write or delete anything.</small></p>
-</body></html>{{end}}
+<p class="foot"><small>You can revoke this later with <code>goldengatebridge oauth clients delete</code>. It can never write or delete anything.</small></p>
+</main></body></html>{{end}}
 {{define "access"}}{{template "page-head"}}
 <h1>What may it see?</h1>
 <div class="box"><p><strong>{{.ClientName}}</strong> will get read-only access through <strong>{{.Server}}</strong>. Choose which assistant this is and which projects it may see. Nothing is ticked: it sees only what you tick here or grant later.</p></div>
@@ -888,9 +908,9 @@ button.go{background:#1a5fb4;color:#fff;border-color:#1a5fb4}
 {{end}}<p><label><input type="checkbox" name="all" value="1"> Every project, including ones I share later</label></p>
 </fieldset>
 <p><small>For an assistant that already exists, ticks add to what it sees; they never take anything away.</small></p>
-<p><button class="go" type="submit" name="decision" value="grant">Connect with this access</button>
-<button type="submit" name="decision" value="deny" formnovalidate>Deny</button></p>
+<div class="actions"><button class="go" type="submit" name="decision" value="grant">Connect with this access</button>
+<button type="submit" name="decision" value="deny" formnovalidate>Deny</button></div>
 </form>
-<p><small>Change this later with <code>goldengate agents</code>. It can never write or delete anything.</small></p>
-</body></html>{{end}}
-{{define "error"}}{{template "page-head"}}<h1>Cannot continue</h1><div class="box"><p>{{.Message}}</p></div></body></html>{{end}}`
+<p class="foot"><small>Change this later with <code>goldengate agents</code>. It can never write or delete anything.</small></p>
+</main></body></html>{{end}}
+{{define "error"}}{{template "page-head"}}<h1>Cannot continue</h1><div class="box"><p>{{.Message}}</p></div></main></body></html>{{end}}`
