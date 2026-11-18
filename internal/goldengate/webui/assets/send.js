@@ -2,7 +2,7 @@
 // every session exactly as a send would, and nothing leaves the computer.
 
 import { api, events } from "/assets/api.js";
-import { h, clear, plural, put, fill, head, card, cardBody, note, empty, table, tag, when, ask, drawer } from "/assets/dom.js";
+import { h, clear, plural, put, fill, head, card, cardBody, note, empty, table, tag, ask, drawer, workCounts, stamp } from "/assets/dom.js";
 import { sessionView } from "/assets/session.js";
 
 const PLANNED = 0, PROJECT_START = 1, PROJECT_DONE = 2, PROJECT_FAILED = 3, FINISHED = 4, PREPARED = 5, PROGRESS = 6, QUEUED = 7;
@@ -102,7 +102,9 @@ function showPlan(box, app, plan, resummarize) {
         const openIt = () => openItem(box, app, it, resummarize);
         rows.push(h("tr", { class: "pick", onclick: openIt },
           h("td", null, h("span", { class: "title-cell" }, tag(it.Source), h("span", null, it.Title || it.ID,
-            h("small", null, it.Payload && it.Payload.summary && it.Payload.summary.abstract ? it.Payload.summary.abstract : (when(it.Updated) ? `updated ${when(it.Updated)}` : ""))))),
+            it.Payload && it.Payload.summary && it.Payload.summary.abstract ? h("small", null, it.Payload.summary.abstract) : null,
+            h("span", { class: "row-meta" }, stamp(it.Updated) ? ["updated ", stamp(it.Updated)] : null,
+              it.Payload && it.Payload.summary ? workCounts(it.Payload.work_items) : null)))),
           h("td", { class: "w" }, it.Status === "changed" ? h("span", { class: "badge warn" }, "▲ changed") : h("span", { class: "badge good" }, "● new")),
           h("td", { class: "dim small" }, it.Why || "you approve it by sending"),
           h("td", { class: "w" }, h("button", { type: "button", class: "ghost sm", onclick: (e) => { e.stopPropagation(); openIt(); } }, "Read"))));
