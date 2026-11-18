@@ -6,8 +6,8 @@
 │  [x] …ndr/.claude/worktrees/fox     ▲ 2 to send│ ● Shared. Untick a tool to stop sending its     │
 │  [x] ~/code/forge                   ▲ 1 to send│ sessions; the others are still sent.            │
 │  [ ] ~/code/vihayas                  not shared│                                                 │
-│  [~] ~/code/website                  ✓ sent 40h│▌[x] CC Claude Code     41 sessions  ✓ sent      │
-│  [-] ~/work/client-x                  ✕ blocked│ [x] CX Codex            6 sessions  ✓ sent      │
+│  [~] ~/code/website                  ✓ sent 40h│▌[x] CC Claude Code     41 sessions  ✓ shared    │
+│  [-] ~/work/client-x                  ✕ blocked│ [x] CX Codex            6 sessions  ✓ shared    │
 │  [ ] ~/scratch/tmp                   not shared│                                                 │
 │  [ ] claude-ai:Chats                 not shared│ [esc Done]                                      │
 │                                                │                                                 │

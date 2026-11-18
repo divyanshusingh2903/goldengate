@@ -11,7 +11,7 @@
 │ Source AI claude.ai                ● on   chat · not found on this computer                      │
 │ + add a redaction pattern (regex)                                                                │
 │ Verify commits with local git      ○ off                                                         │
-│ Session hook / schedule            not available yet (coming with deployment support)            │
+│ Session hook / schedule            goldengate install-hook · install-schedule                    │
 │                                                                                                  │
 │                                                                                                  │
 │                                                                                                  │
