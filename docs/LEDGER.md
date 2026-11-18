@@ -190,8 +190,8 @@ Found on 2026-11-17 by driving the TUI, the web UI and the CLI against a local s
 | B8 | #119 Held edit conflicts: sync silent, TUI approve claims they go | S | | Nov 17 | done | #132 |
 | B9 | #120 TUI view-as: colour codes cut mid-sequence | S | | Nov 17 | done | #133 |
 | B10 | #121 TUI search matches the hidden home directory | S | | Nov 17 | done | #134 |
-| B11 | #122 Web UI warnings: home path, overflow at phone width | S | | Nov 17 | in progress | |
-| B12 | #123 Web UI settings: wrong API key store label | S | | Nov 17 | todo | |
+| B11 | #122 Web UI warnings: home path, overflow at phone width | S | | Nov 17 | done | #135 |
+| B12 | #123 Web UI settings: wrong API key store label | S | | Nov 17 | in progress | |
 | B13 | #124 UI words: ingest/read token, "sent" for shared, hook text | S | | Nov 17 | todo | |
 
 ## Log
@@ -269,3 +269,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-17: #119 done (#132): sync says when edited sessions are held; the TUI no longer approves them.
 - 2026-11-17: #120 done (#133): view-as lines are cut by visible width.
 - 2026-11-17: #121 done (#134): the TUI search matches what is shown. #122 in progress.
+- 2026-11-17: #122 done (#135): web UI warnings show the ~ form and wrap at phone width. #123 in progress.

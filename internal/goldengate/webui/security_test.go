@@ -310,6 +310,22 @@ func TestWarningsWrapLongWords(t *testing.T) {
 	}
 }
 
+// Where the summarizer key is kept comes from the backend, never a fixed
+// word (#123).
+func TestSettingsSaysWhereTheKeyIs(t *testing.T) {
+	b, err := fs.ReadFile(webui.AssetFS, "assets/settings.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	js := string(b)
+	if strings.Contains(js, "(keyring)") || strings.Contains(js, "goes into this computer's keyring") {
+		t.Error("settings.js claims the keyring whatever the backend says")
+	}
+	if !strings.Contains(js, "KeySource") || !strings.Contains(js, `src === "file"`) {
+		t.Error("settings.js must show the backend's KeySource, including the file fallback")
+	}
+}
+
 // Every script the page imports is one of its own embedded files, served as
 // JavaScript, and the page starts from app.js.
 func TestThePagesScriptsAllExistAndAreServed(t *testing.T) {
