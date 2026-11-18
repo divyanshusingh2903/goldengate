@@ -169,7 +169,7 @@ func TestBar(t *testing.T) {
 func TestServerScreen(t *testing.T) {
 	h := newHarness(t, 100, 30)
 	h.key("3")
-	h.contains("https://bridge.example.com", "Server ● reachable", "Ingest token ● accepted (keyring)", "2 project(s)", "~/code/pharmfindr", "44 sessions")
+	h.contains("https://bridge.example.com", "Server ● reachable", "Upload token ● accepted (keyring)", "2 project(s)", "~/code/pharmfindr", "44 sessions")
 	h.checkGeometry(100, 30)
 	h.golden("server")
 }
@@ -211,7 +211,8 @@ func TestServerScreenWithoutServerAndUnreachable(t *testing.T) {
 func TestSettingsScreen(t *testing.T) {
 	h := newHarness(t, 100, 30)
 	h.key("4")
-	h.contains("Share level", "summary", "Look back", "90d", "Source CC Claude Code", "on", "Source AI claude.ai", "not found on this computer", "Verify commits with local git", "not available yet")
+	h.contains("Share level", "summary", "Look back", "90d", "Source CC Claude Code", "on", "Source AI claude.ai", "not found on this computer", "Verify commits with local git", "goldengate install-hook · install-schedule")
+	h.lacks("not available yet")
 	h.checkGeometry(100, 30)
 	h.golden("settings")
 }
@@ -701,4 +702,13 @@ func TestReviewShowsWhatHappensWhileItSummarizes(t *testing.T) {
 	if strings.Contains(h.view(), "nowhere yet") {
 		t.Error("the destination is known from the snapshot while the plan builds")
 	}
+}
+
+// The screens say upload token and assistant token, never the server's
+// scope names (#124).
+func TestScreensSayUploadAndAssistantToken(t *testing.T) {
+	h := newHarness(t, 120, 30)
+	h.key("3")
+	h.contains("Upload token")
+	h.lacks("Ingest", "ingest", "Read token", "read token")
 }

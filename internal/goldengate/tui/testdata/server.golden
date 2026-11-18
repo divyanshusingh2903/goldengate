@@ -2,7 +2,7 @@
 │ Sources ● CC Claude Code 142  ● CX Codex 37  ● OC OpenCode 58  ○ AI claude.ai                    │
 ├──────────────────────────────────────────────────────────────────────────────────────────────────┤
 │ https://bridge.example.com                                                                       │
-│ Server ● reachable   Ingest token ● accepted (keyring)                                           │
+│ Server ● reachable   Upload token ● accepted (keyring)                                           │
 │                                                                                                  │
 │ What the server holds (2 project(s))                                                             │
 │▌ code  ~/code/pharmfindr                                   44 sessions  2h ago    [D Delete]     │

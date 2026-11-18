@@ -95,7 +95,7 @@ func (m *Model) viewServer() string {
 		if !i.TokenOK {
 			tok = m.th.Bad.Render("✗ not accepted")
 		}
-		add(fmt.Sprintf("Server %s   Ingest token %s (%s)", health, tok, i.TokenStore))
+		add(fmt.Sprintf("Server %s   Upload token %s (%s)", health, tok, i.TokenStore))
 		if i.Err != "" {
 			add(m.th.Bad.Render(clip(i.Err, w-4)))
 		}

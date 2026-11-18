@@ -1001,7 +1001,7 @@ func (m *Model) cardLines(w, h, x0 int) []string {
 			case s.OffEverywhere:
 				box, state, sst = "[-]", "off in Settings", m.th.Warn
 			case s.Shared:
-				box, state, sst = "[x]", "✓ sent", m.th.Good
+				box, state, sst = "[x]", "✓ shared", m.th.Good
 			case r.State == Shared || r.State == Partial:
 				state, sst = "✗ off", m.th.Warn
 			}

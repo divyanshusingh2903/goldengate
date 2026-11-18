@@ -388,10 +388,10 @@ func (m *Model) wizServerView(out *[]string) string {
 	if w.done {
 		add(m.th.Good.Render("Connected."))
 		add("")
-		add("Ingest token stored in the " + w.res.TokenStore + ". The admin token was not saved.")
+		add("Upload token stored in the " + w.res.TokenStore + ". The admin token was not saved.")
 		if w.res.ReadToken != "" {
 			add("")
-			add(m.th.Title.Render("Read token for your assistant (shown only now):"))
+			add(m.th.Title.Render("Assistant token, for your assistant's connector (shown only now):"))
 			add("   " + w.res.ReadToken)
 			if w.res.SeesAll {
 				add(m.th.Dim.Render("This assistant sees every project you share. Change it with `goldengate agents`."))

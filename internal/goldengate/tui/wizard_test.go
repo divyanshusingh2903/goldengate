@@ -67,7 +67,7 @@ func TestWizardConnectsWithAdminTokenAndForgetsIt(t *testing.T) {
 	if h.m.wz.admin.Value() != "" {
 		t.Fatal("the admin token must be wiped from the UI after use")
 	}
-	h.contains("Connected.", "Ingest token stored in the keyring", "The admin token was not saved", "ggb_read_EXAMPLE", "shown only now", "https://bridge.example.com/mcp", "OAuth is enabled")
+	h.contains("Connected.", "Upload token stored in the keyring", "The admin token was not saved", "ggb_read_EXAMPLE", "shown only now", "https://bridge.example.com/mcp", "OAuth is enabled")
 	h.golden("wizard_connected")
 	if strings.Contains(h.view(), "S3CR3T") {
 		t.Fatal("secret leaked into the view")
@@ -90,7 +90,7 @@ func TestWizardPairingCode(t *testing.T) {
 		t.Fatalf("%+v", be.inits)
 	}
 	h.contains("Connected.")
-	h.lacks("Read token for your assistant") // pairing yields an ingest token only
+	h.lacks("Assistant token") // pairing yields an upload token only
 }
 
 func TestWizardValidationAndErrors(t *testing.T) {

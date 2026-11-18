@@ -364,7 +364,8 @@ func (a *app) rotate(ctx context.Context, scope string, grace time.Duration, std
 	if grace > 0 {
 		when = "after " + grace.String()
 	}
-	fmt.Fprintf(a.Stdout, "Created a new %s token and revoked %d old one(s) %s.\n", scope, revoked, when)
+	kind := map[string]string{"ingest": "upload", "read": "assistant"}[scope]
+	fmt.Fprintf(a.Stdout, "Created a new %s token and revoked %d old one(s) %s.\n", kind, revoked, when)
 	if scope == "read" {
 		fmt.Fprintf(a.Stdout, "\nNew assistant token (shown ONCE):\n\n    %s\n\nUpdate your assistant's connector (%s/mcp) with it.\n", fresh.Secret, cfg.Server.URL)
 	}

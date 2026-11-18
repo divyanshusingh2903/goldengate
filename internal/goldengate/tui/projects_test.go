@@ -260,7 +260,7 @@ func TestSourceEditor(t *testing.T) {
 	h := newHarness(t, 100, 30)
 	h.key("e")
 	h.contains("Which tools to send from pharmfindr", "● Shared. Untick a tool",
-		"[x] CC Claude Code     41 sessions  ✓ sent", "[x] CX Codex            6 sessions  ✓ sent", "↑/↓ move")
+		"[x] CC Claude Code     41 sessions  ✓ shared", "[x] CX Codex            6 sessions  ✓ shared", "↑/↓ move")
 	h.golden("source_editor")
 	h.key("down", "space")
 	if a := h.be.actions[0]; a.Kind != ActToggleSource || a.Source != "codex" || a.Keys[0] != "/home/u/code/pharmfindr" || len(a.Others) != 1 {
@@ -405,7 +405,7 @@ func TestSourceEditorSharesOnlyThatSource(t *testing.T) {
 	if a := be.actions[0]; a.Source != "codex" || len(a.Others) != 1 || a.Others[0] != "claude-code" {
 		t.Fatalf("a click toggles that line: %+v", a)
 	}
-	h.contains("[x] CX Codex", "✓ sent", "[ ] CC Claude Code", "✗ off")
+	h.contains("[x] CX Codex", "✓ shared", "[ ] CC Claude Code", "✗ off")
 }
 
 func TestSourceEditorOnDeniedProject(t *testing.T) {

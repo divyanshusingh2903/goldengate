@@ -158,7 +158,7 @@ func (m *Model) settingRows() []settingRow {
 	}
 	rows = append(rows,
 		settingRow{kind: setGit, label: "Verify commits with local git", value: git},
-		settingRow{kind: setNote, label: "Session hook / schedule", value: "not available yet (coming with deployment support)"},
+		settingRow{kind: setNote, label: "Session hook / schedule", value: "goldengate install-hook · install-schedule"},
 	)
 	return rows
 }
