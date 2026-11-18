@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"runtime"
+	"strconv"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -88,6 +89,11 @@ func (a *app) serveCmd() *cobra.Command {
 			if !cmd.Flags().Changed("addr") && a.Getenv("PORT") != "" { // Cloud Run and similar
 				addr = ":" + a.Getenv("PORT")
 			}
+			if !cmd.Flags().Changed("oauth") { // for hosts that cannot change the start arguments
+				if v, err := strconv.ParseBool(a.Getenv("GOLDENGATE_OAUTH")); err == nil {
+					enableOAuth = v
+				}
+			}
 			if enableOAuth && publicURL == "" {
 				publicURL = a.Getenv("GOLDENGATE_PUBLIC_URL")
 			}
@@ -110,7 +116,7 @@ func (a *app) serveCmd() *cobra.Command {
 	f.IntVar(&hops, "proxy-hops", 1, "number of proxies in front, for X-Forwarded-For")
 	f.IntVar(&perProject, "max-sessions-per-project", 5000, "storage quota per project")
 	f.IntVar(&total, "max-sessions-total", 100000, "storage quota overall")
-	f.BoolVar(&enableOAuth, "oauth", false, "enable the built-in OAuth 2.1 server so OAuth-only assistants (e.g. Gemini) can connect")
+	f.BoolVar(&enableOAuth, "oauth", false, "enable the built-in OAuth 2.1 server so OAuth-only assistants (e.g. Gemini) can connect (env GOLDENGATE_OAUTH=true)")
 	f.StringVar(&publicURL, "public-url", "", "with --oauth: the externally visible https URL of this server (env GOLDENGATE_PUBLIC_URL)")
 	f.StringSliceVar(&redirectHosts, "oauth-redirect-host", nil, "with --oauth: only allow https redirect URIs on these hosts (repeatable)")
 	f.StringSliceVar(&origins, "allowed-origin", nil, "browser origin (scheme://host[:port]) allowed to call /mcp; requests with any other Origin get 403 (repeatable)")

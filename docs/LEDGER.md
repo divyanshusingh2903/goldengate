@@ -304,3 +304,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-18: #161: first release is v1.0.0 (user's decision). README says version 1.0.0 and shows the install; the v1.0.0 tag is pushed from main after this merges, which publishes the image as 1.0.0, 1.0, 1 and latest.
 - 2026-11-18: #163: found while testing the Vercel and VM deploys: `/mcp` answered 403 "invalid Host header" when the proxy reaches the server over loopback (Caddy or nginx on the same VM, Vercel's container runtime). The MCP library's loopback Host check is now off; the Origin allow-list and bearer tokens stay. Affects v1.0.0.
 - 2026-11-18: v1.0.1 tagged and published (fix for #163); README says 1.0.1 (#165).
+- 2026-11-18: #167: `GOLDENGATE_OAUTH=true` turns OAuth on without the flag, for hosts that cannot change the start arguments (Railway image deploys). The flag wins when given. Needs a release (1.1.0) before the published image has it.

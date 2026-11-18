@@ -74,7 +74,7 @@ go install github.com/divyanshusingh2903/goldengate/cmd/goldengate@v1.0.1
 
 4. **Connect the assistant.**
    - If its connector lets you set a header: use `https://bridge.example.com/mcp` and send the assistant token as `Authorization: Bearer <token>`.
-   - If it only supports OAuth (Gemini's custom apps do; it supports dynamic client registration): start the server with `--oauth --public-url https://bridge.example.com`, then add `https://bridge.example.com/mcp` as the connector URL (Gemini: Settings > Connected Apps > Add a custom app). A consent page opens; approve it with your admin secret. No token to paste. If the assistant asks for a client ID and secret instead, run `goldengatebridge oauth clients create --redirect-uri <the address it shows>`.
+   - If it only supports OAuth (Gemini's custom apps do; it supports dynamic client registration): start the server with `--oauth --public-url https://bridge.example.com` (on a host where you cannot change the start command, such as Railway, set the variables `GOLDENGATE_OAUTH=true` and `GOLDENGATE_PUBLIC_URL=https://bridge.example.com` instead), then add `https://bridge.example.com/mcp` as the connector URL (Gemini: Settings > Connected Apps > Add a custom app). A consent page opens; approve it with your admin secret. No token to paste. If the assistant asks for a client ID and secret instead, run `goldengatebridge oauth clients create --redirect-uri <the address it shows>`.
    - Revoke a connected assistant with `goldengatebridge oauth clients delete <id>`.
 
 Un-share with `goldengate share remove ~/code/myproject --delete-from-server`. Replace the assistant's token with `goldengate token rotate assistant`.
