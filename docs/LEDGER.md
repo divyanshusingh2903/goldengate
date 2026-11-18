@@ -9,9 +9,10 @@ This file lets any Claude Code session (or person) pick up the Product v2 work w
 
 ## Status
 
-_Last updated 2026-11-16. Update this section whenever a row in the queue changes._
+_Last updated 2026-11-17. Update this section whenever a row in the queue changes._
 
 **Progress:** 30 of 31 scheduled issues done (plus 2 stretch). Phases 1 (Foundations), 2 (Per-agent access) and 3 (Inbox and curation) are complete.
+**Bug fixes from the end-to-end test** (#112–#124, PRs #125–#137) are all done; the report is `docs/TEST-REPORT.md`, with small observations left for later.
 **Nothing is next:** every issue of the queue is done except #40. **Blocked:** #40 Share-link import: the #39 spike recommends not building it; whether to close it as not planned is the user's call. Phase 4 (work items, rules and automation) is complete: #21, #35, #36, #45, #31, #33, #34, #32 and #22.
 
 ### Done
@@ -192,7 +193,7 @@ Found on 2026-11-17 by driving the TUI, the web UI and the CLI against a local s
 | B10 | #121 TUI search matches the hidden home directory | S | | Nov 17 | done | #134 |
 | B11 | #122 Web UI warnings: home path, overflow at phone width | S | | Nov 17 | done | #135 |
 | B12 | #123 Web UI settings: wrong API key store label | S | | Nov 17 | done | #136 |
-| B13 | #124 UI words: ingest/read token, "sent" for shared, hook text | S | | Nov 17 | in progress | |
+| B13 | #124 UI words: ingest/read token, "sent" for shared, hook text | S | | Nov 17 | done | #137 |
 
 ## Log
 
@@ -271,3 +272,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-17: #121 done (#134): the TUI search matches what is shown. #122 in progress.
 - 2026-11-17: #122 done (#135): web UI warnings show the ~ form and wrap at phone width. #123 in progress.
 - 2026-11-17: #123 done (#136): the web UI's Settings say where the summarizer key really is.
+- 2026-11-17: #124 done (#137): upload token, assistant token, shared, and the install commands in the TUI. Every bug from the end-to-end test is fixed; report in `docs/TEST-REPORT.md`.
