@@ -93,3 +93,70 @@ export function marked(text) {
   out.push(text.slice(last));
   return out;
 }
+
+// head is a screen's title, its one line, and its actions.
+export function head(title, line, ...actions) {
+  return h("div", { class: "page-head" },
+    h("div", null, h("h1", null, title), line ? h("p", null, line) : null),
+    actions.flat().some(Boolean) ? h("div", { class: "actions" }, actions) : null);
+}
+
+// card is a framed surface. head is a title (or a node) and its actions;
+// body is placed as it is, so a caller picks card-body, a table or rows.
+export function card(title, actions, ...body) {
+  return h("section", { class: "card" },
+    title ? h("div", { class: "card-head" }, typeof title === "string" ? h("h2", null, title) : title, actions ? h("div", { class: "actions" }, actions) : null) : null,
+    body);
+}
+
+export function cardBody(...children) {
+  return h("div", { class: "card-body" }, children);
+}
+
+// note says what leaves this computer, and when.
+export function note(...text) {
+  return h("p", { class: "note" }, text);
+}
+
+export function stat(key, value, sub, word) {
+  return h("div", { class: "card stat" }, h("div", { class: "k" }, key), h("div", { class: word ? "v word" : "v" }, value), sub ? h("div", { class: "s" }, sub) : null);
+}
+
+export function empty(big, title, line, ...actions) {
+  return h("div", { class: "empty" }, big ? h("div", { class: "big" }, big) : null, title ? h("h2", null, title) : null, line ? h("p", null, line) : null,
+    actions.length ? h("div", { class: "actions" }, actions) : null);
+}
+
+// table wraps a table so a wide one scrolls inside its frame.
+export function table(heads, rows) {
+  return h("div", { class: "tbl" }, h("table", null,
+    heads ? h("thead", null, h("tr", null, heads.map((x) => (x instanceof Node ? x : h("th", null, x))))) : null,
+    h("tbody", null, rows)));
+}
+
+// drawer opens a side panel over the page; it closes with Esc, the scrim or
+// its close button, and returns its body and foot to fill. onClose runs once.
+export function drawer(title, top, onClose) {
+  const layer = document.getElementById("layer");
+  const before = document.activeElement;
+  const body = h("div", { class: "drawer-body" });
+  const foot = h("div", { class: "drawer-foot" });
+  let closed = false;
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    document.removeEventListener("keydown", onKey);
+    clear(layer);
+    if (before && before.isConnected) before.focus();
+    if (onClose) onClose();
+  };
+  const onKey = (e) => { if (e.key === "Escape" && !document.getElementById("confirm").open) close(); };
+  const x = h("button", { type: "button", class: "ghost icon", "aria-label": "Close", onclick: close }, "✕");
+  const panel = h("aside", { class: "drawer", role: "dialog", "aria-modal": "true", "aria-label": title },
+    h("div", { class: "drawer-head" }, h("div", { class: "row" }, h("span", { class: "actions" }, top), x), h("h2", null, title)),
+    body, foot);
+  fill(layer, h("div", { class: "scrim", onclick: close }), panel);
+  document.addEventListener("keydown", onKey);
+  x.focus();
+  return { body, foot, close };
+}

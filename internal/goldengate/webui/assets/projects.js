@@ -2,12 +2,18 @@
 // send would take.
 
 import { api } from "/assets/api.js";
-import { h, clear, when, plural, ask, put, fill, tag } from "/assets/dom.js";
+import { h, clear, when, plural, ask, put, fill, tag, head, card, cardBody, note } from "/assets/dom.js";
 
 const NOT = 0, SHARED = 1, PARTIAL = 2, BLOCKED = 3;
 const ALLOW = 0, REMOVE = 1, DENY = 2, TOGGLE = 3, SETPROJECT = 4;
 
 const ui = { view: "all", query: "", tree: false, selected: "" };
+
+// initials are the first letters of a folder's last part, for its tile.
+function initials(label) {
+  const last = String(label || "?").split("/").filter(Boolean).pop() || "?";
+  return last.replace(/[^A-Za-z0-9]/g, "").slice(0, 2).toUpperCase() || "?";
+}
 
 function isShared(r) { return r.State === SHARED || r.State === PARTIAL; }
 
@@ -70,19 +76,20 @@ export async function render(main, app) {
   const search = h("input", { type: "search", value: ui.query, placeholder: "Search projects", "aria-label": "Search projects" });
   search.addEventListener("input", () => { ui.query = search.value; drawList(); });
 
-  const list = h("ul", { class: "list" });
-  const detail = h("div", { class: "card" });
+  const list = h("ul", { class: "plist" });
+  const detail = h("div", { class: "grid" });
 
   const rowButton = (r, depth) => {
     const [text, cls] = stateText(r);
     return h("li", null, h("button", {
-      type: "button", class: "item" + (depth ? ` indent-${Math.min(depth, 4)}` : ""), "aria-current": String(r.Key === ui.selected),
+      type: "button", class: "pitem" + (depth ? ` indent-${Math.min(depth, 4)}` : ""), "aria-current": String(r.Key === ui.selected),
       onclick: () => { ui.selected = r.Key; drawList(); drawDetail(); },
       ondblclick: () => app.go("preview", { key: r.Key, label: r.Label }),
     },
     h("span", { class: "glyph " + box(r)[1], title: ["not shared", "shared", "some tools shared", "blocked"][r.State] }, box(r)[0]),
-    h("span", { class: "where" }, r.Label, r.Project && r.Project !== r.Label ? h("span", { class: "dim" }, ` · ${r.Project}`) : null,
-      (r.Sources || []).length ? h("span", { class: "tags" }, (r.Sources || []).map((s) => tag(s.Name))) : null),
+    h("span", { class: "nm" }, r.Label,
+      r.Project && r.Project !== r.Label ? h("small", null, r.Project) : null),
+    (r.Sources || []).length ? h("span", { class: "tags" }, (r.Sources || []).map((s) => tag(s.Name))) : null,
     h("span", { class: "state " + cls }, text)));
   };
 
@@ -121,7 +128,7 @@ export async function render(main, app) {
       put(list, h("li", null, h("div", { class: "folder" + (depthOf(f.label) ? ` indent-${Math.min(depthOf(f.label), 4)}` : "") },
         h("span", null, `▾ ${f.label}/ (${plural(f.n, "project")})`),
         h("button", {
-          type: "button",
+          type: "button", class: "sm",
           onclick: async () => {
             if (await ask(`Share everything under ${f.label}?`, ["Every project in this folder becomes shared, including ones that appear later.", "Their sessions are sent only when you review and press Send."], "Share the folder")) {
               act({ Kind: ALLOW, Keys: [f.key] }, "shared");
@@ -134,66 +141,71 @@ export async function render(main, app) {
   function drawDetail() {
     clear(detail);
     const r = rows.find((x) => x.Key === ui.selected);
-    if (!r) { put(detail, h("p", { class: "dim" }, "Select a project.")); return; }
-    const [head, text] = cardText(r);
+    if (!r) { put(detail, card(null, null, cardBody(h("p", { class: "dim" }, "Select a project.")))); return; }
+    const [head2, text] = cardText(r);
     const others = (r.Sources || []).map((s) => s.Name);
-    put(detail, 
-      h("h2", null, r.Label),
-      h("p", null, h("strong", null, head)),
-      h("p", { class: "leaves" }, text),
-      r.Project ? h("p", { class: "dim" }, `In project: ${r.Project}`) : null,
-      r.Root ? h("p", { class: "dim" }, `A worktree of ${r.Root}`) : null,
-      h("p", { class: "dim" }, `${plural(r.Sessions, "session")} here${when(r.Last) ? ", last active " + when(r.Last) : ""}. ${r.Reason || ""}`),
-      h("div", { class: "row" },
-        isShared(r)
-          ? h("button", { type: "button", onclick: () => act({ Kind: REMOVE, Keys: [r.Key] }, "no longer shared") }, "Stop sharing")
-          : h("button", { type: "button", class: "primary", onclick: () => act({ Kind: ALLOW, Keys: [r.Key] }, "shared") }, "Share"),
+    const [, cls] = stateText(r);
+    put(detail, card(
+      h("div", { class: "title-cell" }, h("span", { class: "avatar", "aria-hidden": "true" }, initials(r.Label)),
+        h("div", null, h("h2", null, r.Label), h("small", null, `${plural(r.Sessions, "session")}${when(r.Last) ? ", last active " + when(r.Last) : ""}`))),
+      h("span", { class: "badge " + cls }, head2),
+      cardBody(
+        h("p", null, text),
+        h("div", { class: "facts gap-top" },
+          h("div", null, h("div", { class: "k" }, "Project"), h("div", { class: "v" }, r.Project || "none")),
+          h("div", null, h("div", { class: "k" }, "Tools"), h("div", { class: "v" }, (r.Sources || []).length ? h("span", { class: "tags" }, r.Sources.map((s) => tag(s.Name))) : "none")),
+          h("div", null, h("div", { class: "k" }, "Waiting to send"), h("div", { class: "v" }, isShared(r) ? String(r.Pending || 0) : "—"))),
+        r.Root ? h("p", { class: "hint gap-top" }, `A worktree of ${r.Root}`) : null,
+        r.Reason ? h("p", { class: "hint gap-top" }, r.Reason) : null),
+      h("div", { class: "card-foot" },
+        h("button", { type: "button", onclick: () => app.go("preview", { key: r.Key, label: r.Label }) }, "Preview what would be sent"),
         r.State !== BLOCKED ? h("button", {
-          type: "button",
+          type: "button", class: "danger",
           onclick: async () => {
             if (await ask(`Block ${r.Label}?`, ["A blocked folder is never sent, even when a parent folder is shared."], "Block")) act({ Kind: DENY, Keys: [r.Key] }, "blocked");
           },
         }, "Block") : null,
-        h("button", { type: "button", onclick: () => app.go("preview", { key: r.Key, label: r.Label }) }, "Preview what would be sent")),
-    );
+        isShared(r)
+          ? h("button", { type: "button", onclick: () => act({ Kind: REMOVE, Keys: [r.Key] }, "no longer shared") }, "Stop sharing")
+          : h("button", { type: "button", class: "primary", onclick: () => act({ Kind: ALLOW, Keys: [r.Key] }, "shared") }, "Share"))));
     if ((r.Sources || []).length && r.State !== BLOCKED) {
-      put(detail, h("h2", null, "Tools"), h("p", { class: "dim" }, "Choose which tools' sessions of this project are shared."));
-      for (const s of r.Sources) {
-        const cb = h("input", { type: "checkbox", checked: !!s.Shared, disabled: !!s.OffEverywhere });
+      put(detail, card("Tools", null, h("div", null, r.Sources.map((s) => {
+        const cb = h("input", { type: "checkbox", class: "switch", checked: !!s.Shared, disabled: !!s.OffEverywhere, "aria-label": `Share ${s.Name} sessions of this project` });
         cb.addEventListener("change", () => act({ Kind: TOGGLE, Keys: [r.Key], Source: s.Name, Others: others.filter((n) => n !== s.Name) }, "changed"));
-        put(detail, h("label", { class: "check" }, cb, tag(s.Name), `${s.Name} (${plural(s.Sessions, "session")})`,
-          s.OffEverywhere ? h("span", { class: "warn" }, " · off for every project in Settings") : null));
-      }
+        return h("div", { class: "set-row" },
+          h("div", null, h("div", { class: "t" }, tag(s.Name), s.Name), h("div", { class: "d" }, plural(s.Sessions, "session"),
+            s.OffEverywhere ? h("span", { class: "warn" }, " · off for every project in Settings") : null)),
+          cb);
+      }))));
     }
     const name = h("input", { type: "text", value: r.Project || "", "aria-label": "Project name", placeholder: "Project name" });
-    put(detail, h("h2", null, "Project"),
-      h("p", { class: "dim" }, "Put this folder in a named project. Doing so shares it."),
+    put(detail, card("Project", null, cardBody(
+      h("p", { class: "hint" }, "Put this folder in a named project. Doing so shares it."),
       h("form", { class: "row", onsubmit: (e) => { e.preventDefault(); if (name.value.trim()) act({ Kind: SETPROJECT, Keys: [r.Key], Project: name.value.trim() }, "moved"); } },
-        name, h("button", { type: "submit" }, "Put in project")));
+        h("span", { class: "grow-field" }, name), h("button", { type: "submit" }, "Put in project")))));
   }
 
   const treeBox = h("input", { type: "checkbox", checked: ui.tree });
   treeBox.addEventListener("change", () => { ui.tree = treeBox.checked; drawList(); });
 
-  fill(main, 
-    h("h1", null, "Projects"),
-    h("p", { class: "leaves" }, "Sharing a project selects it; nothing is sent from this screen. Sessions leave this computer only when you review them and press Send."),
-    h("div", { class: "row" },
-      h("div", { class: "chips", role: "group", "aria-label": "Show" }, chip("all", "All"), chip("shared", "Shared"), chip("tosend", "To send"), chip("notshared", "Not shared")),
-      h("label", { class: "check" }, treeBox, "Show as folders"),
+  fill(main,
+    head("Projects", "What is on this computer, and what is shared.",
       h("button", {
         type: "button",
         onclick: async () => { try { app.say((await api("/api/undo", {})).Message); } catch (e) { app.say(String(e.message || e), true); } render(main, app); },
-      }, "Undo"),
-      h("button", { type: "button", class: "primary", onclick: () => app.go("send") }, "Review and send →")),
-    h("div", { class: "row" }, search),
-    h("div", { class: "split" }, list, detail),
-    (snap.Warnings || []).map((w) => h("p", { class: "warn" }, "⚠ " + w)),
-    (snap.Notices || []).map((w) => h("p", { class: "warn" }, "Note: " + w)),
+      }, "Undo")),
+    (snap.Warnings || []).map((w) => h("p", { class: "banner warn" }, "⚠ " + w)),
+    (snap.Notices || []).map((w) => h("p", { class: "banner warn" }, "Note: " + w)),
+    h("div", { class: "toolbar" },
+      h("div", { class: "seg", role: "group", "aria-label": "Show" }, chip("all", "All"), chip("shared", "Shared"), chip("tosend", "To send"), chip("notshared", "Not shared")),
+      search,
+      h("label", { class: "check" }, treeBox, "Show as folders")),
+    h("div", { class: "proj" }, h("div", { class: "card" }, list), detail),
     h("p", { class: "legend dim" },
       h("span", null, h("span", { class: "glyph good" }, "●"), " shared"), h("span", null, h("span", { class: "glyph none" }, "○"), " not shared"),
       h("span", null, h("span", { class: "glyph warn" }, "◐"), " some tools shared"), h("span", null, h("span", { class: "glyph bad" }, "✕"), " blocked"),
       h("span", null, "Double-click a project to preview it.")),
+    note("Sharing a project selects it; nothing is sent from this screen. Sessions leave this computer only when you review them and press Send."),
   );
   void shown;
   drawList();

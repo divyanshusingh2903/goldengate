@@ -1,7 +1,7 @@
 // Setup: find the tools on this computer and connect to your server.
 
 import { api } from "/assets/api.js";
-import { h, clear, plural, put, fill } from "/assets/dom.js";
+import { h, clear, put, fill, head, card, cardBody, note, table } from "/assets/dom.js";
 
 export async function render(main, app) {
   const [tools, snap] = await Promise.all([api("/api/detect"), app.refresh()]);
@@ -29,25 +29,25 @@ export async function render(main, app) {
       connect.disabled = false;
     },
   },
-  h("label", { for: "srv-url" }, "Server address"), url,
-  h("label", { for: "srv-admin" }, "Admin secret"), admin,
-  h("p", { class: "dim" }, "Used once to create this computer's upload token and your assistant's token. It is not stored, here or on disk."),
-  h("label", { for: "srv-pair" }, "Or a pairing code"), pair,
-  h("p", { class: "dim" }, "From `goldengatebridge pair` on the server, when you would rather not type the admin secret here."),
+  h("div", { class: "field" }, h("label", { for: "srv-url" }, "Server address"), url),
+  h("div", { class: "field" }, h("label", { for: "srv-admin" }, "Admin secret"), admin,
+    h("p", { class: "hint" }, "Used once to create this computer's upload token and your assistant's token. It is not stored, here or on disk.")),
+  h("div", { class: "field" }, h("label", { for: "srv-pair" }, "Or a pairing code"), pair,
+    h("p", { class: "hint" }, "From `goldengatebridge pair` on the server, when you would rather not type the admin secret here.")),
   h("div", { class: "row" }, connect));
 
-  fill(main, 
-    h("h1", null, "Setup"),
-    h("p", { class: "leaves" }, "Nothing leaves this computer during setup. Connecting only creates tokens; you choose what is shared on the Projects screen, and it is sent only when you press Send."),
-    h("h2", null, "Tools found on this computer"),
-    h("table", null,
-      h("thead", null, h("tr", null, h("th", null, "Tool"), h("th", null, "Found"), h("th", { class: "num" }, "Sessions"), h("th", null, "Note"))),
-      h("tbody", null, (tools || []).map((t) => h("tr", null,
-        h("td", null, t.Name), h("td", null, t.Installed ? "✓ yes" : "– no"), h("td", { class: "num" }, t.Installed ? String(t.Sessions) : ""), h("td", { class: "dim" }, t.Note || ""))))),
-    h("h2", null, snap.Server ? "Your server" : "Connect to your server"),
-    snap.Server ? h("p", null, "Connected to ", h("code", null, snap.Server), ". Fill the form again only to connect to a different server or to make new tokens.") : null,
-    form, result,
-    h("div", { class: "row" }, h("button", { type: "button", onclick: () => app.go("projects") }, "Next: choose what to share →")),
+  fill(main,
+    head("Setup", "Find the tools on this computer and connect to your server.",
+      h("button", { type: "button", class: "primary", onclick: () => app.go("projects") }, "Next: choose what to share →")),
+    h("div", { class: "grid setup" },
+      card("Tools found on this computer", null, table(["Tool", "Found", h("th", { class: "num" }, "Sessions"), "Note"],
+        (tools || []).map((t) => h("tr", null,
+          h("td", null, t.Name), h("td", { class: t.Installed ? "w good" : "w dim" }, t.Installed ? "✓ yes" : "– no"),
+          h("td", { class: "num" }, t.Installed ? String(t.Sessions) : ""), h("td", { class: "dim small" }, t.Note || ""))))),
+      card(snap.Server ? "Your server" : "Connect to your server", null, cardBody(
+        snap.Server ? h("p", { class: "hint" }, "Connected to ", h("code", null, snap.Server), ". Fill the form again only to connect to a different server or to make new tokens.") : null,
+        form, result))),
+    note("Nothing leaves this computer during setup. Connecting only creates tokens; you choose what is shared on the Projects screen, and it is sent only when you press Send."),
   );
 }
 

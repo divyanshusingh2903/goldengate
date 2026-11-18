@@ -460,7 +460,7 @@ Legend: `[x]` shared, `[ ]` not shared, `[~]` some sources shared, `[-]` denied.
 
 ### 6.1 Local web UI (`goldengate ui`): design and security model
 
-Status: the server, its security checks and the JSON API are built (issue #46, package `internal/goldengate/webui`, command `goldengate ui`). The screens are built too: Setup, Projects, Preview, Send, Server and Settings, the same flow as the terminal UI (#47), and Inbox, Receipts and Agents (#48).
+Status: the server, its security checks and the JSON API are built (issue #46, package `internal/goldengate/webui`, command `goldengate ui`). The screens are built too: Setup, Projects, Preview, Send, Server and Settings, the same flow as the terminal UI (#47), and Inbox, Receipts and Agents (#48). Since #139 the page is laid out as an app: a sidebar of screens (with what waits in the inbox and what is to send), an Overview that only reads, page heads and framed cards, a drawer for one inbox session with its decisions and the summary editor, selecting several waiting sessions to approve or keep local at once, and a two-step send with progress.
 
 `goldengate ui` runs the same product in a browser, for people who do not live in a terminal. It is a second front end on `tui.Backend`, not a second implementation: every selection, preview, redaction, validation and send goes through the code the TUI and the commands already use, and through the single push path (`sync.Push`). It adds no capability. What it does add is a browser-facing surface on the laptop, so this section is mostly about keeping that surface closed.
 

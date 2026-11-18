@@ -2,7 +2,7 @@
 // screens. Each screen is a module with render(main, app).
 
 import { api, setRequestToken } from "/assets/api.js";
-import { h, fill } from "/assets/dom.js";
+import { h, fill, head } from "/assets/dom.js";
 import * as setup from "/assets/setup.js";
 import * as projects from "/assets/projects.js";
 import * as preview from "/assets/preview.js";
@@ -12,11 +12,22 @@ import * as settings from "/assets/settings.js";
 import * as inbox from "/assets/inbox.js";
 import * as receipts from "/assets/receipts.js";
 import * as agents from "/assets/agents.js";
+import * as overview from "/assets/overview.js";
 
-const screens = { setup, projects, preview, send, server, settings, inbox, receipts, agents };
+const screens = { overview, setup, projects, preview, send, server, settings, inbox, receipts, agents };
 const main = document.getElementById("main");
 const statusEl = document.getElementById("status");
 const nav = document.getElementById("nav");
+const sendBtn = document.getElementById("send-btn");
+// Screens reached from another one keep that one lit in the sidebar.
+const parent = { preview: "projects" };
+
+// count shows a number beside a screen in the sidebar, or nothing for zero.
+function count(id, n) {
+  const el = document.getElementById(id);
+  el.textContent = n ? String(n) : "";
+  el.title = n ? `${n} waiting` : "";
+}
 
 const app = {
   snapshot: null,
@@ -25,16 +36,27 @@ const app = {
     statusEl.textContent = text || "";
     statusEl.className = bad ? "status bad" : "status";
   },
-  // refresh reloads what every screen needs and updates the header.
+  // refresh reloads what every screen needs and updates the sidebar.
   async refresh() {
-    app.snapshot = await api("/api/snapshot");
-    const badge = document.getElementById("badge");
-    badge.textContent = app.snapshot.Server ? `server: ${app.snapshot.Server.replace(/^https?:\/\//, "")}` : "server: not connected";
-    return app.snapshot;
+    // one after the other: on a first run the two would open a new state
+    // database at the same time (#140)
+    const snap = await api("/api/snapshot");
+    const inbox = await api("/api/inbox").catch(() => null);
+    app.snapshot = snap;
+    const host = snap.Server ? snap.Server.replace(/^https?:\/\//, "") : "";
+    document.getElementById("badge").textContent = host || "not connected";
+    document.getElementById("badge").title = host ? `server: ${host}` : "no server connected";
+    document.getElementById("server-dot").className = host ? "dot" : "dot off";
+    const toSend = (snap.Rows || []).filter((r) => (r.State === 1 || r.State === 2) && r.Pending > 0).reduce((n, r) => n + r.Pending, 0);
+    count("count-inbox", inbox ? (inbox.Pending || []).length : 0);
+    count("count-send", toSend);
+    sendBtn.hidden = !host;
+    sendBtn.textContent = toSend ? `Review and send ${toSend}` : "Review and send";
+    return snap;
   },
   async go(name, params) {
     for (const b of nav.querySelectorAll("button")) {
-      if (b.dataset.screen === name || (name === "preview" && b.dataset.screen === "projects") || (name === "receipts" && b.dataset.screen === "inbox")) b.setAttribute("aria-current", "page");
+      if (b.dataset.screen === (parent[name] || name)) b.setAttribute("aria-current", "page");
       else b.removeAttribute("aria-current");
     }
     app.say(""); // feedback belongs to the screen it was given on
@@ -48,12 +70,13 @@ const app = {
     } catch (e) {
       fill(view, h("p", { class: "bad" }, String(e.message || e)));
     }
+    document.querySelector(".scroll").scrollTop = 0;
     main.focus();
   },
 };
 
 function fail(text, more) {
-  fill(main, h("h1", null, text), h("p", { class: "dim" }, more));
+  fill(main, head(text, more));
 }
 
 function theme() {
@@ -95,8 +118,9 @@ async function start() {
   }
   nav.hidden = false;
   for (const b of nav.querySelectorAll("button")) b.addEventListener("click", () => app.go(b.dataset.screen));
+  sendBtn.addEventListener("click", () => app.go("send"));
   // first run, or no server yet: start with setup, as the terminal UI does
-  app.go(app.snapshot.FirstRun || !app.snapshot.Server ? "setup" : "projects");
+  app.go(app.snapshot.FirstRun || !app.snapshot.Server ? "setup" : "overview");
 }
 
 // A fresh link pasted into this tab only changes the part after "#", which
