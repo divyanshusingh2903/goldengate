@@ -862,6 +862,35 @@ func TestMCPRefusesUnknownBrowserOrigins(t *testing.T) {
 	}
 }
 
+// A proxy on the same machine reaches the server over loopback and keeps the public Host.
+func TestMCPServesAPublicHostOverLoopback(t *testing.T) {
+	e := newEnv(t)
+	seedMCP(e)
+	send := func(origin string) int {
+		t.Helper()
+		req, _ := http.NewRequestWithContext(context.Background(), "POST", e.ts.URL+"/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))
+		req.Host = "bridge.example.com"
+		req.Header.Set("Authorization", "Bearer "+e.read)
+		req.Header.Set("Content-Type", "application/json")
+		req.Header.Set("Accept", "application/json, text/event-stream")
+		if origin != "" {
+			req.Header.Set("Origin", origin)
+		}
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		resp.Body.Close()
+		return resp.StatusCode
+	}
+	if c := send(""); c != 200 {
+		t.Errorf("public Host over loopback, no Origin: %d want 200", c)
+	}
+	if c := send("http://bridge.example.com"); c != 403 {
+		t.Errorf("a browser origin is still refused unless trusted: %d want 403", c)
+	}
+}
+
 func TestMCPTrustsThePublicURLOrigin(t *testing.T) {
 	e := newEnv(t, func(c *server.Config) { c.PublicURL = "self" })
 	req, _ := http.NewRequestWithContext(context.Background(), "POST", e.ts.URL+"/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))

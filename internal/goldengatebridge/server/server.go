@@ -514,6 +514,12 @@ func (s *Server) mcpHandler() http.Handler {
 	// it runs on scale-to-zero platforms and behind rewriting proxies.
 	h := mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return m }, &mcp.StreamableHTTPOptions{
 		Stateless: true, JSONResponse: true, MaxRequestBodyBytes: 256 << 10,
+		// The SDK refuses a loopback connection that carries a public Host, which is
+		// exactly what a reverse proxy on this machine (Caddy, nginx) or a container
+		// runtime that proxies over loopback produces. DNS rebinding is covered here
+		// instead: the Origin allow-list refuses browsers before the token check
+		// (origin.go), and every request needs a bearer token.
+		DisableLocalhostProtection: true,
 	})
 	verifier := func(ctx context.Context, _ string, req *http.Request) (*sdkauth.TokenInfo, error) {
 		ip := s.clientIP(req)
