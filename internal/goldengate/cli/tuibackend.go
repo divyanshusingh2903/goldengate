@@ -30,9 +30,10 @@ import (
 // tuiBackend implements tui.Backend on the same code the CLI commands use, so
 // the UI can do exactly what the commands can and nothing else.
 type tuiBackend struct {
-	a    *app
-	mu   sync.Mutex
-	undo []shareRules
+	a       *app
+	mu      sync.Mutex
+	undo    []shareRules
+	notices []string // said once in the interface (tui.Snapshot.Notices)
 
 	// reviewed is what the last clean review (dry run) prepared, so that
 	// sending right after it sends exactly that, without reading and redacting
@@ -74,7 +75,22 @@ func rulesOf(c config.Config) shareRules {
 	return shareRules{slices.Clone(c.Share.Allow), slices.Clone(c.Share.Deny), slices.Clone(c.Share.SourceDeny), config.CloneProjects(c.Projects)}
 }
 
-func (a *app) tuiBackend() *tuiBackend { return &tuiBackend{a: a} }
+// tuiBackend serves the TUI and the web UI. The secret store's warnings go
+// to the interface as a notice instead of to the terminal, where they would
+// be printed over the screen (#118).
+func (a *app) tuiBackend() *tuiBackend {
+	b := &tuiBackend{a: a}
+	a.secretWarn = b.notice
+	return b
+}
+
+func (b *tuiBackend) notice(msg string) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if !slices.Contains(b.notices, msg) {
+		b.notices = append(b.notices, msg)
+	}
+}
 
 func (b *tuiBackend) syncer(ctx context.Context, cfg config.Config) (*gsync.Syncer, func(), error) {
 	m, err := b.a.matcher(cfg)
@@ -165,6 +181,9 @@ func (b *tuiBackend) Snapshot(ctx context.Context) (tui.Snapshot, error) {
 		snap.Rows = append(snap.Rows, row)
 	}
 	snap.Warnings = res.Warnings
+	b.mu.Lock()
+	snap.Notices = slices.Clone(b.notices)
+	b.mu.Unlock()
 	if c := a.summarizer(cfg); c != nil {
 		snap.Summarizer = c.Name()
 	}

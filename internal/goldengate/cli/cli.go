@@ -102,6 +102,9 @@ func DefaultRegistry(_ string, _ func(string) string) (*adapters.Registry, error
 type app struct {
 	Deps
 	configPath string
+	// secretWarn receives the secret store's warnings instead of stderr
+	// while a full-screen or browser UI is running (#118).
+	secretWarn func(string)
 }
 
 // New returns the root command.

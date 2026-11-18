@@ -76,6 +76,7 @@ type Model struct {
 
 	snap   Snapshot
 	loaded bool
+	told   map[string]bool // notices already shown in the status line
 
 	ck clickState
 
@@ -314,6 +315,15 @@ func (m *Model) onSnapshot(msg snapshotMsg) tea.Cmd {
 		return nil
 	}
 	m.snap, m.loaded = msg.snap, true
+	for _, n := range msg.snap.Notices {
+		if !m.told[n] {
+			if m.told == nil {
+				m.told = map[string]bool{}
+			}
+			m.told[n] = true
+			m.setStatus("note: "+n, false)
+		}
+	}
 	m.pk.clamp(m)
 	if msg.snap.FirstRun && !m.opts.SkipWizard && !m.wz.started {
 		return m.startWizard()

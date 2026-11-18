@@ -19,6 +19,7 @@ import (
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/adapters/codex"
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/adapters/export/exporttest"
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/adapters/opencode"
+	"github.com/divyanshusingh2903/goldengate/internal/goldengate/secrets"
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/tui"
 	"github.com/divyanshusingh2903/goldengate/internal/model"
 )
@@ -379,5 +380,35 @@ func TestSharingParentLiftsChildTombstone(t *testing.T) {
 				t.Errorf("~/projects/demo still dropped after sharing ~/projects (sources sent: %v):\n%s", got, m.errOut)
 			}
 		})
+	}
+}
+
+// Inside the TUI and the web UI the no-keyring warning is a notice in the
+// interface, not a line printed over the screen (#118).
+func TestSecretWarningIsANoticeInTheUI(t *testing.T) {
+	m := newMulti(t)
+	m.deps.SecretStore = func(dir string, warn func(string)) secrets.Store {
+		warn("no OS keyring available")
+		return &secrets.Memory{}
+	}
+	a := &app{Deps: m.deps}
+	b := a.tuiBackend()
+	a.secretStore()
+	a.secretStore()
+	snap, err := b.Snapshot(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snap.Notices) != 1 || snap.Notices[0] != "no OS keyring available" {
+		t.Errorf("notices = %q", snap.Notices)
+	}
+	if m.errOut.Len() != 0 {
+		t.Errorf("printed to the terminal: %q", m.errOut)
+	}
+	// the command line keeps printing it
+	cli := &app{Deps: m.deps}
+	cli.secretStore()
+	if !strings.Contains(m.errOut.String(), "warning: no OS keyring available") {
+		t.Errorf("CLI warning missing: %q", m.errOut)
 	}
 }
