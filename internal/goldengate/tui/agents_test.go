@@ -2,6 +2,11 @@ package tui
 
 import (
 	"errors"
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
+	"github.com/muesli/termenv"
+	"io"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -174,6 +179,29 @@ func TestAgentsViewAsAgentShowsWhatItCanRead(t *testing.T) {
 	h.key("pgdown")
 	h.contains("Work items from the last 5 days (4)")
 	h.checkGeometry(80, 24)
+}
+
+// With colours on, view-as lines are cut by visible width: no colour code is
+// cut in half and a line that fits is shown whole (#120).
+func TestAgentsViewAsKeepsColourCodesWhole(t *testing.T) {
+	h := openAgentsGrid(t, 70, 34)
+	h.key("right", "v")
+	r := lipgloss.NewRenderer(io.Discard)
+	r.SetColorProfile(termenv.TrueColor)
+	h.m.th = NewTheme(r)
+	complete := regexp.MustCompile("\x1b\\[[0-9;:]*[A-Za-z]")
+	out := h.m.View()
+	for _, l := range strings.Split(out, "\n") {
+		if strings.Contains(complete.ReplaceAllString(l, ""), "\x1b") {
+			t.Errorf("colour code cut in half: %q", l)
+		}
+		if lipgloss.Width(l) > 70 {
+			t.Errorf("line wider than the window (%d): %q", lipgloss.Width(l), l)
+		}
+	}
+	if !strings.Contains(ansi.Strip(out), "Work on Pharmfindr") {
+		t.Errorf("lines that fit must be whole:\n%s", ansi.Strip(out))
+	}
 }
 
 func TestAgentDetailsAndTokenRevoke(t *testing.T) {
