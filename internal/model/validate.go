@@ -14,7 +14,7 @@ import (
 // fails Validate, and the server refuses to store one. They bound what a
 // leaked ingest token can stuff into the store.
 const (
-	MaxPayloadBytes   = 64 << 10
+	MaxPayloadBytes   = 192 << 10 // room for a long session's work items
 	MaxSummaryJSON    = 4 << 10
 	MaxProjectLen     = 300
 	MaxProjectNameLen = 100
@@ -33,7 +33,7 @@ const (
 	MaxFiles          = 20
 	MaxCommands       = 12
 	MaxTools          = 12
-	MaxWorkItemCount  = 50
+	MaxWorkItemCount  = 200
 	MaxKeyLen         = 200
 	MaxURLLen         = 300
 	MaxEvidenceCount  = 3

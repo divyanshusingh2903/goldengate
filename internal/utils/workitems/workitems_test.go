@@ -240,7 +240,8 @@ func TestCommandTextInsideHeredocOrQuotesIsNotACommand(t *testing.T) {
 		sh("grep -r 'gh issue create' .", "https://github.com/example/demo/issues/3\n"),
 		sh("git commit --dry-run -m x", commitOut),
 	}}}}
-	if items := workitems.Extract(s, workitems.Options{}); len(items) != 0 {
+	// The heredoc's own target is a real write: t.go is the only item.
+	if items := workitems.Extract(s, workitems.Options{}); len(items) != 1 || items[0].Kind != model.KindFile || items[0].Key != "t.go" {
 		t.Fatalf("non-commands produced work items: %+v", items)
 	}
 	// ... while the same commands for real do count
@@ -304,5 +305,75 @@ func TestBranchIssueIsOnlyAMention(t *testing.T) {
 	s.Ref.StartedAt, s.Turns = time.Time{}, nil
 	if items := workitems.Extract(s, workitems.Options{KnownPrefixes: []string{"LIN"}}); len(items) != 0 {
 		t.Errorf("zero time: %+v", items)
+	}
+}
+
+// Issues a pull request's body closes are linked to the session, and become
+// completed once that pull request is merged in it. A template's commented
+// example is not an issue.
+func TestClosingKeywordsLinkIssuesAndMergeCompletesThem(t *testing.T) {
+	sh := func(cmd, out string) model.ToolCall {
+		return model.ToolCall{Name: "Bash", Kind: model.ToolShell, Command: cmd, Result: model.ToolResult{Known: true, OK: true, Text: out}}
+	}
+	create := "gh pr create --title \"feat: x\" --body-file - <<'EOF'\n<!-- e.g. Closes #123 -->\nCloses #48\nFixes other/repo#9\nEOF"
+	s := &model.RawSession{Ref: model.SessionRef{ID: "s", ProjectKey: "/p"}, Turns: []model.Turn{{Role: "assistant", Tools: []model.ToolCall{
+		sh(create, "https://github.com/example/demo/pull/7\n"),
+		sh("gh pr create --title y --body 'Closes #50'", "https://github.com/example/demo/pull/8\n"),
+		sh("gh pr merge 7 --merge", "✓ Merged pull request example/demo#7\n"),
+		sh("gh issue view 22", "title: something\n"),
+	}}}}
+	items := workitems.Extract(s, workitems.Options{})
+	if it := find(items, model.KindIssue, "github:example/demo#48"); it == nil || it.Status != model.StatusCompleted {
+		t.Errorf("#48 is closed by the merged PR: %+v", it)
+	}
+	if it := find(items, model.KindIssue, "github:other/repo#9"); it == nil || it.Status != model.StatusCompleted {
+		t.Errorf("other/repo#9 is closed by the merged PR: %+v", it)
+	}
+	if it := find(items, model.KindIssue, "github:example/demo#50"); it == nil || it.Status != model.StatusMentioned {
+		t.Errorf("#50's PR is not merged: mentioned only: %+v", it)
+	}
+	if it := find(items, model.KindIssue, "github:example/demo#22"); it == nil || it.Status != model.StatusMentioned {
+		t.Errorf("a viewed issue is mentioned: %+v", it)
+	}
+	if it := find(items, model.KindIssue, "github:example/demo#123"); it != nil {
+		t.Errorf("a commented template example is not an issue: %+v", it)
+	}
+}
+
+// Files written by shell commands count like the edit tools' files; a failed
+// command, a variable path or a path outside the project does not.
+func TestShellCommandsThatWriteFilesRecordThem(t *testing.T) {
+	sh := func(cmd string, ok bool) model.ToolCall {
+		return model.ToolCall{Name: "Bash", Kind: model.ToolShell, Command: cmd, Result: model.ToolResult{Known: true, OK: ok}}
+	}
+	py := "python3 - <<'EOF'\np='internal/a.go'; s=open(p).read()\nopen(p,'w').write(s)\nopen('docs/b.md', 'w')\nEOF"
+	s := &model.RawSession{Ref: model.SessionRef{ID: "s", ProjectKey: "/p"}, Turns: []model.Turn{{Role: "assistant", Tools: []model.ToolCall{
+		sh("sed -i -E 's/a/b/' cmd/x.go cmd/y.go", true),
+		sh("echo hi > notes.txt && echo more >> /p/log/out.txt", true),
+		sh("go test ./... 2>&1 | tee test.log", true),
+		sh("git add internal/z.go -- docs/GUIDE.md", true),
+		sh(py, true),
+		sh("sed -i 's/a/b/' failed.go", false),
+		sh("cat > $S/body.md <<'EOF'\nx\nEOF", true),
+		sh("echo x > /etc/elsewhere && sed 's/a/b/' readonly.go && echo y > /dev/null", true),
+	}}}}
+	got := map[string]bool{}
+	for _, it := range workitems.Extract(s, workitems.Options{}) {
+		if it.Kind == model.KindFile {
+			got[it.Key] = true
+		}
+	}
+	for _, f := range []string{"cmd/x.go", "cmd/y.go", "notes.txt", "log/out.txt", "test.log", "internal/z.go", "docs/GUIDE.md", "internal/a.go", "docs/b.md"} {
+		if !got[f] {
+			t.Errorf("missing %s in %v", f, got)
+		}
+	}
+	for _, f := range []string{"failed.go", "readonly.go", "body.md"} {
+		if got[f] {
+			t.Errorf("%s is not a write: %v", f, got)
+		}
+	}
+	if len(got) != 9 {
+		t.Errorf("want 9 files, got %v", got)
 	}
 }
