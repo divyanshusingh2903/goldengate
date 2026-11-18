@@ -127,19 +127,36 @@ func (c *Client) Health(ctx context.Context) error {
 	return c.do(ctx, http.MethodGet, "/healthz", nil, nil)
 }
 
-// Send implements sync.Sink: it uploads payloads in batches.
+// BatchBytes bounds one ingest request's payloads, under the server's 2 MiB
+// default body limit.
+const BatchBytes = 1536 << 10
+
+// Send implements sync.Sink: it uploads payloads in batches of at most
+// BatchSize payloads and BatchBytes bytes.
 func (c *Client) Send(ctx context.Context, ps []*model.SessionPayload) error {
-	for start := 0; start < len(ps); start += BatchSize {
-		end := min(start+BatchSize, len(ps))
-		batch := make([]model.SessionPayload, 0, end-start)
-		for _, p := range ps[start:end] {
-			batch = append(batch, *p)
+	var batch []model.SessionPayload
+	size := 0
+	flush := func() error {
+		if len(batch) == 0 {
+			return nil
 		}
-		if err := c.do(ctx, http.MethodPost, "/v1/ingest", map[string]any{"sessions": batch}, nil); err != nil {
-			return err
-		}
+		err := c.do(ctx, http.MethodPost, "/v1/ingest", map[string]any{"sessions": batch}, nil)
+		batch, size = nil, 0
+		return err
 	}
-	return nil
+	for _, p := range ps {
+		n := model.MaxPayloadBytes // a payload that cannot be measured counts as the largest allowed
+		if b, err := json.Marshal(p); err == nil {
+			n = len(b)
+		}
+		if len(batch) == BatchSize || (len(batch) > 0 && size+n > BatchBytes) {
+			if err := flush(); err != nil {
+				return err
+			}
+		}
+		batch, size = append(batch, *p), size+n
+	}
+	return flush()
 }
 
 // DeleteProject removes data from the server. project is a project id (the

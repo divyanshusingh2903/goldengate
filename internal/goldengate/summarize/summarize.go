@@ -28,8 +28,8 @@ import (
 // Size caps. A summary stays under MaxSummaryBytes so MCP responses are small.
 const (
 	MaxSummaryBytes  = 3072
-	MaxWorkItems     = 50
-	MaxWorkItemBytes = 8 << 10
+	MaxWorkItems     = model.MaxWorkItemCount
+	MaxWorkItemBytes = 128 << 10
 	maxFiles         = 20
 	maxCommands      = 12
 	maxTools         = 12
@@ -137,12 +137,12 @@ func Build(s *model.RawSession, o Options) (*model.SessionPayload, error) {
 				}
 			}
 		}
+		p.WorkItems = workItems(s, o.Work, r)
 		if o.Model != nil {
-			o.Model.apply(s, rd, r, sum)
+			o.Model.apply(s, rd, r, sum, p.WorkItems)
 		}
 		capSummary(sum)
 		p.Summary = sum
-		p.WorkItems = workItems(s, o.Work, r)
 	}
 	p.Redactions = model.Redactions(r.counts)
 	return p, nil
@@ -535,6 +535,9 @@ func head[T any](s []T, n int) []T {
 
 func workItems(s *model.RawSession, wo workitems.Options, r *scoped) []model.WorkItem {
 	items := workitems.Extract(s, wo)
+	// When a long session has more than fits, pull requests and issues stay
+	// ahead of commits, artifacts and files; within a kind, newest first.
+	sort.SliceStable(items, func(i, j int) bool { return kindRank(items[i].Kind) < kindRank(items[j].Kind) })
 	out := make([]model.WorkItem, 0, len(items))
 	for _, it := range items {
 		if len(out) >= MaxWorkItems {
@@ -557,6 +560,20 @@ func workItems(s *model.RawSession, wo workitems.Options, r *scoped) []model.Wor
 		}
 	}
 	return out
+}
+
+func kindRank(kind string) int {
+	switch kind {
+	case model.KindPR:
+		return 0
+	case model.KindIssue:
+		return 1
+	case model.KindCommit:
+		return 2
+	case model.KindArtifact:
+		return 3
+	}
+	return 4
 }
 
 var reURLCreds = regexp.MustCompile(`^([a-z][a-z0-9+.\-]*://)[^/@\s]*@`)

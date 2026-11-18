@@ -80,11 +80,14 @@ type extractor struct {
 	glRepo string         // group/project seen in GitLab URLs, or repo
 	lastMR string         // key of most recent merge request touched by evidence
 	lastPR string         // key of most recent PR touched by evidence
+	// closes maps a pull request's item key to the issues its body closes
+	// ("Closes #12"), read from the command that created or edited it.
+	closes map[string][]string
 }
 
 // Extract returns the session's work items, deduplicated within the session.
 func Extract(s *model.RawSession, o Options) []model.WorkItem {
-	e := &extractor{s: s, o: o, items: map[string]*model.WorkItem{}, known: map[string]bool{}}
+	e := &extractor{s: s, o: o, items: map[string]*model.WorkItem{}, known: map[string]bool{}, closes: map[string][]string{}}
 	for _, p := range o.KnownPrefixes {
 		e.known[strings.ToUpper(p)] = true
 	}
@@ -110,6 +113,7 @@ func Extract(s *model.RawSession, o Options) []model.WorkItem {
 			e.touch(model.KindPR, "github", ev.Repo+"#"+strconv.Itoa(ev.Number), "", ev.URL, model.StatusMentioned, "", -1, model.ViaHarnessEvent, ev.Time)
 		}
 	}
+	e.closeMerged()
 	out := make([]model.WorkItem, 0, len(e.order))
 	for _, k := range e.order {
 		out = append(out, *e.items[k])
@@ -236,8 +240,15 @@ func (e *extractor) fromShell(ti int, c model.ToolCall, at time.Time) {
 	out := c.Result.Text
 	commits := reCommitOut.FindAllStringSubmatch(out, -1)
 	next := 0
+	e.pyWrites(ti, c.Command, at)
 	for _, inv := range shellcmd.Parse(c.Command) {
+		e.fileEdits(ti, inv, at)
 		if sub, args, ok := shellcmd.GitSubcommand(inv); ok {
+			if sub == "add" {
+				for _, f := range plainArgs(args) {
+					e.shellFile(ti, f, at)
+				}
+			}
 			if sub == "commit" && !shellcmd.Has(args, "--dry-run") && next < len(commits) {
 				m := commits[next]
 				next++
@@ -258,27 +269,30 @@ func (e *extractor) fromShell(ti int, c model.ToolCall, at time.Time) {
 		}
 		switch {
 		case noun == "pr":
-			e.ghPR(ti, verb, args, out, at)
+			if k := e.ghPR(ti, verb, args, out, at); k != "" && (verb == "create" || verb == "edit") {
+				e.closingRefs(ti, k, c.Command, at)
+			}
 		case noun == "issue" && e.o.enabled("github"):
 			e.ghIssue(ti, verb, args, out, at)
 		}
 	}
 }
 
-func (e *extractor) ghPR(ti int, verb string, args []string, out string, at time.Time) {
+// ghPR records a gh pr subcommand and returns the item key it touched, if any.
+func (e *extractor) ghPR(ti int, verb string, args []string, out string, at time.Time) string {
 	status := map[string]string{
 		"create": model.StatusCreated, "merge": model.StatusMerged, "close": model.StatusClosed,
 		"reopen": model.StatusUpdated, "ready": model.StatusUpdated, "edit": model.StatusUpdated, "comment": model.StatusUpdated,
 	}[verb]
 	if status == "" {
-		return
+		return ""
 	}
 	repo, num := e.target(args, out, rePRURL)
 	title, _ := shellcmd.Flag(args, "title", "t")
 	if verb == "create" {
 		m := rePRURL.FindStringSubmatch(out)
 		if m == nil {
-			return // created without a URL in the result: no evidence of which PR
+			return "" // created without a URL in the result: no evidence of which PR
 		}
 		repo, num = m[1], m[2]
 	}
@@ -287,8 +301,9 @@ func (e *extractor) ghPR(ti int, verb string, args []string, out string, at time
 		// the most recent PR proven in this session, if any.
 		if it := e.items[e.lastPR]; it != nil && verb != "create" {
 			e.touch(model.KindPR, "github", it.Key, "", it.URL, status, "", ti, model.ViaToolResult, at)
+			return e.lastPR
 		}
-		return
+		return ""
 	}
 	if repo == "" {
 		repo = e.repo
@@ -300,12 +315,14 @@ func (e *extractor) ghPR(ti int, verb string, args []string, out string, at time
 	}
 	e.touch(model.KindPR, "github", key, title, url, status, "", ti, model.ViaToolResult, at)
 	e.lastPR = itemKey(model.KindPR, "github", key)
+	return e.lastPR
 }
 
 func (e *extractor) ghIssue(ti int, verb string, args []string, out string, at time.Time) {
 	status := map[string]string{
 		"create": model.StatusCreated, "close": model.StatusCompleted, "reopen": model.StatusUpdated,
 		"edit": model.StatusUpdated, "comment": model.StatusUpdated,
+		"view": model.StatusMentioned, // read, not changed: it only links the issue to the session
 	}[verb]
 	if status == "" {
 		return
@@ -870,4 +887,162 @@ func trimEvidence(ev []model.Evidence) []model.Evidence {
 		ev = slices.Delete(ev, drop, drop+1)
 	}
 	return ev
+}
+
+var (
+	// reClosing is GitHub's closing keywords: "Closes #12", "fixes owner/repo#3".
+	reClosing     = regexp.MustCompile(`(?i)\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\s*:?\s+(?:([\w.\-]+/[\w.\-]+)#(\d+)|#(\d+)|https://github\.com/([\w.\-]+/[\w.\-]+)/issues/(\d+))`)
+	reHTMLComment = regexp.MustCompile(`(?s)<!--.*?-->`)
+)
+
+// closingRefs reads the closing keywords in a successful `gh pr create` or
+// `gh pr edit` command, body heredoc included (a template's commented-out
+// example is skipped). Each issue is linked as mentioned; closeMerged
+// completes it once the pull request is proven merged.
+func (e *extractor) closingRefs(ti int, prKey, cmd string, at time.Time) {
+	if !e.o.enabled("github") {
+		return
+	}
+	for _, m := range reClosing.FindAllStringSubmatch(reHTMLComment.ReplaceAllString(cmd, ""), -1) {
+		repo, num := firstNonEmpty(m[1], m[4]), firstNonEmpty(m[2], m[3], m[5])
+		if repo == "" {
+			if it := e.items[prKey]; it != nil {
+				repo, _, _ = strings.Cut(it.Key, "#")
+			}
+		}
+		if repo == "" || num == "" {
+			continue
+		}
+		key := "github:" + repo + "#" + num
+		e.touch(model.KindIssue, "github", key, "", "", model.StatusMentioned, "", ti, model.ViaToolResult, at)
+		if !slices.Contains(e.closes[prKey], key) {
+			e.closes[prKey] = append(e.closes[prKey], key)
+		}
+	}
+}
+
+// closeMerged marks the issues a merged pull request closes as completed:
+// GitHub closes them when the merge lands. The evidence is the merge.
+func (e *extractor) closeMerged() {
+	for prKey, issues := range e.closes {
+		pr := e.items[prKey]
+		if pr == nil || pr.Status != model.StatusMerged {
+			continue
+		}
+		turn := -1
+		for _, ev := range pr.Evidence {
+			if ev.Via == model.ViaToolResult {
+				turn = ev.Turn
+			}
+		}
+		for _, key := range issues {
+			e.touch(model.KindIssue, "github", key, "", "", model.StatusCompleted, "", turn, model.ViaToolResult, pr.ObservedAt)
+		}
+	}
+}
+
+// plainArgs are the arguments that are not flags: after "--" every word is.
+func plainArgs(args []string) []string {
+	var out []string
+	rest := false
+	for _, a := range args {
+		switch {
+		case rest:
+			out = append(out, a)
+		case a == "--":
+			rest = true
+		case !strings.HasPrefix(a, "-"):
+			out = append(out, a)
+		}
+	}
+	return out
+}
+
+var (
+	rePyAssign = regexp.MustCompile(`(?m)\b([A-Za-z_]\w*)\s*=\s*['"]([^'"\n]+)['"]`)
+	rePyOpen   = regexp.MustCompile(`\bopen\(\s*(?:['"]([^'"\n]+)['"]|([A-Za-z_]\w*))\s*,\s*['"][wa]`)
+)
+
+// fileEdits records the files a successful shell command wrote: `sed -i`
+// targets, `>`/`>>` redirections, `tee` and a Python heredoc's
+// open(..., "w"). It under-detects: anything with a variable, a glob or a
+// path outside the project is left out.
+func (e *extractor) fileEdits(ti int, inv shellcmd.Invocation, at time.Time) {
+	w := inv.Words
+	for i, x := range w {
+		switch {
+		case (x == ">" || x == ">>") && i+1 < len(w):
+			e.shellFile(ti, w[i+1], at)
+		case strings.HasPrefix(x, ">>") && len(x) > 2:
+			e.shellFile(ti, x[2:], at)
+		case strings.HasPrefix(x, ">") && len(x) > 1 && x[1] != '&':
+			e.shellFile(ti, x[1:], at)
+		}
+	}
+	switch inv.Name() {
+	case "tee":
+		for _, f := range plainArgs(w[1:]) {
+			e.shellFile(ti, f, at)
+		}
+	case "sed":
+		inPlace, script, files := false, false, []string{}
+		for i := 1; i < len(w); i++ {
+			a := w[i]
+			switch {
+			case a == "--in-place" || strings.HasPrefix(a, "--in-place="):
+				inPlace = true
+			case a == "-e" || a == "-f" || a == "--expression" || a == "--file":
+				script = true
+				i++
+			case strings.HasPrefix(a, "-") && !strings.HasPrefix(a, "--") && len(a) > 1:
+				if strings.Contains(a[1:], "i") {
+					inPlace = true
+				}
+			case strings.HasPrefix(a, "-"):
+			case !script:
+				script = true // the first plain word is the script
+			default:
+				files = append(files, a)
+			}
+		}
+		if inPlace {
+			for _, f := range files {
+				e.shellFile(ti, f, at)
+			}
+		}
+	}
+}
+
+// pyWrites records files a Python heredoc in a successful command opened
+// for writing, by literal path or a variable set to one.
+func (e *extractor) pyWrites(ti int, cmd string, at time.Time) {
+	if !strings.Contains(cmd, "python") || !strings.Contains(cmd, "open(") {
+		return
+	}
+	vars := map[string]string{}
+	for _, m := range rePyAssign.FindAllStringSubmatch(cmd, -1) {
+		vars[m[1]] = m[2]
+	}
+	for _, m := range rePyOpen.FindAllStringSubmatch(cmd, -1) {
+		f := m[1]
+		if f == "" {
+			f = vars[m[2]]
+		}
+		if f != "" {
+			e.shellFile(ti, f, at)
+		}
+	}
+}
+
+// shellFile records one file a shell command wrote, if it is a plain path
+// inside the project.
+func (e *extractor) shellFile(ti int, f string, at time.Time) {
+	if f == "" || f == "." || strings.ContainsAny(f, "$*?{}[]~`'\"<>|&") || strings.HasPrefix(f, "/dev/") || strings.HasSuffix(f, "/") {
+		return
+	}
+	rel, ok := relPath(e.s.Ref.ProjectKey, f)
+	if !ok || rel == "." || rel == ".." || strings.HasPrefix(rel, "../") || redact.IsSecretFile(rel) {
+		return
+	}
+	e.touch(model.KindFile, "", rel, path.Base(rel), "", model.StatusUpdated, "", ti, model.ViaToolResult, at)
 }

@@ -84,17 +84,86 @@ func TestModelInputIsTheRedactedConversationOnly(t *testing.T) {
 	}
 }
 
-func TestModelInputCutsTheMiddleOfLongSessions(t *testing.T) {
+// recorder answers every call and keeps what it was asked.
+type recorder struct {
+	systems, inputs []string
+}
+
+func (r *recorder) Name() string { return "fake:small" }
+func (r *recorder) JSON(_ context.Context, system, user string, _ map[string]any) ([]byte, error) {
+	r.systems, r.inputs = append(r.systems, system), append(r.inputs, user)
+	n := len(r.inputs)
+	return []byte(answer(modelAnswer{Title: fmt.Sprintf("answer %d", n), Narrative: strings.Repeat(fmt.Sprintf("Work of call %d. ", n), 20), Goals: []string{"g"}})), nil
+}
+
+// A conversation longer than MaxInputChars is not cut: it is summarized in
+// consecutive parts, the part summaries are combined until they fit, and the
+// final call writes the summary from them, with the recorded facts.
+func TestLongSessionsAreSummarizedInPartsThenCombined(t *testing.T) {
 	s := chatty()
+	users := 0
 	for i := 0; i < 200; i++ {
 		s.Turns = append(s.Turns, s.Turns[0], s.Turns[1])
 	}
-	fm := &fakeModel{answer: answer(modelAnswer{Title: "t"})}
-	if _, err := Build(s, Options{Model: &ModelOptions{Client: fm, MaxInputChars: 3000}}); err != nil {
+	for _, t := range s.Turns {
+		if t.Role == "user" && strings.TrimSpace(t.Text) != "" {
+			users++
+		}
+	}
+	rec := &recorder{}
+	p, err := Build(s, Options{Model: &ModelOptions{Client: rec, MaxInputChars: 3000}})
+	if err != nil {
 		t.Fatal(err)
 	}
-	if len(fm.input) > 4000 || !strings.Contains(fm.input, "middle of the conversation is omitted") || strings.Contains(fm.input, fakeSecret()) {
-		t.Errorf("long input is cut and still redacted (%d bytes)", len(fm.input))
+	parts, combines, seen := 0, 0, 0
+	for i, in := range rec.inputs {
+		if strings.Contains(in, fakeSecret()) {
+			t.Errorf("call %d is not redacted", i)
+		}
+		switch {
+		case strings.HasPrefix(in, "<conversation part="):
+			parts++
+			seen += strings.Count(in, "[developer]")
+		case strings.HasPrefix(in, "<part_summaries>"):
+			combines++
+		}
+	}
+	last := len(rec.inputs) - 1
+	if parts < 2 || parts > maxChunks {
+		t.Errorf("the conversation goes in 2..%d parts, got %d", maxChunks, parts)
+	}
+	if seen != users {
+		t.Errorf("every message is in some part: %d of %d", seen, users)
+	}
+	if combines == 0 {
+		t.Error("part summaries longer than the limit are combined first")
+	}
+	if !strings.Contains(rec.systems[last], "too long to send whole") || !strings.Contains(rec.inputs[last], "<part_summaries>") ||
+		!strings.Contains(rec.inputs[last], "Commands run:") || len([]rune(rec.inputs[last])) > 4500 {
+		t.Errorf("the final call works from the part summaries and the facts, within the limit: %d runes", len([]rune(rec.inputs[last])))
+	}
+	if p.Summary.Title != fmt.Sprintf("answer %d", last+1) || p.Summary.SummarizedBy != "fake:small" {
+		t.Errorf("the final answer is the summary: %+v", p.Summary)
+	}
+}
+
+// The model sees the recorded pull requests and issues, so a long session's
+// achievements do not depend on the conversation alone.
+func TestModelInputListsRecordedWorkItems(t *testing.T) {
+	s := chatty()
+	s.Turns = append(s.Turns, model.Turn{Role: "assistant", Text: "Opening the PR.", Tools: []model.ToolCall{{
+		Name: "Bash", Kind: model.ToolShell, Command: "gh pr create --title \"feat: add login\" --body 'Closes #4'",
+		Result: model.ToolResult{Known: true, OK: true, Text: "https://github.com/example/demo/pull/9\n"},
+	}}})
+	rec := &recorder{}
+	if _, err := Build(s, Options{Model: &ModelOptions{Client: rec}}); err != nil {
+		t.Fatal(err)
+	}
+	in := rec.inputs[0]
+	for _, want := range []string{"Recorded work items", "pull_request example/demo#9 (created): feat: add login", "issue github:example/demo#4 (mentioned)"} {
+		if !strings.Contains(in, want) {
+			t.Errorf("the model input lacks %q:\n%s", want, in)
+		}
 	}
 }
 

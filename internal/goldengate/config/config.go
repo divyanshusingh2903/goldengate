@@ -56,7 +56,8 @@ type Summarize struct {
 	Model string `toml:"model,omitempty"`
 	// BaseURL overrides the provider's endpoint (not used by anthropic).
 	BaseURL string `toml:"base_url,omitempty"`
-	// MaxInputChars bounds the conversation sent per session (default 24000).
+	// MaxInputChars bounds the conversation sent per model call (default
+	// 24000); a longer session is summarized in parts.
 	MaxInputChars int `toml:"max_input_chars,omitempty"`
 	// Length is how long a narrative a model may write per session: "short",
 	// "standard" (default) or "detailed". The heuristic writes none.
