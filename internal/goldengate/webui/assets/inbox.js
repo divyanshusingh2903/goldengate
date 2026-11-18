@@ -147,7 +147,7 @@ function open(app, main, it) {
   const title = it.Title || it.ID;
   // an edit left open when the drawer closes is cancelled, so its form is not kept
   const editing = { id: "" };
-  const d = drawer(title, [tag(it.Source), badge(it)], () => {
+  const d = drawer(title, [tag(it.Source, { name: true }), badge(it)], () => {
     if (editing.id) api("/api/edit/finish", { ID: editing.id, Cancel: true }).catch(() => {});
   });
   d.editing = editing;
