@@ -13,7 +13,7 @@ _Last updated 2026-11-17. Update this section whenever a row in the queue change
 
 **Progress:** 30 of 31 scheduled issues done (plus 2 stretch). Phases 1 (Foundations), 2 (Per-agent access) and 3 (Inbox and curation) are complete.
 **Bug fixes from the end-to-end test** (#112–#124, PRs #125–#137) are all done; the report is `docs/TEST-REPORT.md`, with small observations left for later.
-**Web UI restyle** (#139, PR #141) and its follow-ups #140 (state database concurrent first open, PR #142) and #143 (Receipts leaves the counts stale, PR #144) are done and #146 (Projects uses the width, tool logos, PR #147) are done; #148 (a review you can review, a readable Preview, PR #149) is done.
+**Web UI restyle** (#139, PR #141) and its follow-ups are done: #140 (PR #142), #143 (PR #144), #146 (PR #147) and #148 (PR #149). #151 (a new assistant token from the Agents screen) is in progress.
 **Nothing else is next:** every issue of the queue is done except #40. **Blocked:** #40 Share-link import: the #39 spike recommends not building it; whether to close it as not planned is the user's call. Phase 4 (work items, rules and automation) is complete: #21, #35, #36, #45, #31, #33, #34, #32 and #22.
 
 ### Done
@@ -207,6 +207,7 @@ The web UI takes the finalized app design (sidebar, page heads, framed cards, dr
 | R3 | #143 Web UI: Receipts leaves the inbox and send counts stale | S | | Nov 18 | done | #144 |
 | R4 | #146 Web UI: Projects uses the width; tool logos in place of letter codes | M | #139 | Nov 18 | done | #147 |
 | R5 | #148 Web UI: a review you can review, a readable Preview, real review progress | L | #146 | Nov 18 | done | #149 |
+| R6 | #151 Web UI: a new assistant token from the Agents screen | S | | Nov 18 | in progress | |
 
 ## Log
 
