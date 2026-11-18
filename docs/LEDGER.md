@@ -206,7 +206,7 @@ The web UI takes the finalized app design (sidebar, page heads, framed cards, dr
 | R2 | #140 State database: concurrent first open fails with SQLITE_BUSY | S | | Nov 18 | done | #142 |
 | R3 | #143 Web UI: Receipts leaves the inbox and send counts stale | S | | Nov 18 | done | #144 |
 | R4 | #146 Web UI: Projects uses the width; tool logos in place of letter codes | M | #139 | Nov 18 | done | #147 |
-| R5 | #148 Web UI: a review you can review, a readable Preview, real review progress | L | #146 | Nov 18 | in progress | |
+| R5 | #148 Web UI: a review you can review, a readable Preview, real review progress | L | #146 | Nov 18 | in review | |
 
 ## Log
 
@@ -291,3 +291,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-17: Receipts tested with real automatic sends (trust auto on one project, an approve rule on another, `sync --auto`): the receipt, its reasons, the Overview timeline and Retract all work, and a first load on a new state directory succeeds. Found #143: Receipts never refreshes the sidebar counts.
 - 2026-11-17: #143 done (#144): Receipts refreshes the sidebar counts and the send button; a test checks every screen that shows or changes what waits. Rechecked every web UI screen on main against the sandbox server. The roadmap page has a Testing and polish section with the 13 test bugs, #139, #140 and #143.
 - 2026-11-17: #146 implemented: Projects is a wide screen (up to 1880px) with the list taking 5/11 of it and the chosen project's cards beside it, rows led by the folder name with the parent folder (or "worktree of …") beneath, and long names breaking at hyphens. Tools show their Simple Icons logos (CC0) in the text colour, Claude's in its terracotta, named for screen readers; an unknown tool shows its name. Checked at 1920, 1280 and 375px, light and dark, with nine extra synthetic folders and a worktree.
+- 2026-11-17: #148 implemented: the plan carries every session it sends (`PlanInfo.Items`, from `Batch.Items`, with new or changed and the rule's reason), and planning reports each queued session (`RunOpts.OnQueued`, `SyncQueued`) so the review counts n of total. The web review lists the sessions; each opens in a wide drawer as a readable summary (narrative, asked for, done, outcomes, left open, work items, files, tools) with the exact JSON as a folding, coloured tree, redactions marked in both, and Keep local re-runs the review without it. Preview uses the same view. Checked at 1440 and 375px, light and dark, with a planted AWS key and a synthetic model-written summary.

@@ -146,6 +146,7 @@ const (
 	SyncFinished
 	SyncPrepared // one more session read and redacted (before the plan is complete)
 	SyncProgress // Sessions more of Project reached the server
+	SyncQueued   // one more session queued to be read and summarized (before the plan is complete)
 )
 
 // SyncEvent is one progress report.
@@ -160,6 +161,20 @@ type SyncEvent struct {
 	Title, By string
 	// SyncPlanned: the whole plan, so the review needs no separate pass.
 	Plan *PlanInfo
+}
+
+// PlanItem is one session of a plan, as the review shows it.
+type PlanItem struct {
+	Source, ID string
+	Project    string // the folder or chat grouping, as sent
+	Title      string // redacted, as sent
+	Updated    time.Time
+	Status     string // new | changed
+	// Why says why trust and rules send it; empty when sending the reviewed
+	// plan is the approval.
+	Why     string
+	Payload model.SessionPayload
+	JSON    string // the exact bytes that would go on the wire, indented
 }
 
 // ProjectPlan is what a sync would do for one project.
@@ -188,6 +203,8 @@ type PlanInfo struct {
 	// excluded; they are in no plan.
 	Approving int
 	Excluded  int
+	// Items lists every session the plan sends, in order.
+	Items []PlanItem
 }
 
 // SyncOpts narrows a plan and its sync.

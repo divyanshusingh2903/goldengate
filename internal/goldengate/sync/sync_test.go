@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -427,5 +428,49 @@ func TestBatchByProject(t *testing.T) {
 	}
 	if n, _ := e.st.Count(context.Background()); n != 3 || len(sink.got) != 3 {
 		t.Errorf("state=%d sent=%d", n, len(sink.got))
+	}
+}
+
+// A review shows how far it has got ("n of total") and, for every session it
+// would send, whether an earlier version is already on the server (#148).
+func TestPlanReportsQueuedAndChangedItems(t *testing.T) {
+	e := setup(t, selection.Policy{Allow: []string{"~/code/app"}},
+		sess("a", "/home/u/code/app", "build the widget"),
+		sess("b", "/home/u/code/app", "fix the login redirect"),
+	)
+	ctx := context.Background()
+	var mu sync.Mutex
+	queued, planned := 0, 0
+	opts := gsync.RunOpts{
+		OnQueued:  func() { queued++ },
+		OnPlanned: func(*model.SessionPayload) { mu.Lock(); planned++; mu.Unlock() },
+	}
+	b, _, err := e.s.Plan(ctx, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if queued != 2 || planned != 2 || b.Len() != 2 {
+		t.Fatalf("queued=%d planned=%d batch=%d, want 2 each", queued, planned, b.Len())
+	}
+	for _, it := range b.Items() {
+		if it.Changed || it.Payload == nil {
+			t.Fatalf("a first plan has only new sessions: %+v", it)
+		}
+	}
+	if err := gsync.Push(ctx, &capture{}, e.st, b, t0); err != nil {
+		t.Fatal(err)
+	}
+
+	// one session goes on: only it is planned again, as changed
+	e.f.sessions[1].Turns[0].Text = "fix the login redirect, and the logout one too"
+	e.f.sessions[1].Ref.SizeBytes = 20
+	queued = 0
+	b, _, err = e.s.Plan(ctx, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	items := b.Items()
+	if queued != 1 || len(items) != 1 || !items[0].Changed || items[0].Payload.SessionID != "b" {
+		t.Fatalf("queued=%d items=%+v, want session b once, changed", queued, items)
 	}
 }

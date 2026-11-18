@@ -301,6 +301,56 @@ progress { width: 100%; height: 8px; appearance: none; border: 1px solid var(--l
 progress::-webkit-progress-bar { background: var(--sunk); }
 progress::-webkit-progress-value { background: var(--orange); }
 progress::-moz-progress-bar { background: var(--orange); }
+/* an indeterminate bar moves, so it never reads as finished */
+progress:not([value]) { background: var(--sunk) linear-gradient(90deg, transparent, var(--orange), transparent) 0 0 / 30% 100% no-repeat; animation: gg-slide 1.4s ease-in-out infinite; }
+progress:not([value])::-webkit-progress-bar { background: transparent; }
+progress:not([value])::-moz-progress-bar { background: transparent; }
+@keyframes gg-slide { from { background-position: -40% 0; } to { background-position: 140% 0; } }
+@media (prefers-reduced-motion: reduce) { progress:not([value]) { animation: none; background-position: 50% 0; } }
+.prog { display: grid; gap: 10px; }
+.prog-line { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 16px; }
+.prog-line .now { min-width: 0; color: var(--dim); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+/* A session as it would be sent: summary, then the exact JSON */
+.sv-tabs { margin-bottom: 14px; }
+.sv { display: grid; gap: 16px; }
+.sv-title { font: 400 1.35rem/1.25 var(--display); letter-spacing: 0.01em; overflow-wrap: anywhere; }
+.sv-abstract { font-size: 1.02rem; max-width: 72ch; }
+.sv-facts { display: flex; flex-wrap: wrap; gap: 8px 28px; padding: 10px 0; border-block: 1px solid var(--line); }
+.sv-facts > div { display: grid; gap: 1px; min-width: 0; }
+.sv-facts .k { font-size: 0.78rem; color: var(--faint); }
+.sv-facts .v { font-weight: 600; overflow-wrap: anywhere; }
+.sv-red { font-size: 0.88rem; color: var(--dim); }
+.sv-sec { display: grid; gap: 6px; max-width: 80ch; }
+.sv-sec h4 { font: 500 0.7rem var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--faint); }
+.sv-sec ul { margin: 0; padding-left: 1.2em; display: grid; gap: 4px; }
+.sv-sec p + p { margin-top: 8px; }
+.sv-sec blockquote { margin: 0; padding: 8px 12px; border-left: 3px solid var(--line); background: var(--sunk); color: var(--dim); white-space: pre-wrap; overflow-wrap: anywhere; max-height: 14em; overflow-y: auto; }
+.sv-files { list-style: none; padding-left: 0 !important; font-size: 0.85rem; }
+.sv-files code, .sv-work code { overflow-wrap: anywhere; }
+.sv-sec details summary { cursor: pointer; color: var(--pacific); font-size: 0.9rem; }
+.sv code { font: 400 0.85em var(--mono); }
+.chip.mono { font-family: var(--mono); font-size: 0.8rem; }
+.jt-bar { margin: 0 0 10px; gap: 8px; }
+.jt { font: 400 0.8rem/1.65 var(--mono); padding: 12px 14px; background: var(--term-bg); border: 1px solid var(--line); overflow-x: auto; }
+.jt summary { cursor: pointer; list-style: none; }
+.jt summary::-webkit-details-marker { display: none; }
+.jt summary::before { content: "▸"; display: inline-block; width: 1.1em; color: var(--faint); }
+.jt details[open] > summary::before { content: "▾"; }
+.jt details[open] > summary .j-size, .jt details[open] > summary .j-close { display: none; }
+.jt details:not([open]) > .j-row:last-child { display: none; }
+.j-kids { padding-left: 1.4em; border-left: 1px dotted var(--line); margin-left: 0.35em; }
+.j-row { padding-left: 1.1em; white-space: pre-wrap; overflow-wrap: anywhere; }
+.j-kids > .j-row, .j-kids > details { padding-left: 0; }
+.j-kids > .j-row { padding-left: 1.1em; }
+.j-key { color: var(--pacific); }
+.j-str { color: var(--cypress); }
+.j-num { color: var(--headland); }
+.j-bool, .j-null { color: var(--twilight); }
+.j-size { color: var(--faint); font-style: italic; }
+.drawer.wide { width: min(820px, 100%); }
+.review-list tr.pick td:first-child { width: 60%; min-width: 16rem; }
+.review-list tr.pick td:nth-child(3) { min-width: 10rem; }
 
 /* Receipts and recent activity: a timeline */
 .tl { list-style: none; margin: 0; padding: 0; }
@@ -380,3 +430,4 @@ thead th.num { font: 500 0.7rem var(--mono); }
 .tokens li > div { min-width: 0; overflow-wrap: anywhere; }
 .tokens small { display: block; color: var(--faint); font-size: 0.8rem; }
 @media (max-width: 760px) { .pitem .tags { display: none; } .pitem .state { min-width: 0; } }
+.drawer .sv-title { display: none; }

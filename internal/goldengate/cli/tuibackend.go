@@ -579,6 +579,19 @@ func planInfo(cfg config.Config, s *gsync.Syncer, batch gsync.Batch, rep gsync.R
 	for _, k := range order {
 		info.Projects = append(info.Projects, tui.ProjectPlan{Label: k, Sessions: counts[k]})
 	}
+	for _, it := range batch.Items() {
+		p := it.Payload
+		body, _ := json.MarshalIndent(p, "", "  ")
+		title, status := p.TitleOnly, "new"
+		if p.Summary != nil {
+			title = p.Summary.Title
+		}
+		if it.Changed {
+			status = "changed"
+		}
+		info.Items = append(info.Items, tui.PlanItem{Source: p.Source, ID: p.SessionID, Project: p.Project, Title: title,
+			Updated: p.UpdatedAt, Status: status, Why: it.Why, Payload: *p, JSON: string(body)})
+	}
 	return info
 }
 
@@ -593,7 +606,15 @@ func (discardSink) Send(context.Context, []*model.SessionPayload) error { return
 // its progress bar moves while a big project uploads.
 const syncStep = 10
 
-func (b *tuiBackend) Sync(ctx context.Context, dry bool, o tui.SyncOpts, emit func(tui.SyncEvent)) error {
+func (b *tuiBackend) Sync(ctx context.Context, dry bool, o tui.SyncOpts, report func(tui.SyncEvent)) error {
+	// Planning reports from its own goroutine and from the summarizer's
+	// workers at once; the caller gets one event at a time.
+	var emitMu sync.Mutex
+	emit := func(ev tui.SyncEvent) {
+		emitMu.Lock()
+		defer emitMu.Unlock()
+		report(ev)
+	}
 	cfg, err := b.a.load()
 	if err != nil {
 		return err
@@ -622,7 +643,9 @@ func (b *tuiBackend) Sync(ctx context.Context, dry bool, o tui.SyncOpts, emit fu
 	var plan *tui.PlanInfo // only when planned now; a reused review was already shown
 	if !reused {
 		var rep gsync.Report
-		batch, rep, err = s.Plan(ctx, gsync.RunOpts{Resummarize: o.Resummarize, Approve: true, OnPlanned: func(p *model.SessionPayload) {
+		batch, rep, err = s.Plan(ctx, gsync.RunOpts{Resummarize: o.Resummarize, Approve: true, OnQueued: func() {
+			emit(tui.SyncEvent{Kind: tui.SyncQueued, Sessions: 1})
+		}, OnPlanned: func(p *model.SessionPayload) {
 			ev := tui.SyncEvent{Kind: tui.SyncPrepared, Sessions: 1, Project: p.Project, Title: p.TitleOnly, By: "heuristic"}
 			if sm := p.Summary; sm != nil {
 				ev.Title, ev.By = sm.Title, sm.SummarizedBy

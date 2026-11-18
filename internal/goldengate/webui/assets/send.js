@@ -2,9 +2,10 @@
 // every session exactly as a send would, and nothing leaves the computer.
 
 import { api, events } from "/assets/api.js";
-import { h, clear, plural, put, fill, head, card, cardBody, note, empty, table } from "/assets/dom.js";
+import { h, clear, plural, put, fill, head, card, cardBody, note, empty, table, tag, when, ask, drawer } from "/assets/dom.js";
+import { sessionView } from "/assets/session.js";
 
-const PLANNED = 0, PROJECT_START = 1, PROJECT_DONE = 2, PROJECT_FAILED = 3, FINISHED = 4, PREPARED = 5, PROGRESS = 6;
+const PLANNED = 0, PROJECT_START = 1, PROJECT_DONE = 2, PROJECT_FAILED = 3, FINISHED = 4, PREPARED = 5, PROGRESS = 6, QUEUED = 7;
 
 // run starts a dry or real send and feeds its events to on(); it resolves to
 // the error text ("" when it went well).
@@ -39,19 +40,30 @@ export async function render(main, app) {
 }
 
 async function review(box, app, resummarize) {
-  const prepared = h("p", { class: "dim" }, "Reading and redacting your sessions…");
+  // The bar counts sessions read and summarized out of those queued so far;
+  // listing is quick next to summarizing, so the total settles at once.
+  const count = h("strong", null, "Finding new and changed sessions…");
+  const now = h("span", { class: "now small" });
+  const bar = h("progress", { "aria-label": "Sessions read and summarized" });
   let runID = "";
   const cancel = h("button", { type: "button", onclick: () => { if (runID) api(`/api/sync/${runID}/cancel`, {}).catch(() => {}); } }, "Cancel");
   fill(box,
     stepper(1),
-    card(null, null, cardBody(prepared, h("progress", { "aria-label": "Reading sessions" })), h("div", { class: "card-foot" }, cancel)),
+    card(null, null, cardBody(h("div", { class: "prog" }, h("div", { class: "prog-line" }, count, now), bar)), h("div", { class: "card-foot" }, cancel)),
     note("Nothing leaves this computer during the review."));
   let plan = null;
-  let n = 0;
+  let queued = 0, done = 0;
+  const update = () => {
+    if (!queued) return;
+    bar.max = queued;
+    bar.value = Math.min(done, queued);
+    count.textContent = `Read and summarized ${done} of ${plural(queued, "session")}`;
+  };
   let error = "";
   try {
     error = await run(true, resummarize, (e) => {
-      if (e.Kind === PREPARED) { n++; prepared.textContent = `Reading and redacting your sessions… ${n} done (${e.Title || "untitled"})`; }
+      if (e.Kind === QUEUED) { queued += e.Sessions || 1; update(); }
+      if (e.Kind === PREPARED) { done++; now.textContent = e.Title ? `Last: ${e.Title}` : ""; update(); }
       if (e.Kind === PLANNED && e.Plan) plan = e.Plan;
     }, (id) => { runID = id; });
   } catch (e) {
@@ -78,12 +90,37 @@ function showPlan(box, app, plan, resummarize) {
   if (plan.Summarizer) facts.push(`Summaries are written by ${plan.Summarizer}: the redacted conversations of the sessions being sent go to that model.`);
 
   const projects = plan.Projects || [];
+  const items = plan.Items || [];
+  let listing;
+  if (items.length) {
+    const groups = new Map();
+    for (const it of items) groups.set(it.Project, [...(groups.get(it.Project) || []), it]);
+    const rows = [];
+    for (const [project, its] of groups) {
+      rows.push(h("tr", { class: "group" }, h("td", { colspan: "4" }, project, h("span", { class: "faint" }, ` · ${plural(its.length, "session")}`))));
+      for (const it of its) {
+        const openIt = () => openItem(box, app, it, resummarize);
+        rows.push(h("tr", { class: "pick", onclick: openIt },
+          h("td", null, h("span", { class: "title-cell" }, tag(it.Source), h("span", null, it.Title || it.ID,
+            h("small", null, it.Payload && it.Payload.summary && it.Payload.summary.abstract ? it.Payload.summary.abstract : (when(it.Updated) ? `updated ${when(it.Updated)}` : ""))))),
+          h("td", { class: "w" }, it.Status === "changed" ? h("span", { class: "badge warn" }, "▲ changed") : h("span", { class: "badge good" }, "● new")),
+          h("td", { class: "dim small" }, it.Why || "you approve it by sending"),
+          h("td", { class: "w" }, h("button", { type: "button", class: "ghost sm", onclick: (e) => { e.stopPropagation(); openIt(); } }, "Read"))));
+      }
+    }
+    listing = h("div", { class: "tbl review-list" }, h("table", null,
+      h("thead", null, h("tr", null, h("th", null, "Session"), h("th", null, "State"), h("th", null, "Sent because"), h("th", { class: "w" }, h("span", { class: "skip" }, "Read")))),
+      h("tbody", null, rows)));
+  } else if (projects.length) {
+    listing = table(["Project", h("th", { class: "num" }, "Sessions to send")], projects.map((p) => h("tr", null, h("td", null, p.Label), h("td", { class: "num" }, String(p.Sessions)))));
+  } else {
+    listing = empty("✓", null, "Everything you share is already on the server, or nothing is shared.");
+  }
   fill(box,
     stepper(1),
-    card(plan.Sessions ? `${plural(plan.Sessions, "session")} ready` : "Nothing to send", null,
-      projects.length
-        ? table(["Project", h("th", { class: "num" }, "Sessions to send")], projects.map((p) => h("tr", null, h("td", null, p.Label), h("td", { class: "num" }, String(p.Sessions)))))
-        : empty("✓", null, "Everything you share is already on the server, or nothing is shared."),
+    card(plan.Sessions ? `${plural(plan.Sessions, "session")} ready` : "Nothing to send",
+      items.length ? h("span", { class: "faint small" }, "Open a session to read exactly what is sent") : null,
+      listing,
       facts.length ? h("div", { class: "card-body" }, h("ul", { class: "dim small" }, facts.map((f) => h("li", null, f)))) : null,
       plan.Stale && !resummarize ? h("div", { class: "card-body" },
         h("p", { class: "warn" }, `${plural(plan.Stale, "sent session")} still ${plan.Stale === 1 ? "has a" : "have"} rule-based ${plan.Stale === 1 ? "summary" : "summaries"}.`),
@@ -93,6 +130,33 @@ function showPlan(box, app, plan, resummarize) {
         h("button", { type: "button", onclick: () => review(box, app, resummarize) }, "Review again"),
         plan.Sessions ? h("button", { type: "button", class: "primary", onclick: () => sendNow(box, app, plan, resummarize) }, `Send ${plural(plan.Sessions, "session")}`) : null)),
     note("Only the summaries reviewed here leave. Raw transcripts stay on this computer."));
+}
+
+// openItem shows one session of the review as it will be sent, and lets you
+// keep it on this computer instead; the review then runs again without it.
+function openItem(box, app, it, resummarize) {
+  const d = drawer(it.Title || it.ID, [tag(it.Source, { name: true }), it.Status === "changed" ? h("span", { class: "badge warn" }, "▲ changed since it was last sent") : h("span", { class: "badge good" }, "● new")], null, { wide: true });
+  put(d.body,
+    h("p", { class: "hint" }, `${it.Project}${it.Why ? " · sent because " + it.Why : ""}`),
+    it.Payload ? sessionView(it.Payload, it.JSON) : h("pre", null, it.JSON || ""));
+  put(d.foot,
+    h("button", {
+      type: "button",
+      onclick: async () => {
+        if (!await ask("Keep this session local?", [`"${it.Title || it.ID}" will not be sent, now or later, until you undo it in the inbox.`], "Keep local")) return;
+        try {
+          await api("/api/inbox/decide", { Items: [{ Source: it.Source, ID: it.ID, Project: it.Project, Title: it.Title }], Decision: "exclude" });
+          app.say(`kept "${it.Title || it.ID}" on this computer`);
+        } catch (e) {
+          app.say(String(e.message || e), true);
+          return;
+        }
+        d.close();
+        await app.refresh();
+        await review(box, app, resummarize);
+      },
+    }, "Keep local"),
+    h("button", { type: "button", class: "primary", onclick: () => d.close() }, "Done"));
 }
 
 async function sendNow(box, app, plan, resummarize) {

@@ -6,6 +6,7 @@ import (
 	"io/fs"
 	"net/http"
 	"regexp"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -459,5 +460,27 @@ func TestThePagesFontsAndMarkAreServed(t *testing.T) {
 		if err != nil || !strings.Contains(string(lic), "SIL Open Font License") {
 			t.Errorf("%s has no licence beside it: %v", face, err)
 		}
+	}
+}
+
+// The send screen numbers sync events as the backend does; a new kind added
+// in Go must be added to the page too, or its progress stops counting (#148).
+func TestSendScreenKnowsTheSyncEventKinds(t *testing.T) {
+	b, err := fs.ReadFile(webui.AssetFS, "assets/send.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	js := string(b)
+	for name, kind := range map[string]tui.SyncEventKind{
+		"PLANNED": tui.SyncPlanned, "PROJECT_START": tui.SyncProjectStart, "PROJECT_DONE": tui.SyncProjectDone,
+		"PROJECT_FAILED": tui.SyncProjectFailed, "FINISHED": tui.SyncFinished, "PREPARED": tui.SyncPrepared,
+		"PROGRESS": tui.SyncProgress, "QUEUED": tui.SyncQueued,
+	} {
+		if !regexp.MustCompile(`\b` + name + ` = ` + strconv.Itoa(int(kind)) + `\b`).MatchString(js) {
+			t.Errorf("send.js must define %s = %d", name, kind)
+		}
+	}
+	if !strings.Contains(js, "plan.Items") || !strings.Contains(js, "sessionView(") {
+		t.Error("the review must list the plan's sessions and open each as it will be sent")
 	}
 }
