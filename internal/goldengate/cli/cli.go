@@ -30,11 +30,15 @@ import (
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/selection"
 	gsync "github.com/divyanshusingh2903/goldengate/internal/goldengate/sync"
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/tui"
+	"github.com/divyanshusingh2903/goldengate/internal/utils/buildver"
 	"github.com/divyanshusingh2903/goldengate/internal/utils/pathutil"
 )
 
-// Version is set at build time.
+// Version is set at build time with -ldflags -X; when it is not, it is the
+// module version embedded by `go install`.
 var Version = "dev"
+
+func init() { Version = buildver.Resolve(Version) }
 
 // Deps are the command tree's external dependencies.
 type Deps struct {

@@ -22,10 +22,14 @@ import (
 	"github.com/divyanshusingh2903/goldengate/internal/goldengatebridge/server"
 	"github.com/divyanshusingh2903/goldengate/internal/goldengatebridge/server/auth"
 	"github.com/divyanshusingh2903/goldengate/internal/goldengatebridge/server/store"
+	"github.com/divyanshusingh2903/goldengate/internal/utils/buildver"
 )
 
-// Version is set at build time.
+// Version is set at build time with -ldflags -X; when it is not, it is the
+// module version embedded by `go install`.
 var Version = "dev"
+
+func init() { Version = buildver.Resolve(Version) }
 
 // Deps are the command tree's external dependencies.
 type Deps struct {

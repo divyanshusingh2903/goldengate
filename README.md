@@ -10,7 +10,7 @@
   <a href="https://github.com/divyanshusingh2903/goldengate/actions/workflows/ci.yml"><img src="https://github.com/divyanshusingh2903/goldengate/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-C0362C" alt="License: Apache-2.0"></a>
   <img src="https://img.shields.io/badge/go-1.26-1F5E80" alt="Go 1.26">
-  <img src="https://img.shields.io/badge/version-1.0.1-2D6A4A" alt="Version 1.0.1">
+  <img src="https://img.shields.io/badge/version-1.1.2-2D6A4A" alt="Version 1.1.2">
 </p>
 
 <p align="center">
@@ -25,14 +25,14 @@ Let a remote AI assistant know what you have been working on in your coding tool
 - `goldengate` (laptop): reads your local session history, applies your choices of what is shared and what is blocked, redacts and summarizes, and sends to your own server.
 - `goldengatebridge` (server you run): stores the summaries and serves them read-only over MCP (streamable HTTP, stateless JSON).
 
-Version 1.0.1. Sources: Claude Code, Codex, OpenCode, Cursor, and claude.ai / ChatGPT data exports. The server is published as a Docker image (below); other release packaging is on the roadmap in [DESIGN.md](DESIGN.md). See [SECURITY.md](SECURITY.md) before connecting an assistant.
+Version 1.1.2. Sources: Claude Code, Codex, OpenCode, Cursor, and claude.ai / ChatGPT data exports. The server is published as a Docker image (below); other release packaging is on the roadmap in [DESIGN.md](DESIGN.md). See [SECURITY.md](SECURITY.md) before connecting an assistant.
 
 ## Install
 
-The server is a versioned Docker image, `ghcr.io/divyanshusingh2903/goldengatebridge` (pin `:1.0.1`, or `:1.0` / `:1` to follow patch / minor releases, or `:latest`). The laptop app is one Go program (Go 1.26 or later):
+The server is a versioned Docker image, `ghcr.io/divyanshusingh2903/goldengatebridge` (pin `:1.1.2`, or `:1.1` / `:1` to follow patch / minor releases, or `:latest`). The laptop app is one Go program (Go 1.26 or later):
 
 ```bash
-go install github.com/divyanshusingh2903/goldengate/cmd/goldengate@v1.0.1
+go install github.com/divyanshusingh2903/goldengate/cmd/goldengate@v1.1.2
 ```
 
 ## Quickstart (about ten minutes)
@@ -52,7 +52,7 @@ go install github.com/divyanshusingh2903/goldengate/cmd/goldengate@v1.0.1
      ghcr.io/divyanshusingh2903/goldengatebridge:latest
    ```
 
-   Images are versioned: pin `:1.0.1` (or `:1.0`) for a server you do not want to change under you; `:latest` follows the newest release and `:edge` follows `main`. It is built by `.github/workflows/release-image.yml`: pushing a tag `vX.Y.Z` publishes that version for amd64 and arm64. Run one container per database.
+   Images are versioned: pin `:1.1.2` (or `:1.1`) for a server you do not want to change under you; `:latest` follows the newest release and `:edge` follows `main`. It is built by `.github/workflows/release-image.yml`: pushing a tag `vX.Y.Z` publishes that version for amd64 and arm64. Run one container per database.
 
 2. **Connect your laptop.** Paste the admin secret when asked (it is never written to disk):
 
