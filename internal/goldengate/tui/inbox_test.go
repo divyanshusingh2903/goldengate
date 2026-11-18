@@ -210,6 +210,11 @@ func TestInboxHoldsASessionWhoseEditNeedsReview(t *testing.T) {
 	h.contains("edit needs review", "This session changed after you edited its summary. e: edit again · K: keep your version · D: use the new one")
 	h.checkGeometry(120, 30)
 	h.golden("inbox_conflict")
+	h.key("a") // approving does not release a held session (#119)
+	if len(be.inboxDecs) != 0 {
+		t.Fatalf("a must not record an approval for a held session: %v", be.inboxDecs)
+	}
+	h.contains("Held: this session changed after you edited its summary")
 	h.key("K")
 	if len(be.inboxDecs) != 1 || be.inboxDecs[0] != "keep-edit:s-conf" {
 		t.Fatalf("K keeps the edit: %v", be.inboxDecs)

@@ -180,6 +180,49 @@ func oldFlagNames(c *cobra.Command) {
 
 // autoReport is the one line an unattended sync prints: what it sent and
 // what it left for the user. Counts only.
+// printSyncReport writes what an interactive sync did.
+func printSyncReport(w io.Writer, rep gsync.Report, dry bool, summarizer func() string) {
+	verb := "sent"
+	if dry {
+		verb = "would be sent (dry run)"
+	}
+	fmt.Fprintf(w, "%d sessions seen, %d not selected, %d unchanged, %d %s, %d warnings\n",
+		rep.Seen, rep.NotSelected, rep.Unchanged, rep.Planned, verb, rep.Warnings)
+	if len(rep.Redactions) > 0 {
+		kinds := make([]string, 0, len(rep.Redactions))
+		for k, n := range rep.Redactions {
+			kinds = append(kinds, fmt.Sprintf("%s=%d", k, n))
+		}
+		sort.Strings(kinds)
+		fmt.Fprintf(w, "redactions: %s\n", strings.Join(kinds, " "))
+	}
+	if n := len(rep.Auto); n > 0 && !dry {
+		fmt.Fprintf(w, "%d of them were sent by your projects' trust level and rules, without asking: receipt %s (`goldengate receipts show %s`)\n", n, rep.Receipt, rep.Receipt)
+	}
+	if rep.RuleExcluded > 0 {
+		fmt.Fprintf(w, "%d sessions are kept back by an exclude rule (see `goldengate rules list`)\n", rep.RuleExcluded)
+	}
+	if rep.Suggested+rep.NewGroupings > 0 {
+		fmt.Fprintf(w, "%d waiting sessions are approved by your rules: `goldengate inbox approve --suggested`\n", rep.Suggested+rep.NewGroupings)
+	}
+	if rep.Pending > 0 {
+		fmt.Fprintf(w, "%d sessions wait in the inbox and were not sent: see them with `goldengate inbox`, approve with `goldengate inbox approve --all`, or send them now with `goldengate sync --approve`\n", rep.Pending)
+	}
+	if rep.Conflicts > 0 {
+		fmt.Fprintf(w, "%d edited sessions changed after your edit and are held until you decide: `goldengate sessions list` shows them; `goldengate sessions edit <id>` edits again (or --keep your version, --discard it for the new summary)\n", rep.Conflicts)
+	}
+	if rep.Refiled > 0 {
+		fmt.Fprintf(w, "%d sent sessions re-sent as they were, under their project's current name and id\n", rep.Refiled)
+	}
+	if rep.Resummarized > 0 {
+		fmt.Fprintf(w, "%d sent sessions re-summarized by %s\n", rep.Resummarized, summarizer())
+	}
+	if rep.Stale > 0 {
+		fmt.Fprintf(w, "%d sent sessions still have summaries not written by %s with the current settings; `goldengate sync --resummarize` upgrades them\n",
+			rep.Stale, summarizer())
+	}
+}
+
 func autoReport(rep gsync.Report, dry bool) string {
 	sent := len(rep.Auto) + len(rep.Unattended)
 	other := rep.Planned - sent // re-filed or re-summarized sessions: already on the server
@@ -279,42 +322,7 @@ func (a *app) syncCmd() *cobra.Command {
 				return nil
 			}
 			if !quiet {
-				verb := "sent"
-				if dry {
-					verb = "would be sent (dry run)"
-				}
-				fmt.Fprintf(a.Stderr, "%d sessions seen, %d not selected, %d unchanged, %d %s, %d warnings\n",
-					rep.Seen, rep.NotSelected, rep.Unchanged, rep.Planned, verb, rep.Warnings)
-				if len(rep.Redactions) > 0 {
-					kinds := make([]string, 0, len(rep.Redactions))
-					for k, n := range rep.Redactions {
-						kinds = append(kinds, fmt.Sprintf("%s=%d", k, n))
-					}
-					sort.Strings(kinds)
-					fmt.Fprintf(a.Stderr, "redactions: %s\n", strings.Join(kinds, " "))
-				}
-				if n := len(rep.Auto); n > 0 && !dry {
-					fmt.Fprintf(a.Stderr, "%d of them were sent by your projects' trust level and rules, without asking: receipt %s (`goldengate receipts show %s`)\n", n, rep.Receipt, rep.Receipt)
-				}
-				if rep.RuleExcluded > 0 {
-					fmt.Fprintf(a.Stderr, "%d sessions are kept back by an exclude rule (see `goldengate rules list`)\n", rep.RuleExcluded)
-				}
-				if rep.Suggested+rep.NewGroupings > 0 {
-					fmt.Fprintf(a.Stderr, "%d waiting sessions are approved by your rules: `goldengate inbox approve --suggested`\n", rep.Suggested+rep.NewGroupings)
-				}
-				if rep.Pending > 0 {
-					fmt.Fprintf(a.Stderr, "%d sessions wait in the inbox and were not sent: see them with `goldengate inbox`, approve with `goldengate inbox approve --all`, or send them now with `goldengate sync --approve`\n", rep.Pending)
-				}
-				if rep.Refiled > 0 {
-					fmt.Fprintf(a.Stderr, "%d sent sessions re-sent as they were, under their project's current name and id\n", rep.Refiled)
-				}
-				if rep.Resummarized > 0 {
-					fmt.Fprintf(a.Stderr, "%d sent sessions re-summarized by %s\n", rep.Resummarized, s.Summarizer.Name())
-				}
-				if rep.Stale > 0 {
-					fmt.Fprintf(a.Stderr, "%d sent sessions still have summaries not written by %s with the current settings; `goldengate sync --resummarize` upgrades them\n",
-						rep.Stale, s.Summarizer.Name())
-				}
+				printSyncReport(a.Stderr, rep, dry, func() string { return s.Summarizer.Name() })
 			}
 			return nil
 		},

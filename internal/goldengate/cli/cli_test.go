@@ -13,6 +13,7 @@ import (
 
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/adapters"
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/adapters/claudecode"
+	gsync "github.com/divyanshusingh2903/goldengate/internal/goldengate/sync"
 	"github.com/divyanshusingh2903/goldengate/internal/model"
 )
 
@@ -189,5 +190,15 @@ func TestVersion(t *testing.T) {
 	h := newHarness(t)
 	if err := h.run("version"); err != nil || !strings.HasPrefix(h.out.String(), "goldengate") {
 		t.Fatalf("%v %s", err, h.out.String())
+	}
+}
+
+// The interactive sync report says when edited sessions are held, and how
+// to resolve them (#119).
+func TestSyncReportSaysHeldEdits(t *testing.T) {
+	var b bytes.Buffer
+	printSyncReport(&b, gsync.Report{Seen: 3, Conflicts: 2}, true, func() string { return "rules" })
+	if !strings.Contains(b.String(), "2 edited sessions changed after your edit and are held") || !strings.Contains(b.String(), "goldengate sessions edit") {
+		t.Errorf("report:\n%s", b.String())
 	}
 }
