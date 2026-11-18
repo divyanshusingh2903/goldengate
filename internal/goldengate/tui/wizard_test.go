@@ -177,6 +177,22 @@ func TestWizardBackFromProjects(t *testing.T) {
 	}
 }
 
+// Esc from a preview opened in setup goes back to setup, on the same step (#117).
+func TestWizardPreviewEscReturnsToSetup(t *testing.T) {
+	be := firstRun()
+	h := newHarnessWith(t, be, 100, 30)
+	h.key("enter", "tab", "tab", "enter", "enter") // to projects
+	h.key("enter")
+	if h.m.scr != scrPreview {
+		t.Fatalf("enter opens the preview: %v", h.m.scr)
+	}
+	h.key("esc")
+	if h.m.scr != scrWizard || h.m.wz.step != wizProjects {
+		t.Fatalf("esc must return to setup's projects step, got screen %v step %v", h.m.scr, h.m.wz.step)
+	}
+	h.contains("Setup 4/6")
+}
+
 func TestWizardAt80x24(t *testing.T) {
 	h := newHarnessWith(t, firstRun(), 80, 24)
 	for _, k := range []string{"enter", "tab", "tab", "enter", "enter"} {
