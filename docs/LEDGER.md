@@ -195,6 +195,14 @@ Found on 2026-11-17 by driving the TUI, the web UI and the CLI against a local s
 | B12 | #123 Web UI settings: wrong API key store label | S | | Nov 17 | done | #136 |
 | B13 | #124 UI words: ingest/read token, "sent" for shared, hook text | S | | Nov 17 | done | #137 |
 
+### Web UI restyle
+
+The web UI takes the finalized app design (sidebar, page heads, framed cards, drawer, stepper) in the Golden Gate look. No behaviour or API change.
+
+| # | Issue | Size | After | Planned | Status | PR |
+|---|---|---|---|---|---|---|
+| R1 | #139 Restyle the web UI to the finalized app design | L | #48 | Nov 18 | in progress | |
+
 ## Log
 
 Newest last. One line per event: date, what happened, PR or issue.
