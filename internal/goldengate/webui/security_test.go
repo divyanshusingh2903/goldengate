@@ -437,8 +437,21 @@ func TestThePagesFontsAndMarkAreServed(t *testing.T) {
 			t.Errorf("%s: %d %q, want %q", path, res.StatusCode, res.Header.Get("Content-Type"), want)
 		}
 	}
+	logos := 0
 	for _, m := range urls {
+		if strings.HasSuffix(m[1], ".svg") {
+			logos++
+			check(m[1], "image/svg+xml")
+			continue
+		}
 		check(m[1], "font/woff2")
+	}
+	// one logo per tool the inbox can show, drawn from app.css
+	if logos < 6 {
+		t.Errorf("expected a logo for each of the six tools in app.css, found %d", logos)
+	}
+	if lic, err := fs.ReadFile(webui.AssetFS, "assets/logos/LICENSE.txt"); err != nil || !strings.Contains(string(lic), "CC0") {
+		t.Errorf("the tool logos have no licence beside them: %v", err)
 	}
 	check("/assets/mark.svg", "image/svg+xml")
 	for _, face := range []string{"federo", "josefin-sans", "ibm-plex-mono"} {

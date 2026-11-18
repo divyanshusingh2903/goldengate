@@ -22,7 +22,7 @@ export async function render(main, app, params) {
   for (const it of items) {
     const status = { new: "new", changed: "changed since it was last sent", unchanged: "already sent, unchanged" }[it.Status] || it.Status;
     const cls = { new: "warn", changed: "warn", unchanged: "good" }[it.Status] || "dim";
-    put(list, card(h("span", { class: "title-cell" }, tag(it.Source), h("span", { class: "badge " + cls }, status)),
+    put(list, card(h("span", { class: "title-cell" }, tag(it.Source, { name: true }), h("span", { class: "badge " + cls }, status)),
       when(it.Updated) ? h("span", { class: "faint mono small" }, when(it.Updated)) : null,
       cardBody(
         (it.Diff || []).length ? h("div", null, h("p", { class: "hint" }, "Since it was last sent:"), h("pre", null, it.Diff.join("\n"))) : null,

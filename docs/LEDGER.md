@@ -205,7 +205,7 @@ The web UI takes the finalized app design (sidebar, page heads, framed cards, dr
 | R1 | #139 Restyle the web UI to the finalized app design | L | #48 | Nov 18 | done | #141 |
 | R2 | #140 State database: concurrent first open fails with SQLITE_BUSY | S | | Nov 18 | done | #142 |
 | R3 | #143 Web UI: Receipts leaves the inbox and send counts stale | S | | Nov 18 | done | #144 |
-| R4 | #146 Web UI: Projects uses the width; tool logos in place of letter codes | M | #139 | Nov 18 | in progress | |
+| R4 | #146 Web UI: Projects uses the width; tool logos in place of letter codes | M | #139 | Nov 18 | in review | |
 
 ## Log
 
@@ -289,3 +289,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-17: #140 done (#142): opening the state database serializes creating the schema inside the process and retries SQLITE_BUSY for up to 10 s (another process doing the same); a test opens a new database from eight goroutines at once, 20 rounds. The web UI loads its first calls in parallel again.
 - 2026-11-17: Receipts tested with real automatic sends (trust auto on one project, an approve rule on another, `sync --auto`): the receipt, its reasons, the Overview timeline and Retract all work, and a first load on a new state directory succeeds. Found #143: Receipts never refreshes the sidebar counts.
 - 2026-11-17: #143 done (#144): Receipts refreshes the sidebar counts and the send button; a test checks every screen that shows or changes what waits. Rechecked every web UI screen on main against the sandbox server. The roadmap page has a Testing and polish section with the 13 test bugs, #139, #140 and #143.
+- 2026-11-17: #146 implemented: Projects is a wide screen (up to 1880px) with the list taking 5/11 of it and the chosen project's cards beside it, rows led by the folder name with the parent folder (or "worktree of …") beneath, and long names breaking at hyphens. Tools show their Simple Icons logos (CC0) in the text colour, Claude's in its terracotta, named for screen readers; an unknown tool shows its name. Checked at 1920, 1280 and 375px, light and dark, with nine extra synthetic folders and a worktree.

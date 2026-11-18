@@ -21,6 +21,8 @@ const nav = document.getElementById("nav");
 const sendBtn = document.getElementById("send-btn");
 // Screens reached from another one keep that one lit in the sidebar.
 const parent = { preview: "projects" };
+// Screens with a list beside a detail use the whole window.
+const wide = new Set(["projects"]);
 
 // count shows a number beside a screen in the sidebar, or nothing for zero.
 function count(id, n) {
@@ -60,6 +62,7 @@ const app = {
     // Each visit draws into its own element: an action that finishes after
     // you moved on redraws the screen you left, which is no longer shown.
     const view = h("div");
+    main.classList.toggle("wide", wide.has(name));
     fill(main, view);
     fill(view, h("p", { class: "dim" }, "Loading…"));
     try {

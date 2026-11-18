@@ -53,13 +53,23 @@ export function when(iso) {
 
 // tag is a session's source as the terminal UI shows it ("CC", "GPT"): text
 // that reads without colour; the colour says whether it is code or chat.
+// SOURCES names each tool the way its maker does. Its logo is
+// /assets/logos/<source>.svg, drawn as a mask in the text colour (app.css).
 const SOURCES = {
-  "claude-code": ["CC", "code"], codex: ["CX", "code"], opencode: ["OC", "code"], cursor: ["CU", "code"],
-  "claude-ai": ["AI", "chat"], chatgpt: ["GPT", "chat"],
+  "claude-code": "Claude Code", codex: "Codex", opencode: "OpenCode", cursor: "Cursor",
+  "claude-ai": "claude.ai", chatgpt: "ChatGPT",
 };
-export function tag(source) {
-  const [short, kind] = SOURCES[source] || [String(source || "?").toUpperCase().slice(0, 3), "code"];
-  return h("span", { class: `tag ${kind}`, title: source }, short);
+export function toolName(source) { return SOURCES[source] || String(source || "unknown"); }
+
+// tag is a tool's logo, named for screen readers and on hover; with
+// { name: true } the name is written beside it too. A tool without a logo
+// shows its name in a small frame.
+export function tag(source, opts) {
+  const name = toolName(source);
+  if (!SOURCES[source]) return h("span", { class: "tag", title: name }, name);
+  const withName = opts && opts.name;
+  return h("span", { class: `tool src-${source}`, title: name, ...(withName ? {} : { role: "img", "aria-label": name }) },
+    h("span", { class: "lg", "aria-hidden": "true" }), withName ? h("span", { class: "tn" }, name) : null);
 }
 
 export function plural(n, one, many) {

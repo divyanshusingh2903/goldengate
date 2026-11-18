@@ -15,6 +15,15 @@ function initials(label) {
   return last.replace(/[^A-Za-z0-9]/g, "").slice(0, 2).toUpperCase() || "?";
 }
 
+// parts splits a folder into the name a person knows it by and where it is.
+// A worktree says whose worktree it is; a chat grouping has no folder.
+function parts(r) {
+  const label = String(r.Label || "");
+  const i = label.replace(/\/+$/, "").lastIndexOf("/");
+  if (i < 0) return { name: label, where: "" };
+  return { name: label.slice(i + 1), where: r.Root ? `worktree of ${r.Root}` : label.slice(0, i + 1) };
+}
+
 function isShared(r) { return r.State === SHARED || r.State === PARTIAL; }
 
 function stateText(r) {
@@ -77,7 +86,7 @@ export async function render(main, app) {
   search.addEventListener("input", () => { ui.query = search.value; drawList(); });
 
   const list = h("ul", { class: "plist" });
-  const detail = h("div", { class: "grid" });
+  const detail = h("div", { class: "proj-detail" });
 
   const rowButton = (r, depth) => {
     const [text, cls] = stateText(r);
@@ -87,8 +96,13 @@ export async function render(main, app) {
       ondblclick: () => app.go("preview", { key: r.Key, label: r.Label }),
     },
     h("span", { class: "glyph " + box(r)[1], title: ["not shared", "shared", "some tools shared", "blocked"][r.State] }, box(r)[0]),
-    h("span", { class: "nm" }, r.Label,
-      r.Project && r.Project !== r.Label ? h("small", null, r.Project) : null),
+    (() => {
+      const p = parts(r);
+      const inProject = r.Project && r.Project !== p.name ? r.Project : "";
+      return h("span", { class: "nm", title: r.Label + (r.Project ? ` · project ${r.Project}` : "") },
+        h("b", null, p.name),
+        p.where || inProject ? h("small", null, p.where, p.where && inProject ? " · " : "", inProject ? h("span", { class: "pj" }, inProject) : null) : null);
+    })(),
     (r.Sources || []).length ? h("span", { class: "tags" }, (r.Sources || []).map((s) => tag(s.Name))) : null,
     h("span", { class: "state " + cls }, text)));
   };
@@ -146,14 +160,14 @@ export async function render(main, app) {
     const others = (r.Sources || []).map((s) => s.Name);
     const [, cls] = stateText(r);
     put(detail, card(
-      h("div", { class: "title-cell" }, h("span", { class: "avatar", "aria-hidden": "true" }, initials(r.Label)),
-        h("div", null, h("h2", null, r.Label), h("small", null, `${plural(r.Sessions, "session")}${when(r.Last) ? ", last active " + when(r.Last) : ""}`))),
+      h("div", { class: "title-cell" }, h("span", { class: "avatar", "aria-hidden": "true" }, initials(parts(r).name)),
+        h("div", null, h("h2", null, parts(r).name), h("small", null, r.Label, ` · ${plural(r.Sessions, "session")}${when(r.Last) ? ", last active " + when(r.Last) : ""}`))),
       h("span", { class: "badge " + cls }, head2),
       cardBody(
         h("p", null, text),
         h("div", { class: "facts gap-top" },
           h("div", null, h("div", { class: "k" }, "Project"), h("div", { class: "v" }, r.Project || "none")),
-          h("div", null, h("div", { class: "k" }, "Tools"), h("div", { class: "v" }, (r.Sources || []).length ? h("span", { class: "tags" }, r.Sources.map((s) => tag(s.Name))) : "none")),
+          h("div", null, h("div", { class: "k" }, "Tools"), h("div", { class: "v" }, (r.Sources || []).length ? h("span", { class: "tags named" }, r.Sources.map((s) => tag(s.Name, { name: true }))) : "none")),
           h("div", null, h("div", { class: "k" }, "Waiting to send"), h("div", { class: "v" }, isShared(r) ? String(r.Pending || 0) : "—"))),
         r.Root ? h("p", { class: "hint gap-top" }, `A worktree of ${r.Root}`) : null,
         r.Reason ? h("p", { class: "hint gap-top" }, r.Reason) : null),
@@ -173,7 +187,7 @@ export async function render(main, app) {
         const cb = h("input", { type: "checkbox", class: "switch", checked: !!s.Shared, disabled: !!s.OffEverywhere, "aria-label": `Share ${s.Name} sessions of this project` });
         cb.addEventListener("change", () => act({ Kind: TOGGLE, Keys: [r.Key], Source: s.Name, Others: others.filter((n) => n !== s.Name) }, "changed"));
         return h("div", { class: "set-row" },
-          h("div", null, h("div", { class: "t" }, tag(s.Name), s.Name), h("div", { class: "d" }, plural(s.Sessions, "session"),
+          h("div", null, h("div", { class: "t" }, tag(s.Name, { name: true })), h("div", { class: "d" }, plural(s.Sessions, "session"),
             s.OffEverywhere ? h("span", { class: "warn" }, " · off for every project in Settings") : null)),
           cb);
       }))));
