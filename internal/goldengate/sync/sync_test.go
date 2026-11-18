@@ -384,6 +384,21 @@ func TestPendingCounts(t *testing.T) {
 	}
 }
 
+// Excluded and retracted sessions are never sent, so they are not counted
+// as to send (#116).
+func TestPendingCountsSkipsBlockedSessions(t *testing.T) {
+	e := setup(t, selection.Policy{Allow: []string{"~/code/app"}}, sess("a", "/home/u/code/app", "one"), sess("b", "/home/u/code/app", "two"), sess("c", "/home/u/code/app", "three"))
+	ctx := context.Background()
+	for id, state := range map[string]string{"a": gsync.DecisionExcluded, "b": gsync.DecisionRetracted} {
+		if err := e.st.Decide(ctx, gsync.Decision{Source: "claude-code", SessionID: id, State: state, ContentHash: strings.Repeat("0", 64), At: t0, Project: "/home/u/code/app", Title: id}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got, err := e.s.PendingCounts(ctx); err != nil || got["/home/u/code/app"] != 1 {
+		t.Errorf("only the undecided session is to send: %v %v", got, err)
+	}
+}
+
 func TestBatchByProject(t *testing.T) {
 	e := setup(t, selection.Policy{Default: "allow"}, sess("a", "/home/u/code/a", "1"), sess("b", "/home/u/code/b", "2"), sess("c", "/home/u/code/a", "3"))
 	b, _, err := e.s.Plan(context.Background(), gsync.RunOpts{})

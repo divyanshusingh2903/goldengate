@@ -183,8 +183,8 @@ Found on 2026-11-17 by driving the TUI, the web UI and the CLI against a local s
 | B1 | #112 Redaction: a random-looking folder splits a path | S | | Nov 17 | done | #125 |
 | B2 | #113 Moving a partly shared folder into a project re-enables its tools | S | | Nov 17 | done | #126 |
 | B3 | #114 CLI share of a parent leaves child projects tombstoned | S | | Nov 17 | done | #127 |
-| B4 | #115 MCP recent_activity text under the wrong project | S | | Nov 17 | in progress | |
-| B5 | #116 Projects screen counts excluded sessions as to send | S | | Nov 17 | todo | |
+| B4 | #115 MCP recent_activity text under the wrong project | S | | Nov 17 | done | #128 |
+| B5 | #116 Projects screen counts excluded sessions as to send | S | | Nov 17 | in progress | |
 | B6 | #117 TUI setup: Esc from a preview leaves setup | S | | Nov 17 | todo | |
 | B7 | #118 TUI: no-keyring warning printed over the interface | S | | Nov 17 | todo | |
 | B8 | #119 Held edit conflicts: sync silent, TUI approve claims they go | S | | Nov 17 | todo | |
@@ -262,3 +262,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-17: #112 done (#125): paths are scrubbed before the high-entropy pass. #113 in progress.
 - 2026-11-17: #113 done (#126): a shared folder moved into a project keeps its switched-off tools. #114 in progress.
 - 2026-11-17: #114 done (#127): `share add` and `projects add` lift the tombstones of every project they start sharing. #115 in progress.
+- 2026-11-17: #115 done (#128): recent_activity's text lists each session under its own project. #116 in progress.
