@@ -13,7 +13,7 @@ _Last updated 2026-11-17. Update this section whenever a row in the queue change
 
 **Progress:** 30 of 31 scheduled issues done (plus 2 stretch). Phases 1 (Foundations), 2 (Per-agent access) and 3 (Inbox and curation) are complete.
 **Bug fixes from the end-to-end test** (#112–#124, PRs #125–#137) are all done; the report is `docs/TEST-REPORT.md`, with small observations left for later.
-**Web UI restyle** (#139, PR #141) and its follow-up #140 (state database concurrent first open, PR #142) are done; #143 (Receipts leaves the counts stale) is in progress.
+**Web UI restyle** (#139, PR #141) and its follow-ups #140 (state database concurrent first open, PR #142) and #143 (Receipts leaves the counts stale, PR #144) are done.
 **Nothing else is next:** every issue of the queue is done except #40. **Blocked:** #40 Share-link import: the #39 spike recommends not building it; whether to close it as not planned is the user's call. Phase 4 (work items, rules and automation) is complete: #21, #35, #36, #45, #31, #33, #34, #32 and #22.
 
 ### Done
@@ -204,7 +204,7 @@ The web UI takes the finalized app design (sidebar, page heads, framed cards, dr
 |---|---|---|---|---|---|---|
 | R1 | #139 Restyle the web UI to the finalized app design | L | #48 | Nov 18 | done | #141 |
 | R2 | #140 State database: concurrent first open fails with SQLITE_BUSY | S | | Nov 18 | done | #142 |
-| R3 | #143 Web UI: Receipts leaves the inbox and send counts stale | S | | Nov 18 | in progress | |
+| R3 | #143 Web UI: Receipts leaves the inbox and send counts stale | S | | Nov 18 | done | #144 |
 
 ## Log
 
@@ -287,3 +287,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-17: #139 implemented: the web UI takes the finalized app design (sidebar with counts, Overview, page heads and cards, inbox tabs with multi-select and a session drawer, send stepper with progress, stat cards on Server, rows with switches in Settings, a card per agent). Walked in a real browser against a local `goldengatebridge` with synthetic sessions: setup, share, inbox select and approve, drawer edit and Esc cancel, review and send, server, agents (grant staged and discarded, view as), settings, preview, receipts; light and dark; no sideways scroll at 375px. Found #140 (concurrent first open of the state database fails with SQLITE_BUSY).
 - 2026-11-17: #140 done (#142): opening the state database serializes creating the schema inside the process and retries SQLITE_BUSY for up to 10 s (another process doing the same); a test opens a new database from eight goroutines at once, 20 rounds. The web UI loads its first calls in parallel again.
 - 2026-11-17: Receipts tested with real automatic sends (trust auto on one project, an approve rule on another, `sync --auto`): the receipt, its reasons, the Overview timeline and Retract all work, and a first load on a new state directory succeeds. Found #143: Receipts never refreshes the sidebar counts.
+- 2026-11-17: #143 done (#144): Receipts refreshes the sidebar counts and the send button; a test checks every screen that shows or changes what waits. Rechecked every web UI screen on main against the sandbox server. The roadmap page has a Testing and polish section with the 13 test bugs, #139, #140 and #143.
