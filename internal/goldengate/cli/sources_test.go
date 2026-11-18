@@ -355,3 +355,29 @@ func TestProjectMoveKeepsToolsSwitchedOff(t *testing.T) {
 		}
 	}
 }
+
+// Sharing a parent folder from the command line brings back a project under
+// it that was unshared earlier, for `share add` and `projects add` (#114).
+func TestSharingParentLiftsChildTombstone(t *testing.T) {
+	for _, add := range [][]string{{"share", "add", "~/projects", "--auto-approve"}, {"projects", "add", "All", "~/projects"}} {
+		t.Run(add[0], func(t *testing.T) {
+			m := newMulti(t)
+			for _, args := range [][]string{{"share", "add", "~/projects/demo", "--auto-approve"}, {"share", "remove", "~/projects/demo", "--keep-on-server"}, add} {
+				if err := m.run(args...); err != nil {
+					t.Fatalf("%v: %v\n%s", args, err, m.errOut)
+				}
+			}
+			if err := m.run("sync", "--dry-run", "--approve"); err != nil {
+				t.Fatalf("%v\n%s", err, m.errOut)
+			}
+			// the Claude Code and Codex sessions live in ~/projects/demo itself
+			got := map[string]bool{}
+			for _, p := range m.payloads() {
+				got[p.Source] = true
+			}
+			if !got["claude-code"] || !got["codex"] {
+				t.Errorf("~/projects/demo still dropped after sharing ~/projects (sources sent: %v):\n%s", got, m.errOut)
+			}
+		})
+	}
+}
