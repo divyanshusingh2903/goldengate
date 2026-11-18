@@ -5,7 +5,8 @@ import { api } from "/assets/api.js";
 import { h, fill, put, plural, ask, tag, when, head, card, note, empty, table } from "/assets/dom.js";
 
 export async function render(main, app) {
-  const receipts = await api("/api/receipts");
+  // a background send or a retract changes the counts, so refresh them too
+  const [receipts] = await Promise.all([api("/api/receipts"), app.refresh()]);
   fill(main,
     head("Receipts", "Every session sent automatically, with the rule that sent it."));
   if (!(receipts || []).length) {

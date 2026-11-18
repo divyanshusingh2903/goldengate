@@ -326,6 +326,21 @@ func TestSettingsSaysWhereTheKeyIs(t *testing.T) {
 	}
 }
 
+// The screens that show or change what waits refresh the sidebar counts and
+// the send button when they render; Receipts missed it, so a background send
+// or a retract left them stale (#143).
+func TestScreensRefreshTheCounts(t *testing.T) {
+	for _, name := range []string{"overview", "inbox", "projects", "send", "receipts"} {
+		b, err := fs.ReadFile(webui.AssetFS, "assets/"+name+".js")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(b), "app.refresh()") {
+			t.Errorf("%s.js must call app.refresh() so the counts stay current", name)
+		}
+	}
+}
+
 // Every script the page imports is one of its own embedded files, served as
 // JavaScript, and the page starts from app.js.
 func TestThePagesScriptsAllExistAndAreServed(t *testing.T) {
