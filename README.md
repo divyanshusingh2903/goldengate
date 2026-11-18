@@ -25,7 +25,7 @@ Let a remote AI assistant know what you have been working on in your coding tool
 - `goldengate` (laptop): reads your local session history, applies your choices of what is shared and what is blocked, redacts and summarizes, and sends to your own server.
 - `goldengatebridge` (server you run): stores the summaries and serves them read-only over MCP (streamable HTTP, stateless JSON).
 
-Status: pre-release (M4). Sources: Claude Code, Codex, OpenCode, Cursor, and claude.ai / ChatGPT data exports. Deployment scripts and release packaging are on the roadmap in [DESIGN.md](DESIGN.md). See [SECURITY.md](SECURITY.md) before connecting an assistant.
+Status: pre-release (M4). Sources: Claude Code, Codex, OpenCode, Cursor, and claude.ai / ChatGPT data exports. The server is published as a Docker image (below); other release packaging is on the roadmap in [DESIGN.md](DESIGN.md). See [SECURITY.md](SECURITY.md) before connecting an assistant.
 
 ## Quickstart (about ten minutes)
 
@@ -35,6 +35,16 @@ Status: pre-release (M4). Sources: Claude Code, Codex, OpenCode, Cursor, and cla
    export GOLDENGATE_ADMIN_TOKEN="$(openssl rand -base64 32)"
    goldengatebridge serve --addr :8080 --behind-tls-proxy --db /data/bridge.db
    ```
+
+   Or run the published image, which needs no Dockerfile of your own. It listens on `$PORT` (default 8080) and keeps its database in `/data`, so mount a volume there:
+
+   ```bash
+   docker run -d --name bridge -p 8080:8080 -v goldengate-data:/data \
+     -e GOLDENGATE_ADMIN_TOKEN="$(openssl rand -base64 32)" \
+     ghcr.io/divyanshusingh2903/goldengatebridge:latest
+   ```
+
+   Images are versioned: pin `:X.Y.Z` (or `:X.Y`) for a server you do not want to change under you; `:latest` follows the newest release and `:edge` follows `main`. It is built by `.github/workflows/release-image.yml`: pushing a tag `vX.Y.Z` publishes that version for amd64 and arm64. Run one container per database.
 
 2. **Connect your laptop.** Paste the admin secret when asked (it is never written to disk):
 
