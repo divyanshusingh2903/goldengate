@@ -70,3 +70,16 @@ jobs:
         with: { go-version-file: go.mod }
       - run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
       - run: go run github.com/zricethezav/gitleaks/v8@v8.30.1 detect --no-banner --redact
+
+  image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build the server image (not pushed)
+        run: docker build -f deploy/Dockerfile --build-arg VERSION=ci -t goldengatebridge:ci .
+      - name: The image starts and answers
+        run: |
+          docker run -d --name bridge -p 8080:8080 -e GOLDENGATE_ADMIN_TOKEN="$(openssl rand -base64 32)" goldengatebridge:ci
+          for i in $(seq 1 20); do curl -fsS localhost:8080/healthz && break; sleep 1; done
+          curl -fsS localhost:8080/healthz
+          docker run --rm goldengatebridge:ci version | grep -q ' ci '

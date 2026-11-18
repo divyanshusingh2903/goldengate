@@ -59,6 +59,7 @@ Supporting changes (not queue issues):
 | First `pr-template` check (unblocked the `main` ruleset); later replaced | #52 | 2026-11-14 |
 | The user's stricter `pr-template` check (Checklist with every item ticked; skips Dependabot) | #9 | 2026-11-14 |
 | This ledger, then its checklist rule, status section and roadmap sync | #54, #56, #57, #58 | 2026-11-14 |
+| #159 Versioned Docker image of the server: `deploy/Dockerfile`, an `image` CI job on every PR, and `release-image.yml` publishing to GHCR on `vX.Y.Z` tags (and `edge` from `main`) | #160 | in review |
 | Ledger status updates between issues (#49 done; phase 2 complete; refresh; phase 3 complete; #21 done; #35 done; #36 done; #45 done; #31 done; #33 done; #34 done; #32 done; #22 done; #44 done; #39 done; #41 done; #42 done; #23 done; #46 done; #47 done) | #61, #68, #69, #73, #75, #77, #79, #81, #83, #85, #87, #89, #91, #93, #95, #97, #99, #101, #103, #105 | 2026-11-15 |
 
 ### Open loose ends
@@ -299,3 +300,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-18: #151 implemented: `MintAgentToken` on the TUI backend makes a read token for one agent and changes nothing else. The web Agents screen has a New token button on each agent that asks first, then shows the token once in a panel with Copy, the connector URL, the header to send and the token id; the TUI does the same with `N` on an agent's tokens. Checked in the sandbox at 1440 and 375px.
 - 2026-11-18: #151 done (#152). The roadmap page lists #151 under Testing and polish.
 - 2026-11-18: #156 and #157 filed from the user's walk through the restyled web UI. #156 implemented: Setup leads with the connected server (status, upload token, connector address) and shows the form only on request; a gear for Settings; Server status values coloured; the summarizer asks for the provider's key first (every provider's key state now comes with the settings), then loads its models by itself. Walked in a real browser against the user's local server with Ollama and an environment key; no key was written to the keyring.
+- 2026-11-18: #159 filed and implemented: `deploy/Dockerfile` (version stamped through `bridgecli.Version`), CI builds it on every PR and checks `/healthz` and `version`, `release-image.yml` publishes `ghcr.io/divyanshusingh2903/goldengatebridge` for amd64 and arm64 on `vX.Y.Z` tags and `edge` from `main`. No tag exists yet; the first release and making the GHCR package public are the user's call.
