@@ -24,6 +24,7 @@ type previewState struct {
 	seq     int
 	key     string
 	vp      viewport.Model
+	from    screen // where the preview was opened; esc goes back there
 }
 
 func newPreviewState() previewState {
@@ -97,6 +98,9 @@ func (m *Model) openPreview() tea.Cmd {
 	r, ok := m.currentProject()
 	if !ok {
 		return nil
+	}
+	if m.scr != scrPreview {
+		m.pv.from = m.scr
 	}
 	m.scr, m.pv.key = scrPreview, r.Key
 	m.pv.vp.GotoTop()
@@ -243,7 +247,11 @@ func (m *Model) renderPreview(pv Preview, width int) string {
 func (m *Model) onKeyPreview(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	switch k.String() {
 	case "esc", "q", "p", "backspace":
+		// back to where it was opened: the project picker, or setup (#117)
 		m.scr = scrProjects
+		if m.pv.from == scrWizard {
+			m.scr = scrWizard
+		}
 		return m, nil
 	case "P":
 		m.pk.paranoid = !m.pk.paranoid
