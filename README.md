@@ -214,6 +214,8 @@ goldengate agents limit ChatGPT 30                   # at most the last 30 days
 goldengate agents remove ChatGPT                     # also revokes its tokens
 ```
 
+The Agents screen does the same in `goldengate` (press `N` on an agent's tokens for a new one) and in `goldengate ui` (New token on each agent); either shows the token once.
+
 An assistant that connects through OAuth is asked about on the consent page instead: after the admin secret, you choose which agent it is and tick the projects it may see (nothing is ticked for you).
 
 Grants and revocations apply to the assistant's next request. A project an assistant may not see is, for that assistant, simply not there.

@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -16,6 +17,7 @@ type fakeAgents struct {
 	info      AgentsInfo
 	applied   [][]GrantChange
 	revoked   []string
+	minted    []string
 	secrets   []string // every admin secret a call was made with
 	applyErr  error
 	viewCalls int
@@ -261,4 +263,24 @@ func (f *fakeBackend) EditFinish(_ context.Context, it InboxItem, path string) (
 		}
 	}
 	return "saved your version; it is what will be sent for this session", nil
+}
+
+const fakeNewToken = "ggr_" + "0123456789abcdef0123456789abcdef"
+
+func (f *fakeBackend) MintAgentToken(_ context.Context, admin, agentID string) (NewAgentToken, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if admin != fakeAdmin {
+		return NewAgentToken{}, errors.New("the server refused the admin token")
+	}
+	for i := range f.ag.info.Agents {
+		a := &f.ag.info.Agents[i]
+		if a.ID == agentID {
+			f.ag.minted = append(f.ag.minted, agentID)
+			id := fmt.Sprintf("tok_new%d", len(f.ag.minted))
+			a.Tokens = append(a.Tokens, AgentToken{ID: id, Label: a.Name, Created: time.Now()})
+			return NewAgentToken{ID: id, Secret: fakeNewToken, URL: "https://bridge.example.com/mcp"}, nil
+		}
+	}
+	return NewAgentToken{}, errors.New("that agent no longer exists")
 }

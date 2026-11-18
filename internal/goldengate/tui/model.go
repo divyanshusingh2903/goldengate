@@ -280,6 +280,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	case agentTokenMsg:
 		return m, m.onAgentToken(msg)
+	case agentNewTokenMsg:
+		return m, m.onAgentNewToken(msg)
 	case settingsMsg:
 		return m, m.onSettings(msg)
 	case savedMsg:

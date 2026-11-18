@@ -43,6 +43,10 @@ type agentsState struct {
 	viewErr string
 	scroll  int
 	tok     int // cursor in the details token list
+	// newTok is an assistant token just made for the agent newFor. It is
+	// shown on that agent's details until they are left, then forgotten.
+	newTok *NewAgentToken
+	newFor string
 }
 
 func newAgentsState(blink bool) agentsState {
@@ -68,6 +72,11 @@ type (
 	agentTokenMsg struct {
 		label string
 		err   error
+	}
+	agentNewTokenMsg struct {
+		agentID, name string
+		tok           NewAgentToken
+		err           error
 	}
 )
 
@@ -291,6 +300,21 @@ func (m *Model) onAgentToken(msg agentTokenMsg) tea.Cmd {
 	}
 }
 
+func (m *Model) onAgentNewToken(msg agentNewTokenMsg) tea.Cmd {
+	if msg.err != nil {
+		m.setStatus("could not make a token for "+msg.name+": "+msg.err.Error(), true)
+		return nil
+	}
+	t := msg.tok
+	m.ag.newTok, m.ag.newFor = &t, msg.agentID
+	m.setStatus("new token for "+msg.name+": copy it now, it is shown only once", false)
+	be, ctx, secret := m.be, m.ctx, m.ag.secret
+	return func() tea.Msg {
+		i, err := be.Agents(ctx, secret)
+		return agentsMsg{i, err}
+	}
+}
+
 func (m *Model) onKeyAgents(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 	ag := &m.ag
 	s := k.String()
@@ -346,6 +370,19 @@ func (m *Model) onKeyAgents(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		switch s {
 		case "esc", "q", "backspace", "d":
 			ag.phase = agGrid
+			ag.newTok, ag.newFor = nil, "" // shown once: gone when you leave
+		case "N":
+			if a != nil {
+				id, name := a.ID, a.Name
+				m.modal = &modal{title: "New assistant token", lines: []string{"Make a new assistant token for " + name + "?", "It is shown once. Its other tokens keep working, and nothing else changes."},
+					yes: func(m *Model) tea.Cmd {
+						be, ctx, secret := m.be, m.ctx, m.ag.secret
+						return func() tea.Msg {
+							t, err := be.MintAgentToken(ctx, secret, id)
+							return agentNewTokenMsg{id, name, t, err}
+						}
+					}}
+			}
 		case "up", "k":
 			ag.tok = max(ag.tok-1, 0)
 		case "down", "j":
@@ -633,10 +670,16 @@ func (m *Model) viewAgentDetail(w, bh int) ([]string, string) {
 	if len(a.Clients) > 0 {
 		add(clip("OAuth applications: "+strings.Join(a.Clients, ", "), w-2))
 	}
+	if t := ag.newTok; t != nil && ag.newFor == a.ID {
+		add("")
+		add(m.th.Good.Render("New assistant token, for this assistant's connector (shown only now):"))
+		add("   " + t.Secret) // whole, never clipped, so it can be selected and copied
+		add("Connector URL: " + t.URL + "   Send it as \"Authorization: Bearer <token>\".")
+	}
 	add("")
 	add(m.th.Title.Render(fmt.Sprintf("Read tokens (%d)", len(a.Tokens))))
 	if len(a.Tokens) == 0 {
-		add(m.th.Dim.Render("none: create one with `goldengate agents token " + a.Name + "`"))
+		add(m.th.Dim.Render("none: press N to make one"))
 	}
 	rev := btn{m.th.ButtonBad, "R", "Revoke"}
 	for i, t := range a.Tokens {
@@ -657,7 +700,7 @@ func (m *Model) viewAgentDetail(w, bh int) ([]string, string) {
 		}
 		out = append(out, line)
 	}
-	return out, m.hints(w, "↑/↓", "select", "R", "revoke token", "v", "view as agent", "esc", "back")
+	return out, m.hints(w, "↑/↓", "select", "N", "new token", "R", "revoke token", "v", "view as agent", "esc", "back")
 }
 
 func (m *Model) viewAsAgent(w, bh int) ([]string, string) {

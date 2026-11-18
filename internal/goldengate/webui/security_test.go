@@ -3,6 +3,7 @@ package webui_test
 import (
 	"bytes"
 	"context"
+	"errors"
 	"io/fs"
 	"net/http"
 	"regexp"
@@ -22,6 +23,7 @@ type stub struct {
 	tui.Backend
 	snapshots int
 	keys      []string
+	minted    []string
 }
 
 func (s *stub) Snapshot(context.Context) (tui.Snapshot, error) {
@@ -35,6 +37,18 @@ func (s *stub) SetSummarizerKey(_ context.Context, _, key string) error {
 }
 
 func (s *stub) Undo(context.Context) (string, error) { return "undone", nil }
+
+func (s *stub) Agents(_ context.Context, admin string) (tui.AgentsInfo, error) {
+	if admin != "admin-ok" {
+		return tui.AgentsInfo{}, errors.New("the server refused the admin token")
+	}
+	return tui.AgentsInfo{}, nil
+}
+
+func (s *stub) MintAgentToken(_ context.Context, admin, agentID string) (tui.NewAgentToken, error) {
+	s.minted = append(s.minted, admin+"/"+agentID)
+	return tui.NewAgentToken{ID: "tok_new", Secret: "ggr_new-secret", URL: "https://bridge.example.com/mcp"}, nil
+}
 
 func start(t *testing.T, o webui.Options) (*webuitest.Client, *stub) {
 	t.Helper()
@@ -403,7 +417,7 @@ func TestEveryPathTheScreensCallIsServed(t *testing.T) {
 		}
 		return nil
 	})
-	for _, want := range []string{"/api/inbox", "/api/inbox/decide", "/api/edit/begin", "/api/edit/finish", "/api/offers/decide", "/api/receipts", "/api/admin", "/api/admin/forget", "/api/agents", "/api/agents/view", "/api/agents/grants", "/api/agents/revoke-token"} {
+	for _, want := range []string{"/api/inbox", "/api/inbox/decide", "/api/edit/begin", "/api/edit/finish", "/api/offers/decide", "/api/receipts", "/api/admin", "/api/admin/forget", "/api/agents", "/api/agents/view", "/api/agents/grants", "/api/agents/revoke-token", "/api/agents/new-token"} {
 		if !called[want] {
 			t.Errorf("no screen calls %s", want)
 		}
@@ -482,5 +496,26 @@ func TestSendScreenKnowsTheSyncEventKinds(t *testing.T) {
 	}
 	if !strings.Contains(js, "plan.Items") || !strings.Contains(js, "sessionView(") {
 		t.Error("the review must list the plan's sessions and open each as it will be sent")
+	}
+}
+
+// A new assistant token needs the admin secret like every agents call, goes
+// to the one agent asked for, and comes back once, uncached (#151).
+func TestNewAgentTokenNeedsTheAdminSecret(t *testing.T) {
+	c, be := start(t, webui.Options{})
+	c.Launch()
+	res, _ := c.Do("POST", "/api/agents/new-token", map[string]string{"AgentID": "agt_default"}, nil)
+	if res.StatusCode != http.StatusUnauthorized || len(be.minted) != 0 {
+		t.Fatalf("without the admin secret: %d, minted %v", res.StatusCode, be.minted)
+	}
+	if res, _ := c.Do("POST", "/api/admin", map[string]string{"Secret": "admin-ok"}, nil); res.StatusCode != 200 {
+		t.Fatalf("admin secret: %d", res.StatusCode)
+	}
+	res, body := c.Do("POST", "/api/agents/new-token", map[string]string{"AgentID": "agt_default"}, nil)
+	if res.StatusCode != 200 || !strings.Contains(string(body), "ggr_new-secret") || res.Header.Get("Cache-Control") != "no-store" {
+		t.Fatalf("new token: %d %q %s", res.StatusCode, res.Header.Get("Cache-Control"), body)
+	}
+	if len(be.minted) != 1 || be.minted[0] != "admin-ok/agt_default" {
+		t.Fatalf("one token, for that agent, with the held secret: %v", be.minted)
 	}
 }

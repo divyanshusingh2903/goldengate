@@ -268,6 +268,15 @@ func (s *Server) routes(mux *http.ServeMux) {
 		}
 		out(w, message{"revoked"}, be.RevokeAgentToken(r.Context(), admin, in.TokenID))
 	}))
+	// the one response that carries a secret: the new token, shown once
+	mux.HandleFunc("POST /api/agents/new-token", s.withAdmin(func(w http.ResponseWriter, r *http.Request, admin string) {
+		var in struct{ AgentID string }
+		if !decode(w, r, &in) {
+			return
+		}
+		v, err := be.MintAgentToken(r.Context(), admin, in.AgentID)
+		out(w, v, err)
+	}))
 }
 
 type remotePrompt struct {

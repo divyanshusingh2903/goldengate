@@ -13,7 +13,7 @@ _Last updated 2026-11-17. Update this section whenever a row in the queue change
 
 **Progress:** 30 of 31 scheduled issues done (plus 2 stretch). Phases 1 (Foundations), 2 (Per-agent access) and 3 (Inbox and curation) are complete.
 **Bug fixes from the end-to-end test** (#112–#124, PRs #125–#137) are all done; the report is `docs/TEST-REPORT.md`, with small observations left for later.
-**Web UI restyle** (#139, PR #141) and its follow-ups are done: #140 (PR #142), #143 (PR #144), #146 (PR #147) and #148 (PR #149). #151 (a new assistant token from the Agents screen) is in progress.
+**Web UI restyle** (#139, PR #141) and its follow-ups are done: #140 (PR #142), #143 (PR #144), #146 (PR #147) and #148 (PR #149). #151 (a new assistant token from the Agents screen) is in review.
 **Nothing else is next:** every issue of the queue is done except #40. **Blocked:** #40 Share-link import: the #39 spike recommends not building it; whether to close it as not planned is the user's call. Phase 4 (work items, rules and automation) is complete: #21, #35, #36, #45, #31, #33, #34, #32 and #22.
 
 ### Done
@@ -207,7 +207,7 @@ The web UI takes the finalized app design (sidebar, page heads, framed cards, dr
 | R3 | #143 Web UI: Receipts leaves the inbox and send counts stale | S | | Nov 18 | done | #144 |
 | R4 | #146 Web UI: Projects uses the width; tool logos in place of letter codes | M | #139 | Nov 18 | done | #147 |
 | R5 | #148 Web UI: a review you can review, a readable Preview, real review progress | L | #146 | Nov 18 | done | #149 |
-| R6 | #151 Web UI: a new assistant token from the Agents screen | S | | Nov 18 | in progress | |
+| R6 | #151 Web UI: a new assistant token from the Agents screen | S | | Nov 18 | in review | |
 
 ## Log
 
@@ -294,3 +294,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-17: #146 implemented: Projects is a wide screen (up to 1880px) with the list taking 5/11 of it and the chosen project's cards beside it, rows led by the folder name with the parent folder (or "worktree of …") beneath, and long names breaking at hyphens. Tools show their Simple Icons logos (CC0) in the text colour, Claude's in its terracotta, named for screen readers; an unknown tool shows its name. Checked at 1920, 1280 and 375px, light and dark, with nine extra synthetic folders and a worktree.
 - 2026-11-17: #148 implemented: the plan carries every session it sends (`PlanInfo.Items`, from `Batch.Items`, with new or changed and the rule's reason), and planning reports each queued session (`RunOpts.OnQueued`, `SyncQueued`) so the review counts n of total. The web review lists the sessions; each opens in a wide drawer as a readable summary (narrative, asked for, done, outcomes, left open, work items, files, tools) with the exact JSON as a folding, coloured tree, redactions marked in both, and Keep local re-runs the review without it. Preview uses the same view. Checked at 1440 and 375px, light and dark, with a planted AWS key and a synthetic model-written summary.
 - 2026-11-17: #148 done (#149). The roadmap page lists #146 and #148 under Testing and polish.
+- 2026-11-18: #151 implemented: `MintAgentToken` on the TUI backend makes a read token for one agent and changes nothing else. The web Agents screen has a New token button on each agent that asks first, then shows the token once in a panel with Copy, the connector URL, the header to send and the token id; the TUI does the same with `N` on an agent's tokens. Checked in the sandbox at 1440 and 375px.
