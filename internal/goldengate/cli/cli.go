@@ -412,6 +412,7 @@ func (a *app) shareAdd(ctx context.Context, p string, auto bool) error {
 	if err != nil {
 		return err
 	}
+	before := cloneRules(cfg)
 	rule := a.ruleFor(p)
 	if limited, _ := cfg.SessionScope(rule, ""); limited {
 		return fmt.Errorf("%s is shared by single conversations (see `goldengate chats --all`); to share all of it instead: goldengate projects add <project> %s", rule, rule)
@@ -441,6 +442,9 @@ func (a *app) shareAdd(ctx context.Context, p string, auto bool) error {
 	}
 	defer func() { _ = st.Close() }()
 	if err := st.ClearTombstone(ctx, a.localKey(p)); err != nil {
+		return err
+	}
+	if err := a.liftTombstones(ctx, st, before, cfg); err != nil {
 		return err
 	}
 	fmt.Fprintf(a.Stdout, "sharing %s\n", rule)
@@ -508,11 +512,7 @@ func (a *app) change(ctx context.Context, before config.Config, edit func(*confi
 // start being shared lose any tombstone. It prints nothing; the returned
 // targets are what the server may still hold for the un-shared projects.
 func (a *app) applyChange(ctx context.Context, before config.Config, edit func(*config.Config)) ([]remoteTarget, error) {
-	after := before
-	after.Projects = config.CloneProjects(before.Projects)
-	after.Share.Allow = append([]string(nil), before.Share.Allow...)
-	after.Share.Deny = append([]string(nil), before.Share.Deny...)
-	after.Share.SourceDeny = append([]string(nil), before.Share.SourceDeny...)
+	after := cloneRules(before)
 	edit(&after)
 
 	mBefore, err := a.matcher(before)
@@ -539,14 +539,56 @@ func (a *app) applyChange(ctx context.Context, before config.Config, edit func(*
 		return nil, err
 	}
 	defer func() { _ = st.Close() }()
-	for _, p := range found.Projects { // newly shared projects are eligible to upload again
-		if !mBefore.Decide(p.Key, "").Shared && mAfter.Decide(p.Key, "").Shared {
+	if err := clearNewlyShared(ctx, st, found.Projects, mBefore, mAfter); err != nil {
+		return nil, err
+	}
+	return a.unshare(ctx, st, found.Projects, mBefore, mAfter)
+}
+
+// cloneRules copies a config deeply enough that editing its projects and
+// share rules leaves the original alone.
+func cloneRules(c config.Config) config.Config {
+	c.Projects = config.CloneProjects(c.Projects)
+	c.Share.Allow = append([]string(nil), c.Share.Allow...)
+	c.Share.Deny = append([]string(nil), c.Share.Deny...)
+	c.Share.SourceDeny = append([]string(nil), c.Share.SourceDeny...)
+	return c
+}
+
+// clearNewlyShared lifts the tombstone of every project that the change
+// starts sharing, so its sessions can be sent again.
+func clearNewlyShared(ctx context.Context, st *gsync.State, projects []discover.Project, before, after *selection.Matcher) error {
+	for _, p := range projects {
+		if !before.Decide(p.Key, "").Shared && after.Decide(p.Key, "").Shared {
 			if err := st.ClearTombstone(ctx, p.Key); err != nil {
-				return nil, err
+				return err
 			}
 		}
 	}
-	return a.unshare(ctx, st, found.Projects, mBefore, mAfter)
+	return nil
+}
+
+// liftTombstones clears the tombstones of every discovered project that the
+// change from before to after starts sharing: sharing a parent folder from
+// the command line brings back child projects unshared earlier (#114).
+func (a *app) liftTombstones(ctx context.Context, st *gsync.State, before, after config.Config) error {
+	mBefore, err := a.matcher(before)
+	if err != nil {
+		return err
+	}
+	mAfter, err := a.matcher(after)
+	if err != nil {
+		return err
+	}
+	reg, err := a.registry(ctx)
+	if err != nil {
+		return err
+	}
+	found, err := discover.Projects(ctx, reg, mBefore, time.Time{}, a.resolver(before))
+	if err != nil {
+		return err
+	}
+	return clearNewlyShared(ctx, st, found.Projects, mBefore, mAfter)
 }
 
 // remoteTarget is what to delete from the server for one un-shared project.

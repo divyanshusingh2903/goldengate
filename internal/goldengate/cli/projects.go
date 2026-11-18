@@ -186,6 +186,7 @@ func (a *app) projectsAdd(ctx context.Context, ref string, members []string) err
 	if err != nil {
 		return err
 	}
+	before := cloneRules(cfg)
 	created := cfg.ProjectIndex(ref) < 0
 	var notes []string
 	for _, raw := range members {
@@ -222,6 +223,9 @@ func (a *app) projectsAdd(ctx context.Context, ref string, members []string) err
 		if err := st.ClearTombstone(ctx, a.localKey(raw)); err != nil {
 			return err
 		}
+	}
+	if err := a.liftTombstones(ctx, st, before, cfg); err != nil {
+		return err
 	}
 	name := ref
 	if i := cfg.ProjectIndex(ref); i >= 0 {
