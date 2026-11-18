@@ -170,3 +170,39 @@ export function drawer(title, top, onClose, opts) {
   x.focus();
   return { body, foot, close };
 }
+
+// Work item kinds in the order a review lists them, with their names. Each
+// kind's icon is /assets/icons/<kind>.svg, drawn as a mask (app.css).
+export const KINDS = [
+  ["pull_request", "pull request", "pull requests"],
+  ["issue", "issue", "issues"],
+  ["commit", "commit", "commits"],
+  ["artifact", "artifact", "artifacts"],
+  ["file", "file", "files"],
+];
+const KIND = Object.fromEntries(KINDS.map(([k, one, many]) => [k, { one, many }]));
+
+// workIcon is a work item kind's icon, named for screen readers.
+export function workIcon(kind) {
+  const k = KIND[kind] ? kind : "file";
+  return h("span", { class: `wi wi-${k}`, role: "img", "aria-label": KIND[k].one });
+}
+
+// workCounts is one line: an icon and a count per kind, then the total.
+export function workCounts(items) {
+  const n = {};
+  for (const w of items || []) n[w.kind] = (n[w.kind] || 0) + 1;
+  const total = (items || []).length;
+  if (!total) return h("span", { class: "wcounts faint" }, "no work items");
+  return h("span", { class: "wcounts" },
+    KINDS.filter(([k]) => n[k]).map(([k, one, many]) =>
+      h("span", { class: "wc", title: plural(n[k], one, many) }, workIcon(k), h("span", null, String(n[k])))),
+    h("span", { class: "faint" }, plural(total, "work item")));
+}
+
+// stamp is a time as "2h ago", with the full local time on hover.
+export function stamp(iso) {
+  const t = Date.parse(iso);
+  if (!when(iso)) return null;
+  return h("time", { datetime: iso, title: new Date(t).toLocaleString() }, when(iso));
+}

@@ -2,7 +2,7 @@
 // exact JSON a tab away. Used by Preview and by the send review. Everything
 // is built as DOM nodes from the payload, never as HTML.
 
-import { h, fill, marked, plural } from "/assets/dom.js";
+import { h, fill, marked, plural, KINDS, workIcon, workCounts, stamp } from "/assets/dom.js";
 
 const text = (s) => marked(String(s == null ? "" : s));
 
@@ -52,12 +52,43 @@ function duration(sec) {
 
 const STATUS = { created: "● created", updated: "● updated", merged: "✓ merged", completed: "✓ completed", closed: "✓ closed", canceled: "– canceled", mentioned: "mentioned" };
 
+// SHOWN is how many items of a kind are listed before "Show all".
+const SHOWN = 8;
+
+// workGroups lists the work items by kind, each kind under its icon and
+// count; a long kind folds after its first few items.
+function workGroups(items) {
+  // Keys from the session's main repository read as "#12" or a short SHA;
+  // the full key is on hover.
+  const repoOf = (k) => (/^(?:[a-z]+:)?([^#@!]+\/[^#@!]+)[#@!]/.exec(k) || [])[1] || "";
+  const seen = {};
+  for (const w of items) { const r = repoOf(w.key); if (r) seen[r] = (seen[r] || 0) + 1; }
+  const main = Object.entries(seen).sort((a, b) => b[1] - a[1]).map(([r]) => r)[0] || "";
+  const short = (k) => {
+    const m = /^(?:[a-z]+:)?([^#@!]+\/[^#@!]+)([#@!])(.+)$/.exec(k);
+    if (!m || m[1] !== main) return k;
+    return m[2] === "@" ? m[3].slice(0, 7) : m[2] + m[3];
+  };
+  const line = (w) => h("li", null, workIcon(w.kind), h("code", { title: w.key }, text(short(w.key))), w.title && w.kind !== "file" ? [" ", text(w.title)] : null,
+    w.status ? h("span", { class: "faint" }, ` · ${STATUS[w.status] || w.status}`) : null);
+  return KINDS.map(([kind, one, many]) => {
+    const its = items.filter((w) => w.kind === kind);
+    if (!its.length) return null;
+    const list = (xs) => h("ul", { class: "sv-work" }, xs.map(line));
+    return h("div", { class: "sv-kind" },
+      h("h5", null, workIcon(kind), plural(its.length, one, many)),
+      list(its.slice(0, SHOWN)),
+      its.length > SHOWN ? h("details", null, h("summary", null, `Show ${its.length - SHOWN} more`), list(its.slice(SHOWN))) : null);
+  });
+}
+
 // summaryView shows the payload the way an assistant will read it.
 export function summaryView(p) {
   const s = p.summary || {};
   const goals = (s.goals && s.goals.length) ? s.goals : (s.goal ? [s.goal] : []);
   const outcomes = (s.outcomes && s.outcomes.length) ? s.outcomes : (s.outcome ? [s.outcome] : []);
   const facts = [
+    stamp(p.updated_at) ? ["Updated", stamp(p.updated_at)] : null,
     s.git_branch ? ["Branch", h("code", null, s.git_branch)] : null,
     s.turn_count ? ["Turns", String(s.turn_count)] : null,
     s.duration_sec ? ["Length", duration(s.duration_sec)] : null,
@@ -72,6 +103,7 @@ export function summaryView(p) {
   return h("div", { class: "sv" },
     h("h3", { class: "sv-title" }, text(s.title || p.title_only || "(untitled)")),
     s.abstract ? h("p", { class: "sv-abstract" }, inline(s.abstract)) : null,
+    p.summary ? h("p", { class: "sv-counts" }, workCounts(p.work_items)) : null,
     h("div", { class: "sv-facts" }, facts.map(([k, v]) => h("div", null, h("span", { class: "k" }, k), h("span", { class: "v" }, v)))),
     reds.length ? h("p", { class: "sv-red" }, "Redacted before it leaves: ", reds.map(([k, n], i) => [i ? ", " : "", h("mark", null, `${k} ×${n}`)])) : null,
     !p.summary ? h("p", { class: "hint" }, "Only the title is sent at this share level.") : null,
@@ -80,8 +112,7 @@ export function summaryView(p) {
     section("What was done", bullets(s.description)),
     section("Outcomes", bullets(outcomes)),
     section("Left open", bullets(s.open_problems)),
-    (p.work_items || []).length ? section("Work items", h("ul", { class: "sv-work" }, p.work_items.map((w) =>
-      h("li", null, h("code", null, w.key), w.title ? [" ", text(w.title)] : null, h("span", { class: "faint" }, ` · ${w.kind}${w.status ? " · " + (STATUS[w.status] || w.status) : ""}`))))) : null,
+    (p.work_items || []).length ? section(`Work items (${p.work_items.length})`, workGroups(p.work_items)) : null,
     files.length ? section(`Files touched (${files.length})`,
       files.length > 8
         ? h("details", null, h("summary", null, `Show all ${files.length}`), h("ul", { class: "sv-files" }, files.map((f) => h("li", null, h("code", null, text(f))))))

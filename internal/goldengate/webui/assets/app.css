@@ -238,6 +238,21 @@ td .row { margin: 0; flex-wrap: nowrap; }
 .src-chatgpt { --logo: url("/assets/logos/chatgpt.svg"); }
 .src-cursor { --logo: url("/assets/logos/cursor.svg"); }
 .src-opencode { --logo: url("/assets/logos/opencode.svg"); }
+.wi { display: inline-block; width: 14px; height: 14px; flex: none; vertical-align: -2px; background: currentColor; -webkit-mask: var(--wi) center / contain no-repeat; mask: var(--wi) center / contain no-repeat; }
+.wi-pull_request { --wi: url("/assets/icons/pull_request.svg"); color: var(--cypress); }
+.wi-issue { --wi: url("/assets/icons/issue.svg"); color: var(--pacific); }
+.wi-commit { --wi: url("/assets/icons/commit.svg"); }
+.wi-file { --wi: url("/assets/icons/file.svg"); }
+.wi-artifact { --wi: url("/assets/icons/artifact.svg"); }
+.wcounts { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+.wc { display: inline-flex; align-items: center; gap: 4px; font-variant-numeric: tabular-nums; }
+.row-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin-top: 4px; font-size: 0.82rem; color: var(--dim); }
+.sv-counts { font-size: 0.92rem; color: var(--dim); }
+.sv-kind + .sv-kind { margin-top: 10px; }
+.sv-kind h5 { display: flex; align-items: center; gap: 6px; margin: 0 0 4px; font-size: 0.85rem; font-weight: 600; }
+.sv-work { list-style: none; padding-left: 0; }
+.sv-work li { padding-left: 20px; text-indent: -20px; }
+.sv-work .wi { margin-right: 6px; }
 .src-claude-code .lg, .src-claude-ai .lg { color: var(--claude); }
 .tags { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 .tags.named { gap: 8px 18px; }
