@@ -808,6 +808,11 @@ func (b *tuiBackend) summarizeSettings(cfg config.Config) tui.SummarizeSettings 
 		out.Provider = sc.Provider
 		_, out.KeySource = b.a.summarizerKey(sc.Provider)
 	}
+	for _, p := range llm.Providers {
+		_, src := b.a.summarizerKey(p.ID)
+		out.Providers = append(out.Providers, tui.ProviderKey{ID: p.ID, Title: p.Title, DefaultModel: p.Model, DefaultURL: p.BaseURL,
+			KeyOptional: p.KeyOptional, KeySource: src})
+	}
 	return out
 }
 

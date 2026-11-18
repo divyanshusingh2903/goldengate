@@ -36,19 +36,59 @@ export async function render(main, app) {
     h("p", { class: "hint" }, "From `goldengatebridge pair` on the server, when you would rather not type the admin secret here.")),
   h("div", { class: "row" }, connect));
 
+  const tools_ = card("Tools found on this computer", null, table(["Tool", "Found", h("th", { class: "num" }, "Sessions"), "Note"],
+    (tools || []).map((t) => h("tr", null,
+      h("td", null, t.Name), h("td", { class: t.Installed ? "w good" : "w dim" }, t.Installed ? "✓ yes" : "– no"),
+      h("td", { class: "num" }, t.Installed ? String(t.Sessions) : ""), h("td", { class: "dim small" }, t.Note || "")))));
+  const formCard = (title) => card(title, null, cardBody(form, result));
+
+  if (!snap.Server) {
+    fill(main,
+      head("Setup", "Find the tools on this computer and connect to your server."),
+      h("div", { class: "grid setup" }, tools_, formCard("Connect to your server")),
+      note("Nothing leaves this computer during setup. Connecting only creates tokens; you choose what is shared on the Projects screen, and it is sent only when you press Send."));
+    return;
+  }
+
+  // Connected: lead with the server; the form is there only on request.
+  const status = h("dd", { class: "dim" }, "checking…");
+  const token = h("dd", { class: "dim" }, "checking…");
+  const mcp = snap.Server.replace(/\/+$/, "") + "/mcp";
+  const copied = h("span", { class: "hint" });
+  const other = h("div", { hidden: true }, formCard("Connect to a different server"));
+  other.firstChild.classList.add("gap-top");
+  const change = h("button", {
+    type: "button",
+    onclick: () => { other.hidden = !other.hidden; change.textContent = other.hidden ? "Connect to a different server" : "Keep this server"; if (!other.hidden) url.focus(); },
+  }, "Connect to a different server");
+  const connected = card("Your server", h("span", { class: "badge good" }, "● Connected"), cardBody(
+    h("dl", { class: "kv" },
+      h("dt", null, "Address"), h("dd", { class: "mono" }, snap.Server),
+      h("dt", null, "Status"), status,
+      h("dt", null, "Upload token"), token,
+      h("dt", null, "Connector"), h("dd", null, h("code", null, mcp), " ",
+        h("button", { type: "button", class: "sm", onclick: async () => { try { await navigator.clipboard.writeText(mcp); copied.textContent = "copied"; } catch { copied.textContent = "select the text and copy it"; } } }, "Copy"), " ", copied)),
+    h("p", { class: "hint gap-top" }, "Assistants connect to the connector address. Make tokens for them, and choose what each one reads, on the Agents screen."),
+    h("div", { class: "row gap-top" },
+      h("button", { type: "button", onclick: () => app.go("agents") }, "Agents"),
+      h("button", { type: "button", onclick: () => app.go("server") }, "What the server holds"),
+      change)));
+
   fill(main,
-    head("Setup", "Find the tools on this computer and connect to your server.",
+    head("Setup", "This computer is connected. Choose what to share next.",
       h("button", { type: "button", class: "primary", onclick: () => app.go("projects") }, "Next: choose what to share →")),
-    h("div", { class: "grid setup" },
-      card("Tools found on this computer", null, table(["Tool", "Found", h("th", { class: "num" }, "Sessions"), "Note"],
-        (tools || []).map((t) => h("tr", null,
-          h("td", null, t.Name), h("td", { class: t.Installed ? "w good" : "w dim" }, t.Installed ? "✓ yes" : "– no"),
-          h("td", { class: "num" }, t.Installed ? String(t.Sessions) : ""), h("td", { class: "dim small" }, t.Note || ""))))),
-      card(snap.Server ? "Your server" : "Connect to your server", null, cardBody(
-        snap.Server ? h("p", { class: "hint" }, "Connected to ", h("code", null, snap.Server), ". Fill the form again only to connect to a different server or to make new tokens.") : null,
-        form, result))),
-    note("Nothing leaves this computer during setup. Connecting only creates tokens; you choose what is shared on the Projects screen, and it is sent only when you press Send."),
-  );
+    h("div", { class: "grid setup" }, tools_, h("div", null, connected, other)),
+    note("Nothing leaves this computer during setup. Connecting only creates tokens; you choose what is shared on the Projects screen, and it is sent only when you press Send."));
+
+  try {
+    const info = await api("/api/server");
+    fill(status, info.Healthy ? h("span", { class: "good" }, "● answers") : h("span", { class: "bad" }, "✕ unreachable", info.Err ? h("small", { class: "dim" }, ` (${info.Err})`) : null));
+    fill(token, info.TokenOK ? h("span", { class: "good" }, "● accepted", info.TokenStore ? h("span", { class: "dim" }, ` · kept in the ${info.TokenStore}`) : null) : h("span", { class: "bad" }, "✕ refused: connect again to make a new one"));
+    status.className = token.className = "";
+  } catch (e) {
+    fill(status, h("span", { class: "bad" }, String(e.message || e)));
+    fill(token, "unknown");
+  }
 }
 
 function showResult(box, r, app) {

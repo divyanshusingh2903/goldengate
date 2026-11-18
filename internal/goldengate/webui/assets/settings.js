@@ -2,7 +2,7 @@
 // redacted, and who writes the summaries.
 
 import { api } from "/assets/api.js";
-import { h, clear, plural, put, fill, head, card, cardBody, note } from "/assets/dom.js";
+import { h, plural, put, fill, ask, head, card, cardBody, note } from "/assets/dom.js";
 
 const PROVIDERS = [
   ["", "Local rules (nothing is sent to a model)"],
@@ -10,11 +10,13 @@ const PROVIDERS = [
   ["opencode", "OpenCode Zen"], ["ollama", "Ollama (on this computer)"], ["custom", "Custom OpenAI-compatible endpoint"],
 ];
 
-// keyText says where the summarizer's API key is, as the backend reports it.
-function keyText(src) {
-  if (!src || src === "none") return "No key is set.";
-  if (src === "file") return "A key is set, in a file on this computer that only you can read but that is not encrypted (there is no keyring).";
-  return `A key is set (${src}).`;
+// keyText says where a provider's API key is, as the backend reports it.
+function keyText(src, name) {
+  if (!src || src === "none") return `No key is stored for ${name}.`;
+  if (src === "file") return `A key for ${name} is stored in a file on this computer that only you can read but that is not encrypted (there is no keyring).`;
+  if (src === "keyring") return `A key for ${name} is stored in this computer's keyring.`;
+  if (src.startsWith("$")) return `${name} uses the key in the environment variable ${src}.`;
+  return `A key for ${name} is stored (${src}).`;
 }
 
 function select(id, options, value) {
@@ -33,15 +35,119 @@ export async function render(main, app) {
   const sources = (s.Sources || []).map((src) => ({ src, box: h("input", { type: "checkbox", class: "switch", checked: !!src.Enabled, "aria-label": `Read ${src.Name}` }) }));
 
   const provider = select("set-provider", PROVIDERS, provider0);
-  const model = h("input", { type: "text", id: "set-model", value: sum.Model || "", list: "set-models", autocomplete: "off" });
-  const models = h("datalist", { id: "set-models" });
   const baseURL = h("input", { type: "url", id: "set-base", value: sum.BaseURL || "", placeholder: "leave empty for the provider's own address" });
   const length = select("set-length", [["short", "Short: one paragraph"], ["", "Standard: two to four paragraphs"], ["detailed", "Detailed: several paragraphs"]], sum.Length === "standard" ? "" : (sum.Length || ""));
-  const key = h("input", { type: "password", id: "set-key", autocomplete: "off", placeholder: "paste a key to store it" });
-  const keyState = h("span", { class: "dim" }, keyText(sum.KeySource));
-  const showKey = async () => { keyState.textContent = keyText(((await api("/api/settings")).Summarize || {}).KeySource); };
   const modelNote = h("p", { class: "note" });
   const modelFields = h("div", null);
+  const keyBox = h("div", { class: "field" });
+  const modelBox = h("div", { class: "field gap-top" });
+  const urlBox = h("div", null);
+
+  // What the backend knows about every provider, keys included; refreshed
+  // after a key is stored or removed.
+  let infos = sum.Providers || [];
+  const info = () => infos.find((p) => p.ID === provider.value) || { ID: provider.value, KeySource: "none" };
+  // the provider's name without the note in brackets: "Ollama", not "Ollama (on this computer)"
+  const label = () => (PROVIDERS.find(([v]) => v === provider.value) || [, provider.value])[1].replace(/ \(.*\)$/, "");
+  const hasKey = () => { const k = info().KeySource; return !!k && k !== "none"; };
+  // the model each provider starts with: the saved one for the saved provider
+  const models0 = { [provider0]: sum.Model || "" };
+  let model = sum.Model || "";
+  let typed = false; // the user chose to type a model name
+
+  const reloadKeys = async () => { infos = ((await api("/api/settings")).Summarize || {}).Providers || infos; };
+
+  const drawKey = (replacing) => {
+    const name = label();
+    const input = h("input", { type: "password", id: "set-key", autocomplete: "off", placeholder: `paste your ${name} API key` });
+    const store = async () => {
+      if (!input.value) { app.say("Paste a key first.", true); return; }
+      try {
+        await api("/api/summarizer/key", { Provider: provider.value, Key: input.value });
+        input.value = "";
+        await reloadKeys();
+        app.say(`Key stored for ${name}.`);
+        drawKey(false);
+        loadModels();
+      } catch (e) { app.say(String(e.message || e), true); }
+    };
+    input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); store(); } });
+    const src = info().KeySource;
+    const stored = hasKey() && !String(src).startsWith("$");
+    let body;
+    if (hasKey() && !replacing) {
+      body = [h("p", { class: "key-state good" }, "✓ ", keyText(src, name)),
+        h("div", { class: "row" },
+          h("button", { type: "button", onclick: () => { drawKey(true); document.getElementById("set-key").focus(); } }, stored ? "Replace key" : "Store a key instead"),
+          stored ? h("button", {
+            type: "button", class: "danger",
+            onclick: async () => {
+              if (!await ask(`Remove the ${name} key?`, ["It is deleted from this computer. Summaries by this provider stop working until a key is stored again."], "Remove key")) return;
+              try { await api("/api/summarizer/key", { Provider: provider.value, Key: "" }); await reloadKeys(); app.say("Key removed."); drawKey(false); loadModels(); } catch (e) { app.say(String(e.message || e), true); }
+            },
+          }, "Remove key") : null)];
+    } else {
+      body = [
+        info().KeyOptional && !hasKey() ? h("p", { class: "hint" }, "A server on this computer usually needs no key. Store one only if yours asks for it.") : null,
+        h("div", { class: "row" }, h("span", { class: "grow-field" }, input),
+          h("button", { type: "button", class: hasKey() || info().KeyOptional ? "" : "primary", onclick: store }, "Store key"),
+          replacing ? h("button", { type: "button", class: "ghost", onclick: () => drawKey(false) }, "Cancel") : null),
+        h("p", { class: "hint" }, "It stays on this computer: in its keyring, or in a file only you can read when there is no keyring. It is never shown again and never sent to your server.")];
+    }
+    fill(keyBox, h("label", { for: "set-key" }, "API key"), body);
+  };
+
+  const drawModels = (list, state) => {
+    const items = [...new Set([...(list || [])])];
+    if (model && !items.includes(model)) items.unshift(model);
+    const lbl = h("label", { for: "set-model" }, "Model");
+    if (state === "wait") { fill(modelBox, lbl, h("p", { class: "hint" }, hasKey() || info().KeyOptional ? "Loading the models…" : "Store a key above and the models load here.")); return; }
+    const text = h("input", { type: "text", id: "set-model", value: model, autocomplete: "off", placeholder: info().DefaultModel ? `for example ${info().DefaultModel}` : "the model's name" });
+    text.addEventListener("input", () => { model = text.value.trim(); });
+    if (typed || !items.length) {
+      fill(modelBox, lbl, text,
+        state ? h("p", { class: "hint bad" }, state) : null,
+        h("div", { class: "row" },
+          (list || []).length ? h("button", { type: "button", class: "sm", onclick: () => { typed = false; drawModels(list); } }, "Choose from the list") : null,
+          h("button", { type: "button", class: "sm", onclick: () => loadModels() }, "Load the models again")));
+      return;
+    }
+    const sel = h("select", { id: "set-model" }, items.map((m) => h("option", { value: m, selected: m === model }, m === info().DefaultModel ? `${m} (default)` : m)));
+    sel.addEventListener("change", () => { model = sel.value; });
+    model = sel.value;
+    fill(modelBox, lbl, sel,
+      h("p", { class: "hint" }, `${plural(list.length, "model")} offered by ${label()}. `,
+        h("button", { type: "button", class: "link", onclick: () => { typed = true; drawModels(list); } }, "Type a name instead"), " · ",
+        h("button", { type: "button", class: "link", onclick: () => loadModels() }, "Load again")));
+  };
+
+  let seq = 0; // only the newest load draws
+  const loadModels = async () => {
+    const me = ++seq;
+    if (!hasKey() && !info().KeyOptional) { drawModels([], "wait"); return; }
+    drawModels([], "wait");
+    try {
+      const list = await api(`/api/summarizer/models?provider=${encodeURIComponent(provider.value)}&base_url=${encodeURIComponent(baseURL.value.trim())}`);
+      if (me !== seq) return;
+      const got = (list || []).slice().sort();
+      // start from the provider's default when it offers it, else its first
+      if (!model) model = got.includes(info().DefaultModel) ? info().DefaultModel : (got[0] || "");
+      drawModels(got);
+    } catch (e) {
+      if (me !== seq) return;
+      typed = true;
+      drawModels([], `The models could not be listed: ${e.message || e}. Type the model's name.`);
+    }
+  };
+
+  const drawURL = () => {
+    const local = provider.value === "ollama" || provider.value === "custom";
+    const def = info().DefaultURL;
+    baseURL.placeholder = def ? `leave empty for ${def}` : "leave empty for the provider's own address";
+    const field = h("div", { class: "field gap-top" }, h("label", { for: "set-base" }, "Endpoint address"), baseURL);
+    fill(urlBox, local || baseURL.value ? field : h("details", { class: "more gap-top" }, h("summary", null, "Use a different endpoint address"), field));
+  };
+  baseURL.addEventListener("change", () => loadModels());
 
   const describe = () => {
     const on = provider.value !== "";
@@ -50,50 +156,33 @@ export async function render(main, app) {
       ? "With a model on, the redacted conversation of each session you send goes to that provider so it can write the summary. Sessions that wait for your approval are never sent to it."
       : "Summaries are written by rules on this computer. Nothing is sent to any model.";
   };
-  provider.addEventListener("change", describe);
+  let shown = provider0;
+  provider.addEventListener("change", () => {
+    models0[shown] = model;
+    shown = provider.value;
+    model = models0[shown] ?? "";
+    typed = false;
+    if (provider.value !== provider0) baseURL.value = ""; // an address belongs to one provider
+    else baseURL.value = sum.BaseURL || "";
+    describe();
+    if (!provider.value) return;
+    drawKey(false); drawURL(); loadModels();
+  });
 
   const collect = () => ({
     Level: level.value, Since: since.value.trim(),
     Sources: sources.map(({ src, box }) => ({ ...src, Enabled: box.checked })),
     ExtraPatterns: patterns.value.split("\n").map((l) => l.trim()).filter(Boolean),
     EnrichGit: git.checked, Theme: s.Theme || "",
-    Summarize: { Provider: provider.value, Model: model.value.trim(), BaseURL: baseURL.value.trim(), Length: length.value, KeySource: sum.KeySource || "" },
+    Summarize: { Provider: provider.value, Model: provider.value ? model.trim() : "", BaseURL: baseURL.value.trim(), Length: length.value, KeySource: sum.KeySource || "" },
   });
   const save = async () => {
     try { await api("/api/settings", collect()); app.say("Saved."); await app.refresh(); return true; } catch (e) { app.say(String(e.message || e), true); return false; }
   };
 
-  put(modelFields, 
-    h("div", { class: "field" }, h("label", { for: "set-model" }, "Model"), model, models),
-    h("div", { class: "row" }, h("button", {
-      type: "button",
-      onclick: async () => {
-        try {
-          const list = await api(`/api/summarizer/models?provider=${encodeURIComponent(provider.value)}&base_url=${encodeURIComponent(baseURL.value.trim())}`);
-          clear(models);
-          for (const m of list || []) put(models, h("option", { value: m }));
-          app.say(`${plural((list || []).length, "model")} offered; start typing in the Model field.`);
-        } catch (e) { app.say(String(e.message || e), true); }
-      },
-    }, "List this provider's models")),
-    h("div", { class: "field gap-top" }, h("label", { for: "set-base" }, "Endpoint address"), baseURL),
-    h("div", { class: "field" }, h("label", { for: "set-length" }, "Narrative length"), length),
-    h("div", { class: "field" }, h("label", { for: "set-key" }, "API key"), key),
-    h("p", { class: "hint" }, "A key you store stays on this computer: in its keyring, or in a file only you can read when there is no keyring. It is never shown again and never sent to your server. ", keyState),
-    h("div", { class: "row" },
-      h("button", {
-        type: "button",
-        onclick: async () => {
-          if (!key.value) { app.say("Paste a key first.", true); return; }
-          try { await api("/api/summarizer/key", { Provider: provider.value, Key: key.value }); key.value = ""; await showKey(); app.say("Key stored."); } catch (e) { app.say(String(e.message || e), true); }
-        },
-      }, "Store key"),
-      h("button", {
-        type: "button",
-        onclick: async () => {
-          try { await api("/api/summarizer/key", { Provider: provider.value, Key: "" }); await showKey(); app.say("Key removed."); } catch (e) { app.say(String(e.message || e), true); }
-        },
-      }, "Remove key"),
+  put(modelFields, keyBox, modelBox, urlBox,
+    h("div", { class: "field gap-top" }, h("label", { for: "set-length" }, "Narrative length"), length),
+    h("div", { class: "row gap-top" },
       h("button", {
         type: "button",
         onclick: async () => {
@@ -122,4 +211,5 @@ export async function render(main, app) {
           cardBody(h("div", { class: "field" }, h("label", { for: "set-provider" }, "Summaries by"), provider), modelNote, h("div", { class: "gap-top" }, modelFields))))),
   );
   describe();
+  if (provider.value) { drawKey(false); drawURL(); loadModels(); }
 }

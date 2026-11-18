@@ -449,3 +449,9 @@ thead th.num { font: 500 0.7rem var(--mono); }
 /* a secret shown once: whole, selectable, never clipped */
 .secret { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px 14px; background: var(--term-bg); border: 1px solid var(--orange); }
 .secret code { flex: 1 1 18rem; min-width: 0; font: 500 0.9rem var(--mono); overflow-wrap: anywhere; user-select: all; }
+
+/* A button that reads as a link, inside a line of text */
+button.link { display: inline; min-height: 0; padding: 0; border: 0; background: none; font-weight: 500; font-size: inherit; color: var(--pacific); text-decoration: underline; text-underline-offset: 2px; }
+button.link:hover { color: var(--ink); }
+details.more > summary { cursor: pointer; color: var(--pacific); font-size: 0.9rem; }
+.key-state { margin-bottom: 8px; }

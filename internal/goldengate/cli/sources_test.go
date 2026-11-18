@@ -440,4 +440,16 @@ func TestSettingsKeySourceIsTheFileFallback(t *testing.T) {
 	if st, _ = b.Settings(ctx); st.Summarize.KeySource != "file" {
 		t.Errorf("key source = %q, want file", st.Summarize.KeySource)
 	}
+	// every provider says where its own key is, chosen or not (#156)
+	if err := b.SetSummarizerKey(ctx, "gemini", "gm-test-not-real"); err != nil {
+		t.Fatal(err)
+	}
+	st, _ = b.Settings(ctx)
+	got := map[string]string{}
+	for _, p := range st.Summarize.Providers {
+		got[p.ID] = p.KeySource
+	}
+	if got["anthropic"] != "file" || got["gemini"] != "file" || got["openai"] != "none" {
+		t.Errorf("per-provider key sources = %v", got)
+	}
 }

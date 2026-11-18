@@ -14,7 +14,7 @@ _Last updated 2026-11-17. Update this section whenever a row in the queue change
 **Progress:** 30 of 31 scheduled issues done (plus 2 stretch). Phases 1 (Foundations), 2 (Per-agent access) and 3 (Inbox and curation) are complete.
 **Bug fixes from the end-to-end test** (#112–#124, PRs #125–#137) are all done; the report is `docs/TEST-REPORT.md`, with small observations left for later.
 **Web UI restyle** (#139, PR #141) and its follow-ups are done: #140 (PR #142), #143 (PR #144), #146 (PR #147), #148 (PR #149) and #151 (PR #152).
-**Nothing else is next:** every issue of the queue is done except #40. **Blocked:** #40 Share-link import: the #39 spike recommends not building it; whether to close it as not planned is the user's call. Phase 4 (work items, rules and automation) is complete: #21, #35, #36, #45, #31, #33, #34, #32 and #22.
+**Next:** #157 (managing agents and OAuth apps from the web UI and TUI), after #156 (found by the user walking the restyled UI). Otherwise every issue of the queue is done except #40. **Blocked:** #40 Share-link import: the #39 spike recommends not building it; whether to close it as not planned is the user's call. Phase 4 (work items, rules and automation) is complete: #21, #35, #36, #45, #31, #33, #34, #32 and #22.
 
 ### Done
 
@@ -208,6 +208,8 @@ The web UI takes the finalized app design (sidebar, page heads, framed cards, dr
 | R4 | #146 Web UI: Projects uses the width; tool logos in place of letter codes | M | #139 | Nov 18 | done | #147 |
 | R5 | #148 Web UI: a review you can review, a readable Preview, real review progress | L | #146 | Nov 18 | done | #149 |
 | R6 | #151 Web UI: a new assistant token from the Agents screen | S | | Nov 18 | done | #152 |
+| R7 | #156 Web UI: Setup shows the connected server, key-first summarizer, Server status colours | S | | Nov 18 | in review | |
+| R8 | #157 Agents: add, rename and remove agents, and remove OAuth apps (web UI and TUI) | M | | Nov 19 | todo | |
 
 ## Log
 
@@ -296,3 +298,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-17: #148 done (#149). The roadmap page lists #146 and #148 under Testing and polish.
 - 2026-11-18: #151 implemented: `MintAgentToken` on the TUI backend makes a read token for one agent and changes nothing else. The web Agents screen has a New token button on each agent that asks first, then shows the token once in a panel with Copy, the connector URL, the header to send and the token id; the TUI does the same with `N` on an agent's tokens. Checked in the sandbox at 1440 and 375px.
 - 2026-11-18: #151 done (#152). The roadmap page lists #151 under Testing and polish.
+- 2026-11-18: #156 and #157 filed from the user's walk through the restyled web UI. #156 implemented: Setup leads with the connected server (status, upload token, connector address) and shows the form only on request; a gear for Settings; Server status values coloured; the summarizer asks for the provider's key first (every provider's key state now comes with the settings), then loads its models by itself. Walked in a real browser against the user's local server with Ollama and an environment key; no key was written to the keyring.
