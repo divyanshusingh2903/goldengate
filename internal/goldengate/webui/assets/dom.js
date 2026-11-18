@@ -146,7 +146,7 @@ export function table(heads, rows) {
 
 // drawer opens a side panel over the page; it closes with Esc, the scrim or
 // its close button, and returns its body and foot to fill. onClose runs once.
-export function drawer(title, top, onClose) {
+export function drawer(title, top, onClose, opts) {
   const layer = document.getElementById("layer");
   const before = document.activeElement;
   const body = h("div", { class: "drawer-body" });
@@ -162,7 +162,7 @@ export function drawer(title, top, onClose) {
   };
   const onKey = (e) => { if (e.key === "Escape" && !document.getElementById("confirm").open) close(); };
   const x = h("button", { type: "button", class: "ghost icon", "aria-label": "Close", onclick: close }, "✕");
-  const panel = h("aside", { class: "drawer", role: "dialog", "aria-modal": "true", "aria-label": title },
+  const panel = h("aside", { class: "drawer" + (opts && opts.wide ? " wide" : ""), role: "dialog", "aria-modal": "true", "aria-label": title },
     h("div", { class: "drawer-head" }, h("div", { class: "row" }, h("span", { class: "actions" }, top), x), h("h2", null, title)),
     body, foot);
   fill(layer, h("div", { class: "scrim", onclick: close }), panel);

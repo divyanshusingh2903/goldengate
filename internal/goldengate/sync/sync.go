@@ -41,6 +41,9 @@ type planned struct {
 	// auto is set when the session is sent by trust and rules rather than
 	// by the user's own approval: Push writes it into the receipt.
 	auto *AutoItem
+	// changed is set when an earlier version was sent: the content changed,
+	// or the session moved to another project.
+	changed bool
 }
 
 // Batch is an opaque, already-approved set of payloads. Only Plan creates one.
@@ -92,6 +95,28 @@ func (b Batch) ByProject() []Batch {
 			out = append(out, Batch{})
 		}
 		out[0].refresh = append(out[0].refresh, b.refresh...)
+	}
+	return out
+}
+
+// BatchItem is one payload of a batch with what a review shows about it.
+type BatchItem struct {
+	Payload *model.SessionPayload
+	// Changed is set when an earlier version is on the server.
+	Changed bool
+	// Why says why the project's trust level and rules send it; it is empty
+	// when the user approves it, by hand or by sending the reviewed plan.
+	Why string
+}
+
+// Items lists the batch's payloads in order, for a review.
+func (b Batch) Items() []BatchItem {
+	out := make([]BatchItem, len(b.items))
+	for i, it := range b.items {
+		out[i] = BatchItem{Payload: it.payload, Changed: it.changed}
+		if it.auto != nil {
+			out[i].Why = it.auto.Why
+		}
 	}
 	return out
 }
@@ -202,6 +227,10 @@ type RunOpts struct {
 	// and redacted, so a caller can show progress while a big plan builds.
 	// It may be called from several goroutines at once.
 	OnPlanned func(p *model.SessionPayload)
+	// OnQueued, when set, is called each time one more session is queued to
+	// be read and summarized, before OnPlanned reports it done, so a caller
+	// can show "n of total". It is called from the planning goroutine only.
+	OnQueued func()
 	// Resummarize rebuilds already-pushed sessions whose file is unchanged but
 	// whose summary was not written by the configured model summarizer (the
 	// heuristic, or another model), so turning a summarizer on can upgrade
@@ -391,7 +420,7 @@ func (s *Syncer) Plan(ctx context.Context, o RunOpts) (Batch, Report, error) {
 					if p, body, ok := s.refiled(prev, ref); ok {
 						entry := prev
 						entry.Payload = body
-						b.items = append(b.items, planned{payload: p, entry: entry})
+						b.items = append(b.items, planned{payload: p, entry: entry, changed: true})
 						rep.Planned++
 						rep.Refiled++
 						continue
@@ -414,6 +443,9 @@ func (s *Syncer) Plan(ctx context.Context, o RunOpts) (Batch, Report, error) {
 			rep.Warnings += len(raw.Warnings)
 			if err := pool.add(job{raw: raw, ref: ref, prev: prev, seen: seen, mtime: mtime, resummarize: resum}); err != nil {
 				return b, rep, err
+			}
+			if o.OnQueued != nil {
+				o.OnQueued()
 			}
 		}
 	}
@@ -500,7 +532,7 @@ func (s *Syncer) Plan(ctx context.Context, o RunOpts) (Batch, Report, error) {
 				rep.Redactions[k] += n
 			}
 			s.log().Debug("planned", "adapter", ref.Source, "session", ref.ID, "redactions", p.Redactions)
-			b.items = append(b.items, planned{payload: p, auto: auto, entry: Entry{
+			b.items = append(b.items, planned{payload: p, auto: auto, changed: seen, entry: Entry{
 				Source: ref.Source, SessionID: ref.ID, Project: ref.ProjectKey, ContentHash: p.ContentHash,
 				Size: ref.SizeBytes, MTimeNS: mtime, Payload: body,
 			}})
