@@ -38,10 +38,7 @@ const app = {
   },
   // refresh reloads what every screen needs and updates the sidebar.
   async refresh() {
-    // one after the other: on a first run the two would open a new state
-    // database at the same time (#140)
-    const snap = await api("/api/snapshot");
-    const inbox = await api("/api/inbox").catch(() => null);
+    const [snap, inbox] = await Promise.all([api("/api/snapshot"), api("/api/inbox").catch(() => null)]);
     app.snapshot = snap;
     const host = snap.Server ? snap.Server.replace(/^https?:\/\//, "") : "";
     document.getElementById("badge").textContent = host || "not connected";
