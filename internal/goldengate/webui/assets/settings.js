@@ -2,7 +2,7 @@
 // redacted, and who writes the summaries.
 
 import { api } from "/assets/api.js";
-import { h, clear, plural, put, fill } from "/assets/dom.js";
+import { h, clear, plural, put, fill, head, card, cardBody, note } from "/assets/dom.js";
 
 const PROVIDERS = [
   ["", "Local rules (nothing is sent to a model)"],
@@ -29,8 +29,8 @@ export async function render(main, app) {
   const level = select("set-level", [["summary", "Summary: title, goals, outcomes, files and work items"], ["titles-only", "Titles only: the session title and work items"]], s.Level);
   const since = h("input", { type: "text", id: "set-since", value: s.Since || "" });
   const patterns = h("textarea", { id: "set-patterns" }, (s.ExtraPatterns || []).join("\n"));
-  const git = h("input", { type: "checkbox", checked: !!s.EnrichGit });
-  const sources = (s.Sources || []).map((src) => ({ src, box: h("input", { type: "checkbox", checked: !!src.Enabled }) }));
+  const git = h("input", { type: "checkbox", class: "switch", checked: !!s.EnrichGit, "aria-label": "Read git metadata" });
+  const sources = (s.Sources || []).map((src) => ({ src, box: h("input", { type: "checkbox", class: "switch", checked: !!src.Enabled, "aria-label": `Read ${src.Name}` }) }));
 
   const provider = select("set-provider", PROVIDERS, provider0);
   const model = h("input", { type: "text", id: "set-model", value: sum.Model || "", list: "set-models", autocomplete: "off" });
@@ -40,7 +40,7 @@ export async function render(main, app) {
   const key = h("input", { type: "password", id: "set-key", autocomplete: "off", placeholder: "paste a key to store it" });
   const keyState = h("span", { class: "dim" }, keyText(sum.KeySource));
   const showKey = async () => { keyState.textContent = keyText(((await api("/api/settings")).Summarize || {}).KeySource); };
-  const modelNote = h("p", { class: "leaves" });
+  const modelNote = h("p", { class: "note" });
   const modelFields = h("div", null);
 
   const describe = () => {
@@ -64,7 +64,7 @@ export async function render(main, app) {
   };
 
   put(modelFields, 
-    h("label", { for: "set-model" }, "Model"), model, models,
+    h("div", { class: "field" }, h("label", { for: "set-model" }, "Model"), model, models),
     h("div", { class: "row" }, h("button", {
       type: "button",
       onclick: async () => {
@@ -76,10 +76,10 @@ export async function render(main, app) {
         } catch (e) { app.say(String(e.message || e), true); }
       },
     }, "List this provider's models")),
-    h("label", { for: "set-base" }, "Endpoint address"), baseURL,
-    h("label", { for: "set-length" }, "Narrative length"), length,
-    h("label", { for: "set-key" }, "API key"), key,
-    h("p", { class: "dim" }, "A key you store stays on this computer: in its keyring, or in a file only you can read when there is no keyring. It is never shown again and never sent to your server. ", keyState),
+    h("div", { class: "field gap-top" }, h("label", { for: "set-base" }, "Endpoint address"), baseURL),
+    h("div", { class: "field" }, h("label", { for: "set-length" }, "Narrative length"), length),
+    h("div", { class: "field" }, h("label", { for: "set-key" }, "API key"), key),
+    h("p", { class: "hint" }, "A key you store stays on this computer: in its keyring, or in a file only you can read when there is no keyring. It is never shown again and never sent to your server. ", keyState),
     h("div", { class: "row" },
       h("button", {
         type: "button",
@@ -103,25 +103,23 @@ export async function render(main, app) {
         },
       }, "Save and test")));
 
-  fill(main, 
-    h("h1", null, "Settings"),
+  const row = (title, desc, control) => h("div", { class: "set-row" }, h("div", null, h("div", { class: "t" }, title), desc ? h("div", { class: "d" }, desc) : null), control);
+  fill(main,
     h("form", { onsubmit: (e) => { e.preventDefault(); save(); } },
-      h("h2", null, "What is sent"),
-      h("label", { for: "set-level" }, "How much of each session"), level,
-      h("label", { for: "set-since" }, "How far back"), since,
-      h("p", { class: "dim" }, "For example 90d. Older sessions are not sent."),
-      h("h2", null, "Tools"),
-      h("p", { class: "dim" }, "A tool that is off is never read for sending, whatever is shared."),
-      sources.map(({ src, box }) => h("label", { class: "check" }, box,
-        `${src.Name}${src.Installed ? "" : " (not found on this computer)"}${src.Note ? " · " + src.Note : ""}`)),
-      h("h2", null, "Redaction"),
-      h("label", { for: "set-patterns" }, "Extra patterns to redact, one per line"), patterns,
-      h("p", { class: "dim" }, "Secrets, keys and home paths are always redacted. Add regular expressions for anything else, such as a client's name."),
-      h("label", { class: "check" }, git, "Read each folder's git metadata (HEAD and config) to recognise worktrees, remotes and branches"),
-      h("h2", null, "Who writes the summaries"),
-      h("label", { for: "set-provider" }, "Summaries by"), provider,
-      modelNote, modelFields,
-      h("div", { class: "row" }, h("button", { type: "submit", class: "primary" }, "Save settings"))),
+      head("Settings", "What is read, what is sent, and who writes the summaries.", h("button", { type: "submit", class: "primary" }, "Save settings")),
+      h("div", { class: "grid" },
+        card("What is sent", null,
+          row(h("label", { for: "set-level" }, "How much of each session"), null, level),
+          row(h("label", { for: "set-since" }, "How far back"), "For example 90d. Older sessions are not sent.", since)),
+        card("Tools", null,
+          h("p", { class: "card-body hint" }, "A tool that is off is never read for sending, whatever is shared."),
+          sources.map(({ src, box }) => row(src.Name, src.Note || (src.Installed ? "" : "Not found on this computer"), box))),
+        card("Redaction", null,
+          cardBody(h("div", { class: "field" }, h("label", { for: "set-patterns" }, "Extra patterns to redact, one per line"), patterns,
+            h("p", { class: "hint" }, "Secrets, keys and home paths are always redacted. Add regular expressions for anything else, such as a client's name."))),
+          row("Read git metadata", "Each folder's HEAD and config, to recognise worktrees, remotes and branches.", git)),
+        card("Who writes the summaries", null,
+          cardBody(h("div", { class: "field" }, h("label", { for: "set-provider" }, "Summaries by"), provider), modelNote, h("div", { class: "gap-top" }, modelFields))))),
   );
   describe();
 }
