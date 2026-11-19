@@ -60,6 +60,7 @@ Supporting changes (not queue issues):
 | The user's stricter `pr-template` check (Checklist with every item ticked; skips Dependabot) | #9 | 2026-11-14 |
 | This ledger, then its checklist rule, status section and roadmap sync | #54, #56, #57, #58 | 2026-11-14 |
 | #159 Versioned Docker image of the server: `deploy/Dockerfile`, an `image` CI job on every PR, and `release-image.yml` publishing to GHCR on `vX.Y.Z` tags (and `edge` from `main`) | #160 | in review |
+| #171 `goldengate` and `goldengatebridge` report the module version when built with `go install ...@vX` (shared `internal/utils/buildver`); README versions refreshed | #172 | in review |
 | Ledger status updates between issues (#49 done; phase 2 complete; refresh; phase 3 complete; #21 done; #35 done; #36 done; #45 done; #31 done; #33 done; #34 done; #32 done; #22 done; #44 done; #39 done; #41 done; #42 done; #23 done; #46 done; #47 done) | #61, #68, #69, #73, #75, #77, #79, #81, #83, #85, #87, #89, #91, #93, #95, #97, #99, #101, #103, #105 | 2026-11-15 |
 
 ### Open loose ends
@@ -306,3 +307,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-18: v1.0.1 tagged and published (fix for #163); README says 1.0.1 (#165).
 - 2026-11-18: #167: `GOLDENGATE_OAUTH=true` turns OAuth on without the flag, for hosts that cannot change the start arguments (Railway image deploys). The flag wins when given. Needs a release (1.1.0) before the published image has it.
 - 2026-11-18: #169: found while connecting Claude web: the consent and access pages were a white box with pale text in dark mode and a blue button. Both pages and the error page now use the BRAND.md tokens in light and dark (square double-rule cards, one orange action, field borders, the mark). Same CSP: no script, no external resource.
+- 2026-11-18: #171 (version shows `dev` after `go install`): both binaries read the embedded module version when `-ldflags -X` did not set one. Takes effect from the next tag; v1.1.1 still prints `dev`. README versions moved from 1.0.1 to 1.1.2. PR #172.
