@@ -425,7 +425,8 @@ func (s *Syncer) Plan(ctx context.Context, o RunOpts) (Batch, Report, error) {
 			mtime := ref.UpdatedAt.UnixNano()
 			resum := false
 			if seen && prev.Size == ref.SizeBytes && prev.MTimeNS == mtime {
-				stale := s.Summarizer != nil && staleSummary(prev.Payload, s.Summarizer.Name(), s.Config.Summarize.Length)
+				stale := s.Summarizer != nil && staleSummary(prev.Payload, s.Summarizer.Name(), s.Config.Summarize.Length) &&
+					!s.State.ModelSkipped(ctx, ref.Source, ref.ID, prev.ContentHash, s.Summarizer.Name())
 				if !stale || !o.Resummarize {
 					if stale {
 						rep.Stale++
@@ -493,6 +494,11 @@ func (s *Syncer) Plan(ctx context.Context, o RunOpts) (Batch, Report, error) {
 			sameProj := !kept || (wasID == p.ProjectID && wasName == p.ProjectName)
 			// an edit made (or removed) after the session was sent changes
 			// the payload without changing the conversation
+			if j.resummarize && !j.failed && p.Summary != nil && p.Summary.SummarizedBy != s.Summarizer.Name() {
+				// the model looked and left the rules' summary: say so, or
+				// the session would be offered for re-summarizing forever
+				s.State.MarkModelSkipped(ctx, ref.Source, ref.ID, p.ContentHash, s.Summarizer.Name())
+			}
 			compare := j.resummarize || (p.Summary != nil && p.Summary.Edited) || editedPayload(prev.Payload)
 			if seen && prev.ContentHash == p.ContentHash && sameProj && (!compare || bytes.Equal(body, prev.Payload)) {
 				// same content, only the file's stat changed: remember the new stat, send nothing
@@ -626,6 +632,7 @@ type job struct {
 	payload *model.SessionPayload
 	// resummarize sends the session even though its conversation is unchanged
 	resummarize bool
+	failed      bool // the model call failed: the rules' summary is a fallback
 	gate        gate
 	// cached marks a payload taken from the plan cache: it is already built,
 	// and raw holds only the git facts rules read
@@ -710,6 +717,7 @@ func (p *buildPool) work() {
 		onErr := func(err error) {
 			p.mu.Lock()
 			p.failures++
+			p.jobs[i].failed = true
 			p.mu.Unlock()
 			p.s.log().Warn("model summary failed; the heuristic summary is used", "session", j.ref.ID, "err", err)
 		}

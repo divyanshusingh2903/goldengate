@@ -86,6 +86,7 @@ function showPlan(box, app, plan, resummarize) {
   if (plan.Unchanged) facts.push(`${plural(plan.Unchanged, "session")} already on the server and unchanged: not sent again.`);
   if (plan.NotSelected) facts.push(`${plural(plan.NotSelected, "session")} in projects you do not share: staying on this computer.`);
   if (plan.Excluded) facts.push(`${plural(plan.Excluded, "session")} excluded: never sent.`);
+  if (resummarize && plan.Resummarized) facts.push(`${plural(plan.Resummarized, "sent session")} checked by ${plan.Summarizer}: only those whose summary changed are sent again.`);
   if (plan.Warnings) facts.push(`${plural(plan.Warnings, "warning")} while reading sessions.`);
   if (plan.Summarizer) facts.push(`Summaries are written by ${plan.Summarizer}: the redacted conversations of the sessions being sent go to that model.`);
 
