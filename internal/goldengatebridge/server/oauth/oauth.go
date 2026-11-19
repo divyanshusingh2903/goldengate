@@ -230,6 +230,10 @@ type registerRequest struct {
 // production) for a connector. Each URI is still validated on its own.
 const maxRedirectURIs = 20
 
+// maxState bounds the state parameter, which is only echoed back to the redirect URI. Google sends
+// a long one (well over 512 characters).
+const maxState = 4096
+
 func (p *Provider) validRedirect(raw string) error {
 	if len(raw) > 500 {
 		return errors.New("redirect URI too long")
@@ -397,7 +401,7 @@ func (p *Provider) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	state := q.Get("state")
-	if len(state) > 512 {
+	if len(state) > maxState {
 		p.redirectWithError(w, r, redirect, "", "invalid_request", "state too long")
 		return
 	}
