@@ -226,6 +226,10 @@ type registerRequest struct {
 	Scope        string   `json:"scope"`
 }
 
+// maxRedirectURIs bounds one registration; Google registers a set of its own (sandbox and
+// production) for a connector. Each URI is still validated on its own.
+const maxRedirectURIs = 20
+
 func (p *Provider) validRedirect(raw string) error {
 	if len(raw) > 500 {
 		return errors.New("redirect URI too long")
@@ -266,8 +270,8 @@ func (p *Provider) handleRegister(w http.ResponseWriter, r *http.Request) {
 		reject("invalid_client_metadata", "request body must be a JSON object")
 		return
 	}
-	if len(req.RedirectURIs) == 0 || len(req.RedirectURIs) > 5 {
-		reject("invalid_redirect_uri", "provide 1 to 5 redirect_uris")
+	if len(req.RedirectURIs) == 0 || len(req.RedirectURIs) > maxRedirectURIs {
+		reject("invalid_redirect_uri", fmt.Sprintf("provide 1 to %d redirect_uris", maxRedirectURIs))
 		return
 	}
 	for _, u := range req.RedirectURIs {

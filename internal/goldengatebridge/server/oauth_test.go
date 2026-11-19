@@ -524,19 +524,27 @@ func TestOAuthConsentIsLockedOutAfterGuessing(t *testing.T) {
 	}
 }
 
+func manyRedirects(n int) []string {
+	out := make([]string, n)
+	for i := range out {
+		out[i] = fmt.Sprintf("https://a.example/cb%d", i)
+	}
+	return out
+}
+
 func TestOAuthRegistrationValidation(t *testing.T) {
 	e := oauthEnv(t, func(c *server.Config) {})
 	c := newOC(t, e)
 	bad := map[string]map[string]any{
-		"no redirect":       {"client_name": "x"},
-		"http non-loopback": {"redirect_uris": []string{"http://evil.example/cb"}},
-		"fragment":          {"redirect_uris": []string{"https://a.example/cb#frag"}},
-		"javascript scheme": {"redirect_uris": []string{"javascript:alert(1)"}},
-		"custom scheme":     {"redirect_uris": []string{"myapp://cb"}},
-		"credentials":       {"redirect_uris": []string{"https://u:p@a.example/cb"}},
-		"relative":          {"redirect_uris": []string{"/cb"}},
-		"six redirects":     {"redirect_uris": []string{"https://a/1", "https://a/2", "https://a/3", "https://a/4", "https://a/5", "https://a/6"}},
-		"bad auth method":   {"redirect_uris": []string{redirect}, "token_endpoint_auth_method": "private_key_jwt"},
+		"no redirect":        {"client_name": "x"},
+		"http non-loopback":  {"redirect_uris": []string{"http://evil.example/cb"}},
+		"fragment":           {"redirect_uris": []string{"https://a.example/cb#frag"}},
+		"javascript scheme":  {"redirect_uris": []string{"javascript:alert(1)"}},
+		"custom scheme":      {"redirect_uris": []string{"myapp://cb"}},
+		"credentials":        {"redirect_uris": []string{"https://u:p@a.example/cb"}},
+		"relative":           {"redirect_uris": []string{"/cb"}},
+		"too many redirects": {"redirect_uris": manyRedirects(21)},
+		"bad auth method":    {"redirect_uris": []string{redirect}, "token_endpoint_auth_method": "private_key_jwt"},
 	}
 	for name, body := range bad {
 		resp, b := c.req("POST", "/oauth/register", nil, body, nil)
@@ -554,6 +562,10 @@ func TestOAuthRegistrationValidation(t *testing.T) {
 	}
 	if extras["scope"] != "read" {
 		t.Errorf("scope registered: %v", extras["scope"])
+	}
+	// Google registers a set of its own redirect URIs for one connector.
+	if resp, b := c.req("POST", "/oauth/register", nil, map[string]any{"redirect_uris": manyRedirects(8), "client_name": "Google"}, nil); resp.StatusCode != 201 {
+		t.Errorf("eight redirects: %d %s", resp.StatusCode, b)
 	}
 	for _, ok := range []string{"http://localhost:5555/cb", "http://127.0.0.1/cb", "http://[::1]:1/cb"} {
 		if resp, b := c.req("POST", "/oauth/register", nil, map[string]any{"redirect_uris": []string{ok}}, nil); resp.StatusCode != 201 {
