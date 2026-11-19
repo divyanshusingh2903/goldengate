@@ -441,6 +441,15 @@ func TestOAuthAuthorizeValidation(t *testing.T) {
 			t.Errorf("%s: %d %s", name, resp.StatusCode, resp.Header.Get("Location"))
 		}
 	}
+	// a long state (Google sends one) is accepted; an absurd one is not
+	long := strings.Repeat("s", 2000)
+	if resp, _ := c.req("GET", c.authorizeQuery(id, challenge, map[string]string{"state": long}), nil, nil, nil); resp.StatusCode != 200 {
+		t.Errorf("2000-character state: %d", resp.StatusCode)
+	}
+	resp, _ := c.req("GET", c.authorizeQuery(id, challenge, map[string]string{"state": strings.Repeat("s", 5000)}), nil, nil, nil)
+	if loc, _ := url.Parse(resp.Header.Get("Location")); resp.StatusCode != 302 || loc.Query().Get("error") != "invalid_request" {
+		t.Errorf("5000-character state: %d %s", resp.StatusCode, resp.Header.Get("Location"))
+	}
 	// the consent page is a page that cannot be framed, cached or leak its URL
 	resp, b := c.req("GET", c.authorizeQuery(id, challenge, nil), nil, nil, nil)
 	h := resp.Header
