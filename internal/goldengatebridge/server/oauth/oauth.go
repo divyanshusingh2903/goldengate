@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"html/template"
+	"io"
 	"log/slog"
 	"net"
 	"net/http"
@@ -249,12 +250,19 @@ func (p *Provider) handleRegister(w http.ResponseWriter, r *http.Request) {
 	if !p.Allow(w, r, "register") {
 		return
 	}
+	// The body is client metadata (names and URLs, no secrets); a truncated copy goes in the log
+	// of a rejection so a client that registers in an unexpected way can be diagnosed.
+	raw, _ := io.ReadAll(http.MaxBytesReader(w, r.Body, 16<<10))
 	reject := func(code, desc string) {
-		p.Log.Warn("oauth register rejected", "code", code, "reason", desc)
+		body := cleanName(string(raw))
+		if len(body) > 1000 {
+			body = body[:1000] + "..."
+		}
+		p.Log.Warn("oauth register rejected", "code", code, "reason", desc, "body", body, "content_type", r.Header.Get("Content-Type"))
 		writeOAuthError(w, http.StatusBadRequest, code, desc)
 	}
 	var req registerRequest
-	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10)).Decode(&req); err != nil {
+	if err := json.Unmarshal(raw, &req); err != nil {
 		reject("invalid_client_metadata", "request body must be a JSON object")
 		return
 	}
