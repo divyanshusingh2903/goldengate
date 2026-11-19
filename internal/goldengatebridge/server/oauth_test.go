@@ -434,7 +434,6 @@ func TestOAuthAuthorizeValidation(t *testing.T) {
 		"bad challenge":    {map[string]string{"code_challenge": "short"}, "invalid_request"},
 		"implicit flow":    {map[string]string{"response_type": "token"}, "unsupported_response_type"},
 		"foreign resource": {map[string]string{"resource": "https://other.example/mcp"}, "invalid_target"},
-		"extra scope":      {map[string]string{"scope": "read write"}, "invalid_scope"},
 	} {
 		resp, _ := c.req("GET", c.authorizeQuery(id, challenge, tc.extra), nil, nil, nil)
 		loc, _ := url.Parse(resp.Header.Get("Location"))
@@ -538,15 +537,23 @@ func TestOAuthRegistrationValidation(t *testing.T) {
 		"relative":          {"redirect_uris": []string{"/cb"}},
 		"six redirects":     {"redirect_uris": []string{"https://a/1", "https://a/2", "https://a/3", "https://a/4", "https://a/5", "https://a/6"}},
 		"bad auth method":   {"redirect_uris": []string{redirect}, "token_endpoint_auth_method": "private_key_jwt"},
-		"password grant":    {"redirect_uris": []string{redirect}, "grant_types": []string{"password"}},
-		"implicit response": {"redirect_uris": []string{redirect}, "response_types": []string{"token"}},
-		"write scope":       {"redirect_uris": []string{redirect}, "scope": "read write"},
 	}
 	for name, body := range bad {
 		resp, b := c.req("POST", "/oauth/register", nil, body, nil)
 		if resp.StatusCode != 400 {
 			t.Errorf("%s: %d %s", name, resp.StatusCode, b)
 		}
+	}
+	// Extras a client may send are dropped, not rejected; only the supported flow is registered.
+	extras := c.register(map[string]any{
+		"grant_types": []string{"authorization_code", "password", "client_credentials"}, "response_types": []string{"code", "token"},
+		"scope": "openid read write",
+	})
+	if g, _ := extras["grant_types"].([]any); len(g) != 1 || g[0] != "authorization_code" {
+		t.Errorf("grant types registered: %v", extras["grant_types"])
+	}
+	if extras["scope"] != "read" {
+		t.Errorf("scope registered: %v", extras["scope"])
 	}
 	for _, ok := range []string{"http://localhost:5555/cb", "http://127.0.0.1/cb", "http://[::1]:1/cb"} {
 		if resp, b := c.req("POST", "/oauth/register", nil, map[string]any{"redirect_uris": []string{ok}}, nil); resp.StatusCode != 201 {

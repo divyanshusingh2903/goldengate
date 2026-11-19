@@ -249,18 +249,22 @@ func (p *Provider) handleRegister(w http.ResponseWriter, r *http.Request) {
 	if !p.Allow(w, r, "register") {
 		return
 	}
+	reject := func(code, desc string) {
+		p.Log.Warn("oauth register rejected", "code", code, "reason", desc)
+		writeOAuthError(w, http.StatusBadRequest, code, desc)
+	}
 	var req registerRequest
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 16<<10)).Decode(&req); err != nil {
-		writeOAuthError(w, http.StatusBadRequest, "invalid_client_metadata", "request body must be a JSON object")
+		reject("invalid_client_metadata", "request body must be a JSON object")
 		return
 	}
 	if len(req.RedirectURIs) == 0 || len(req.RedirectURIs) > 5 {
-		writeOAuthError(w, http.StatusBadRequest, "invalid_redirect_uri", "provide 1 to 5 redirect_uris")
+		reject("invalid_redirect_uri", "provide 1 to 5 redirect_uris")
 		return
 	}
 	for _, u := range req.RedirectURIs {
 		if err := p.validRedirect(u); err != nil {
-			writeOAuthError(w, http.StatusBadRequest, "invalid_redirect_uri", err.Error())
+			reject("invalid_redirect_uri", err.Error())
 			return
 		}
 	}
@@ -269,28 +273,21 @@ func (p *Provider) handleRegister(w http.ResponseWriter, r *http.Request) {
 		method = "none"
 	}
 	if !slices.Contains([]string{"none", "client_secret_post", "client_secret_basic"}, method) {
-		writeOAuthError(w, http.StatusBadRequest, "invalid_client_metadata", "unsupported token_endpoint_auth_method")
+		reject("invalid_client_metadata", "unsupported token_endpoint_auth_method")
 		return
 	}
-	grants := req.GrantTypes
+	// Grant types, response types and scope are advertised, not negotiated: the server only ever
+	// offers the code flow and the read scope, so a client asking for more is registered for what
+	// is supported rather than turned away (assistants such as Gemini send extras). Unsupported
+	// values are dropped, and the response says what was registered.
+	var grants []string
+	for _, g := range req.GrantTypes {
+		if (g == "authorization_code" || g == "refresh_token") && !slices.Contains(grants, g) {
+			grants = append(grants, g)
+		}
+	}
 	if len(grants) == 0 {
 		grants = []string{"authorization_code", "refresh_token"}
-	}
-	for _, g := range grants {
-		if g != "authorization_code" && g != "refresh_token" {
-			writeOAuthError(w, http.StatusBadRequest, "invalid_client_metadata", "unsupported grant_type "+cleanName(g))
-			return
-		}
-	}
-	for _, rt := range req.ResponseType {
-		if rt != "code" {
-			writeOAuthError(w, http.StatusBadRequest, "invalid_client_metadata", "only response_type code is supported")
-			return
-		}
-	}
-	if req.Scope != "" && strings.TrimSpace(req.Scope) != Scope {
-		writeOAuthError(w, http.StatusBadRequest, "invalid_client_metadata", "only the read scope exists")
-		return
 	}
 	if n, err := p.Store.CountOAuthClients(r.Context()); err != nil {
 		p.Log.Error("oauth register failed", "err", err)
@@ -401,10 +398,8 @@ func (p *Provider) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 		p.redirectWithError(w, r, redirect, state, "invalid_request", "PKCE with code_challenge_method=S256 is required")
 		return
 	}
-	if sc := strings.TrimSpace(q.Get("scope")); sc != "" && sc != Scope {
-		p.redirectWithError(w, r, redirect, state, "invalid_scope", "only the read scope exists")
-		return
-	}
+	// A requested scope is not negotiated: the code only ever carries the read scope (RFC 6749 3.3
+	// lets a server grant less than asked), so extra scopes such as openid are ignored.
 	res, ok := p.canonicalResource(q.Get("resource"))
 	if !ok {
 		p.redirectWithError(w, r, redirect, state, "invalid_target", "resource must identify this server's MCP endpoint")
