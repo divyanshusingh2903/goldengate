@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS import_stats(import_id INTEGER PRIMARY KEY, total INT
 CREATE TABLE IF NOT EXISTS offers_dismissed(key TEXT PRIMARY KEY, dismissed_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS imports(
   id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT NOT NULL, path TEXT NOT NULL, added_at INTEGER NOT NULL, UNIQUE(source, path));
-`
+` + planCacheSchema
 
 // OpenState opens (creating if needed) the state database at path. Use
 // ":memory:" in tests.
@@ -212,6 +212,9 @@ func (s *State) Tombstone(ctx context.Context, project string, now time.Time) er
 	if _, err := tx.ExecContext(ctx, `DELETE FROM sessions WHERE project=?`, project); err != nil {
 		return fmt.Errorf("state: tombstone: %w", err)
 	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM plan_cache WHERE project=?`, project); err != nil {
+		return fmt.Errorf("state: tombstone: %w", err)
+	}
 	return tx.Commit()
 }
 
@@ -297,6 +300,9 @@ func (s *State) ProjectStats(ctx context.Context) (map[string]ProjectStat, error
 // purge) so that the next sync uploads them again if the project is still shared.
 func (s *State) ForgetProject(ctx context.Context, project string) error {
 	if _, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE project=?`, project); err != nil {
+		return fmt.Errorf("state: forget project: %w", err)
+	}
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM plan_cache WHERE project=?`, project); err != nil {
 		return fmt.Errorf("state: forget project: %w", err)
 	}
 	return nil
@@ -445,6 +451,9 @@ func (s *State) Payloads(ctx context.Context) ([][]byte, error) {
 func (s *State) ForgetUnder(ctx context.Context, project string) error {
 	prefix := project + "/"
 	if _, err := s.db.ExecContext(ctx, `DELETE FROM sessions WHERE project=? OR substr(project,1,?)=?`, project, len(prefix), prefix); err != nil {
+		return fmt.Errorf("state: forget under: %w", err)
+	}
+	if _, err := s.db.ExecContext(ctx, `DELETE FROM plan_cache WHERE project=? OR substr(project,1,?)=?`, project, len(prefix), prefix); err != nil {
 		return fmt.Errorf("state: forget under: %w", err)
 	}
 	return nil
