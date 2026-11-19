@@ -154,3 +154,28 @@ func TestResummarizeKeepsSessionsTheModelCannotSummarize(t *testing.T) {
 		t.Fatalf("an unchanged heuristic summary is not pushed again: %v, %d sent, %+v", err, len(sink.got), rep)
 	}
 }
+
+func TestResummarizeStopsOfferingSessionsTheModelSkips(t *testing.T) {
+	tiny := sess("a", "/home/u/code/app", "hi")
+	tiny.Turns[1].Text = "hello"
+	e := setup(t, selection.Policy{Allow: []string{"~/code/app"}}, tiny)
+	ctx := context.Background()
+	if _, err := e.s.Run(ctx, gsync.RunOpts{}, &capture{}, false); err != nil {
+		t.Fatal(err)
+	}
+	rec := &recorder{}
+	e.s.Summarizer = rec
+	rep, err := e.s.Run(ctx, gsync.RunOpts{}, &capture{}, true)
+	if err != nil || rep.Stale != 1 {
+		t.Fatalf("before the button the session is offered: %v %+v", err, rep)
+	}
+	sink := &capture{}
+	rep, err = e.s.Run(ctx, gsync.RunOpts{Resummarize: true}, sink, true)
+	if err != nil || len(sink.got) != 0 || rep.Resummarized != 1 {
+		t.Fatalf("the model skips it and nothing is sent: %v %d %+v", err, len(sink.got), rep)
+	}
+	rep, err = e.s.Run(ctx, gsync.RunOpts{}, &capture{}, true)
+	if err != nil || rep.Stale != 0 || len(rec.inputs) != 0 {
+		t.Fatalf("it is not offered again: %v %+v, %d calls", err, rep, len(rec.inputs))
+	}
+}

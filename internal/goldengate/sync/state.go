@@ -37,6 +37,9 @@ CREATE TABLE IF NOT EXISTS sessions(
   payload TEXT NOT NULL DEFAULT '',
   PRIMARY KEY(source, session_id));
 CREATE INDEX IF NOT EXISTS sessions_project ON sessions(project);
+CREATE TABLE IF NOT EXISTS model_skipped(
+  source TEXT NOT NULL, session_id TEXT NOT NULL, model TEXT NOT NULL, content_hash TEXT NOT NULL,
+  PRIMARY KEY(source, session_id));
 CREATE TABLE IF NOT EXISTS tombstones(project TEXT PRIMARY KEY, created_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS model_summaries(key TEXT PRIMARY KEY, answer TEXT NOT NULL, created_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS decisions(
@@ -242,6 +245,22 @@ func (s *State) Count(ctx context.Context) (int, error) {
 		return 0, fmt.Errorf("state: count: %w", err)
 	}
 	return n, nil
+}
+
+// MarkModelSkipped remembers that the model was asked to summarize this
+// content and left the rules' summary (too little conversation, say), so the
+// session is not offered for re-summarizing again.
+func (s *State) MarkModelSkipped(ctx context.Context, source, id, hash, by string) {
+	_, _ = s.db.ExecContext(ctx, `INSERT INTO model_skipped(source, session_id, model, content_hash) VALUES(?,?,?,?)
+		ON CONFLICT(source, session_id) DO UPDATE SET model=excluded.model, content_hash=excluded.content_hash`, source, id, by, hash)
+}
+
+// ModelSkipped reports whether MarkModelSkipped was called for this very
+// content and model.
+func (s *State) ModelSkipped(ctx context.Context, source, id, hash, by string) bool {
+	var n int
+	err := s.db.QueryRowContext(ctx, `SELECT COUNT(*) FROM model_skipped WHERE source=? AND session_id=? AND model=? AND content_hash=?`, source, id, by, hash).Scan(&n)
+	return err == nil && n > 0
 }
 
 // SummaryCache stores model answers in the state database, so a session is
