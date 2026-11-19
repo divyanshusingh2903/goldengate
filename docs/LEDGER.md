@@ -62,6 +62,7 @@ Supporting changes (not queue issues):
 | #159 Versioned Docker image of the server: `deploy/Dockerfile`, an `image` CI job on every PR, and `release-image.yml` publishing to GHCR on `vX.Y.Z` tags (and `edge` from `main`) | #160 | in review |
 | #171 `goldengate` and `goldengatebridge` report the module version when built with `go install ...@vX` (shared `internal/utils/buildver`); README versions refreshed | #172 | in review |
 | #173 Plan cache: the inbox and the Send review no longer read every never-sent transcript on each open (419 sessions: 21s cold, 0.4s after) | #174 | in review |
+| #177 OAuth registration no longer rejects extra scope, grant types or response types (Gemini sends them); the authorize step ignores extra scope; rejected registrations are logged with the reason | #178 | in review |
 | Ledger status updates between issues (#49 done; phase 2 complete; refresh; phase 3 complete; #21 done; #35 done; #36 done; #45 done; #31 done; #33 done; #34 done; #32 done; #22 done; #44 done; #39 done; #41 done; #42 done; #23 done; #46 done; #47 done) | #61, #68, #69, #73, #75, #77, #79, #81, #83, #85, #87, #89, #91, #93, #95, #97, #99, #101, #103, #105 | 2026-11-15 |
 
 ### Open loose ends
