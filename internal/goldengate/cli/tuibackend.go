@@ -554,7 +554,7 @@ func (b *tuiBackend) Plan(ctx context.Context, o tui.SyncOpts) (tui.PlanInfo, er
 	// The Sync screen shows every session exactly as it would be sent and
 	// sends only after the user presses Send, so sending approves what was
 	// reviewed: sessions waiting in the inbox are part of the plan.
-	batch, rep, err := s.Plan(ctx, gsync.RunOpts{Resummarize: o.Resummarize, Approve: true})
+	batch, rep, err := s.Plan(ctx, gsync.RunOpts{Resummarize: o.Resummarize, Approve: true, Review: true})
 	if err != nil {
 		return tui.PlanInfo{}, err
 	}

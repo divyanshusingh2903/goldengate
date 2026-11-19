@@ -220,6 +220,9 @@ func (s *Syncer) summarizeOptions(ctx context.Context, ref model.SessionRef, wo 
 
 // RunOpts narrows one run.
 type RunOpts struct {
+	// Review marks a plan made only to show what a send would hold. Like an
+	// offline plan it may reuse builds it kept, when no model is configured.
+	Review  bool
 	Project string        // only this project (absolute path); "" = all selected
 	Source  string        // only this source
 	Since   time.Duration // 0 = use config
@@ -359,6 +362,16 @@ func (s *Syncer) Plan(ctx context.Context, o RunOpts) (Batch, Report, error) {
 	pool := s.newPool(ctx, wo, o.OnPlanned)
 	pool.offline, pool.approve = o.Offline, o.Approve
 	defer pool.stop() // on an early return the workers must not wait forever
+	// an offline plan reuses what it built before for sessions whose file and
+	// settings are unchanged; a plan that sends reads every session itself
+	// (Review is for a plan that only shows what a send would hold: without
+	// a model its payloads are the offline ones.)
+	cacheOK := o.Offline || (o.Review && s.Summarizer == nil)
+	var fp string
+	var listed map[[2]string]bool
+	if cacheOK {
+		fp, listed = s.planFingerprint(ctx), map[[2]string]bool{}
+	}
 
 	for _, a := range s.Registry.All() {
 		if o.Source != "" && a.Name() != o.Source {
@@ -431,6 +444,19 @@ func (s *Syncer) Plan(ctx context.Context, o RunOpts) (Batch, Report, error) {
 				rep.Resummarized++
 				resum = true
 			}
+			if cacheOK && !resum {
+				listed[[2]string{ref.Source, ref.ID}] = true
+				if c, ok := s.useCachedPlan(ctx, ref, mtime, fp); ok {
+					raw := &model.RawSession{GitRemote: c.Remote, GitBranch: c.Branch}
+					if err := pool.add(job{raw: raw, ref: ref, prev: prev, seen: seen, mtime: mtime, payload: c.Payload, cached: true}); err != nil {
+						return b, rep, err
+					}
+					if o.OnQueued != nil {
+						o.OnQueued()
+					}
+					continue
+				}
+			}
 			raw, err := a.Load(ctx, ref)
 			if err != nil {
 				if adapters.IsSkip(err) {
@@ -454,6 +480,9 @@ func (s *Syncer) Plan(ctx context.Context, o RunOpts) (Batch, Report, error) {
 		return b, rep, err
 	}
 	rep.ModelFailures = pool.failures
+	if cacheOK {
+		s.rememberPlans(ctx, jobs, fp, listed, o.Project == "" && o.Source == "")
+	}
 	for _, j := range jobs {
 		{
 			p, ref, prev, seen, mtime := j.payload, j.ref, j.prev, j.seen, j.mtime
@@ -598,6 +627,10 @@ type job struct {
 	// resummarize sends the session even though its conversation is unchanged
 	resummarize bool
 	gate        gate
+	// cached marks a payload taken from the plan cache: it is already built,
+	// and raw holds only the git facts rules read
+	cached         bool
+	remote, branch string
 }
 
 // buildPool summarizes sessions while the plan keeps listing them: with a
@@ -660,6 +693,20 @@ func (p *buildPool) work() {
 		p.mu.Lock()
 		j := p.jobs[i]
 		p.mu.Unlock()
+		if j.cached {
+			g, err := p.s.gate(p.ctx, j.ref, j.raw, j.payload)
+			p.mu.Lock()
+			if err != nil && p.err == nil {
+				p.err = fmt.Errorf("sync: gate: %w", err)
+			}
+			p.jobs[i].gate = g
+			p.jobs[i].raw = nil
+			p.mu.Unlock()
+			if err == nil && p.onDone != nil {
+				p.onDone(j.payload)
+			}
+			continue
+		}
 		onErr := func(err error) {
 			p.mu.Lock()
 			p.failures++
@@ -697,6 +744,9 @@ func (p *buildPool) work() {
 			p.err = fmt.Errorf("sync: summarize: %w", err)
 		}
 		p.jobs[i].gate = g
+		if j.raw != nil {
+			p.jobs[i].remote, p.jobs[i].branch = j.raw.GitRemote, j.raw.GitBranch
+		}
 		p.jobs[i].payload, p.jobs[i].raw = pl, nil // the transcript is no longer needed
 		p.mu.Unlock()
 		if err == nil && p.onDone != nil {
