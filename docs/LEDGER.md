@@ -66,7 +66,7 @@ Supporting changes (not queue issues):
 | #179 A rejected OAuth registration logs its (truncated) body, to see what Gemini sends (it registers with no redirect URIs) | #180 | in review |
 | #181 OAuth registration accepts up to 20 redirect URIs (Gemini registers a set of Google ones, more than the old limit of 5) | #182 | in review |
 | #183 OAuth authorize accepts a `state` of up to 4096 characters (Google sends one over 512) | #184 | in review |
-| #185 Sent sessions the model skips as trivial are no longer offered for re-summarizing again and again; the web review says how many sent sessions the button checked | #PR | in review |
+| #185 Sent sessions the model skips as trivial are no longer offered for re-summarizing again and again; the web review says how many sent sessions the button checked | #186 | in review |
 | Ledger status updates between issues (#49 done; phase 2 complete; refresh; phase 3 complete; #21 done; #35 done; #36 done; #45 done; #31 done; #33 done; #34 done; #32 done; #22 done; #44 done; #39 done; #41 done; #42 done; #23 done; #46 done; #47 done) | #61, #68, #69, #73, #75, #77, #79, #81, #83, #85, #87, #89, #91, #93, #95, #97, #99, #101, #103, #105 | 2026-11-15 |
 
 ### Open loose ends
