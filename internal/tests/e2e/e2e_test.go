@@ -43,6 +43,9 @@ type bridge struct {
 	st     store.Store
 	au     *auth.Authenticator
 	dbPath string
+	// down makes every request fail with 503, as a server that cannot be
+	// reached would, without changing its address.
+	down *atomic.Bool
 }
 
 func startBridge(t *testing.T) *bridge { return startBridgeOpts(t, false) }
@@ -60,7 +63,14 @@ func startBridgeOpts(t *testing.T, withOAuth bool) *bridge {
 		t.Fatal(err)
 	}
 	var handler http.Handler
-	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { handler.ServeHTTP(w, r) }))
+	down := &atomic.Bool{}
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if down.Load() {
+			http.Error(w, "down", http.StatusServiceUnavailable)
+			return
+		}
+		handler.ServeHTTP(w, r)
+	}))
 	t.Cleanup(ts.Close)
 	cfg := server.Config{Store: st, Auth: au, Now: func() time.Time { return fakeNow }, BehindProxy: true}
 	if withOAuth {
@@ -71,7 +81,7 @@ func startBridgeOpts(t *testing.T, withOAuth bool) *bridge {
 		t.Fatal(err)
 	}
 	handler = s
-	return &bridge{ts: ts, st: st, au: au, dbPath: dbPath}
+	return &bridge{ts: ts, st: st, au: au, dbPath: dbPath, down: down}
 }
 
 // uniqueClients makes every request come from a fresh address, so the
@@ -104,6 +114,8 @@ type laptop struct {
 	errOut *bytes.Buffer
 	home   string
 	http   *http.Client
+	// now is the laptop's clock; nil means fakeNow.
+	now func() time.Time
 }
 
 func newLaptop(t *testing.T) *laptop {
@@ -129,6 +141,13 @@ func newLaptop(t *testing.T) *laptop {
 	return l
 }
 
+func (l *laptop) clock() time.Time {
+	if l.now != nil {
+		return l.now()
+	}
+	return fakeNow
+}
+
 func (l *laptop) deps(env map[string]string) cli.Deps {
 	e := map[string]string{"XDG_CONFIG_HOME": filepath.Join(l.root, "cfg"), "XDG_STATE_HOME": filepath.Join(l.root, "state")}
 	for k, v := range env {
@@ -140,7 +159,7 @@ func (l *laptop) deps(env map[string]string) cli.Deps {
 			var r adapters.Registry
 			return &r, r.Register(claudecode.New(claudecode.Options{ConfigDir: l.claude}))
 		},
-		Now: func() time.Time { return fakeNow }, HTTP: l.http, Hostname: func() string { return "testbox" },
+		Now: l.clock, HTTP: l.http, Hostname: func() string { return "testbox" },
 		SecretStore: func(string, func(string)) secrets.Store { return l.secrets },
 		Notify:      l.notify,
 		EditFile: func(path string) error {

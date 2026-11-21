@@ -215,6 +215,7 @@ func TestAutoSyncSendsOnlyWhatIsApproved(t *testing.T) {
 	l := newLaptop(t)
 	l.must(l.initEnv(b), "init", "--non-interactive")
 	l.must(nil, "share", "add", "~/projects/demo")
+	l.appendConfig("[sync]\nsettle_minutes = 0\n") // the settle window has its own test
 
 	// a pending session and no rule: nothing is sent, and it says so
 	l.errOut.Reset()

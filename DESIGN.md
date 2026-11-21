@@ -337,6 +337,10 @@ model = ""                       # empty = the provider's default (see llm.Provi
 base_url = ""                    # endpoint override; custom defaults to http://localhost:11434/v1 (Ollama)
 max_input_chars = 0              # conversation per model call; longer sessions go in parts; 0 = 24000 (about 6k tokens)
 length = "standard"              # narrative a model writes per session: short | standard | detailed
+
+[sync]                           # written only when set
+settle_minutes = 10              # unattended runs leave a session alone until it has not changed for this long; 0 = no wait
+daemon = ""                      # background sending: "" (not asked yet) | on | off (#189)
 ```
 
 **Chats are shared by conversation.** A chat grouping from an export (`claude-ai:Chats`, `chatgpt:Chats`) can hold hundreds of unrelated conversations, so the unit of sharing for chats is the single conversation. A project member may list conversations:
@@ -628,7 +632,8 @@ goldengate import-claude-ai ./export.zip
 goldengate chats [--all] [--grep TEXT] | chats share <id>... --project P | chats move <id> P | chats unshare <id>...   # share single conversations of imported exports
 goldengate doctor               # detects tools, checks formats, server, token
 goldengate sync --auto          # unattended run: only what is approved or rule-approved; one-line report; everything sent is in a receipt
-goldengate install-hook claude-code     # adds a SessionEnd hook that runs `goldengate sync --auto --quiet --source claude-code`
+goldengate sync --auto --settle 0   # do not wait for sessions to settle (default: [sync] settle_minutes, 10)
+goldengate install-hook claude-code     # adds a SessionEnd hook that runs `goldengate sync --auto --quiet --source claude-code --settle 0`
 goldengate install-schedule [--every 30m]   # systemd user timer / launchd agent / Task Scheduler running `goldengate sync --auto`
 goldengate uninstall-hook claude-code | uninstall-schedule      # remove them; every installer has --print
 goldengate purge --project PATH # delete remote data
@@ -650,7 +655,8 @@ goldengatebridge version
 
 Automation
 - Unattended runs use `goldengate sync --auto`. It goes through the same plan and the same gate as every sync, so it sends only sessions the user approved or that a project's trust level and rules send, and never what waits in the inbox; it refuses `--approve` and `--resummarize`. It prints one line of counts (what was sent and under which receipt, what waits, what is held or excluded) and nothing with `--quiet`. Everything it sends is listed in the receipt, also sessions the user approved by hand earlier ("you approved it in the inbox"), because they too leave while nobody is watching (`RunOpts.Unattended`). The model summarizer runs only if the user turned it on, and only for sessions that are sent.
-- Claude Code: `goldengate install-hook claude-code` adds a `SessionEnd` hook to Claude Code's `settings.json` that runs `goldengate sync --auto --quiet --source claude-code`. The rest of the file is kept, the file as it was is copied to `settings.json.goldengate-backup`, an existing Golden Gate hook is replaced rather than doubled, and a file that is not valid JSON is left alone.
+- Unattended runs are safe to repeat (#188). *Settle window*: a new or changed session whose last change is less than `[sync] settle_minutes` ago (default 10; 0 turns it off; `--settle` overrides it for one run) is counted as settling and left alone, neither read nor recorded, so a session still being written is not summarized and sent on every run. The check comes after the unchanged check, so a session already sent and unchanged is never "settling". The last change is the time the tool records, or the file's modification time. Only `--auto` applies it: a send someone is watching sends everything. *Run lock*: every real send (not a dry run or a review) takes an OS file lock on `sync.lock` in the state directory (`flock`, or `LockFileEx` on Windows). `--auto` does nothing while it is held; the CLI's, TUI's and web UI's Send wait 5 seconds, then say another send is running. The operating system releases the lock when the process ends, however it ends, and the file is never removed (removing a locked file lets two processes lock different files). *Unreachable server*: holding the lock, `--auto` checks `/healthz` (5 s); on failure it prints one line, exits 0 and records the failure in the state table `sync_meta`; later runs do not try the server until 1, 2, 4 … minutes (at most 60) after the last attempt, and the first reachable run clears the record. An error during the send itself still fails the run.
+- Claude Code: `goldengate install-hook claude-code` adds a `SessionEnd` hook to Claude Code's `settings.json` that runs `goldengate sync --auto --quiet --source claude-code --settle 0` (the session has ended, so it need not settle; installing again replaces a hook written without `--settle`). The rest of the file is kept, the file as it was is copied to `settings.json.goldengate-backup`, an existing Golden Gate hook is replaced rather than doubled, and a file that is not valid JSON is left alone.
 - Codex, OpenCode and chats: `goldengate install-schedule` installs a timer for the user (default every 30 minutes, 5m to 24h): a systemd user service and timer on Linux, a launchd agent on macOS, a Task Scheduler task on Windows. The unit holds only the path of the binary and `sync --auto`: no token and no option that approves.
 - Both installers print every file they write and every command they run, have `--print` to show that without changing anything, and have an uninstall command.
 - Sync is **idempotent**, keyed on `(source, session_id)` with a content hash; unchanged sessions are skipped via a local state DB (`~/.local/state/goldengate/state.db`, SQLite).

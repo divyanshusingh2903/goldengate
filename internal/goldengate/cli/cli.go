@@ -242,6 +242,10 @@ func autoReport(rep gsync.Report, dry bool) string {
 	if other > 0 {
 		parts = append(parts, fmt.Sprintf("%d already-sent session(s) refreshed", other))
 	}
+	if rep.Settling > 0 {
+		parts = append(parts, fmt.Sprintf("%d session(s) changed too recently and wait until they settle (the first from %s)",
+			rep.Settling, rep.SettledAt.Local().Format("15:04")))
+	}
 	if rep.Pending > 0 {
 		parts = append(parts, fmt.Sprintf("%d session(s) wait in the inbox and were not sent (goldengate inbox)", rep.Pending))
 	}
@@ -259,7 +263,7 @@ func autoReport(rep gsync.Report, dry bool) string {
 
 func (a *app) syncCmd() *cobra.Command {
 	var dry, quiet, resummarize, approve, auto bool
-	var project, source, since string
+	var project, source, since, settle string
 	cmd := &cobra.Command{
 		Use:     "sync",
 		Aliases: []string{"send"},
@@ -289,6 +293,15 @@ func (a *app) syncCmd() *cobra.Command {
 					return err
 				}
 			}
+			if settle != "" && !auto {
+				return errors.New("--settle is for unattended runs: use it with --auto")
+			}
+			settleD := cfg.Sync.Settle()
+			if settle != "" {
+				if settleD, err = time.ParseDuration(settle); err != nil || settleD < 0 {
+					return fmt.Errorf("--settle takes a duration such as 10m or 0, got %q", settle)
+				}
+			}
 			if auto && (approve || resummarize) {
 				return errors.New("--auto is for unattended runs: it never approves what waits (--approve) and never re-sends old sessions to a model (--resummarize)")
 			}
@@ -301,18 +314,43 @@ func (a *app) syncCmd() *cobra.Command {
 				Log:        slog.New(slog.NewTextHandler(a.Stderr, &slog.HandlerOptions{Level: level})),
 				Summarizer: a.summarizer(cfg),
 			}
+			if resummarize && s.Summarizer == nil {
+				return errors.New("--resummarize needs a model summarizer: run `goldengate summarizer use anthropic` (or openai) first")
+			}
 			var sink gsync.Sink = gsync.DryRunSink{W: a.Stdout}
 			if !dry {
+				// One send at a time: a timer, a hook and a person pressing
+				// Send must not send the same session twice.
+				lock, err := a.runLock(cmd.Context(), auto)
+				if errors.Is(err, gsync.ErrBusy) && auto {
+					if !quiet {
+						fmt.Fprintln(a.Stderr, "goldengate background send: another send is running; nothing done")
+					}
+					return nil
+				}
+				if err != nil {
+					return err
+				}
+				defer func() { _ = lock.Release() }()
 				cl, err := a.ingestClient(cfg)
 				if err != nil {
 					return err
 				}
+				if auto {
+					if line, ok := a.serverReachable(cmd.Context(), st, cl); !ok {
+						if !quiet {
+							fmt.Fprintln(a.Stderr, "goldengate background send: "+line)
+						}
+						return nil
+					}
+				}
 				sink = cl
 			}
-			if resummarize && s.Summarizer == nil {
-				return errors.New("--resummarize needs a model summarizer: run `goldengate summarizer use anthropic` (or openai) first")
+			opts := gsync.RunOpts{Project: project, Source: source, Since: sinceD, Resummarize: resummarize, Approve: approve, Unattended: auto}
+			if auto {
+				opts.Settle = settleD
 			}
-			rep, err := s.Run(cmd.Context(), gsync.RunOpts{Project: project, Source: source, Since: sinceD, Resummarize: resummarize, Approve: approve, Unattended: auto}, sink, dry)
+			rep, err := s.Run(cmd.Context(), opts, sink, dry)
 			if err != nil {
 				return err
 			}
@@ -337,6 +375,8 @@ func (a *app) syncCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&auto, "auto", false,
 		"unattended run, for a timer or a hook: sends only what you approved or your rules approve, never what waits in the inbox,\n"+
 			"lists everything it sent in a receipt and prints one line saying what happened")
+	cmd.Flags().StringVar(&settle, "settle", "",
+		"with --auto: how long a new or changed session must be left alone before it is sent (default: sync.settle_minutes, 10m; 0 sends at once)")
 	cmd.Flags().StringVar(&project, "project", "", "only this project folder")
 	cmd.Flags().StringVar(&source, "source", "", "only this source (e.g. claude-code)")
 	cmd.Flags().StringVar(&since, "since", "", "override the since window (e.g. 7d)")

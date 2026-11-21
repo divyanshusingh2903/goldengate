@@ -626,6 +626,12 @@ func (b *tuiBackend) Sync(ctx context.Context, dry bool, o tui.SyncOpts, report 
 	defer closeFn()
 	var sink gsync.Sink = discardSink{}
 	if !dry {
+		// a background send may be under way: wait a moment, then say so
+		lock, err := b.a.runLock(ctx, false)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = lock.Release() }()
 		cl, err := b.a.ingestClient(cfg)
 		if err != nil {
 			return err

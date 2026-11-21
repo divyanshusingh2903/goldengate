@@ -347,9 +347,16 @@ goldengate install-hook claude-code      # also when a Claude Code session ends
 
 Both run `goldengate sync --auto`, which sends only what you approved or your rules approved, never what is still waiting. Remove them with `goldengate uninstall-schedule` and `goldengate uninstall-hook claude-code`.
 
+Background runs are safe to repeat often:
+
+- **A session still being written waits.** A new or changed session is sent once it has been left alone for 10 minutes, so it is not summarized and sent again every few minutes. Change it with `settle_minutes` under `[sync]` in the config (0 sends at once). The Claude Code hook runs when a session has ended, so it does not wait (`--settle 0`).
+- **One send at a time.** If a send is already running, a background run does nothing; pressing Send waits a few seconds, then says so.
+- **An unreachable server is left alone for a while.** The run says so in one line and ends without an error; the next tries come after 1, 2, 4 … minutes, at most an hour apart, and the first success resets that.
+
 **Check**
 - [ ] At trust auto with a rule, a new session is sent by `sync` and listed in a receipt.
 - [ ] At trust ask, `sync --auto` leaves new sessions in the inbox.
+- [ ] A session changed a minute ago is reported as waiting to settle, and sent by a run 10 minutes later.
 
 ---
 
