@@ -226,7 +226,7 @@ People will not remember to send at the end of the day: once the user chooses au
 | # | Issue | Size | After | Planned | Status | PR |
 |---|---|---|---|---|---|---|
 | D1 | #188 `sync --auto`: settle window, single-run lock, offline handling | M | | Nov 21 | done | #190 |
-| D2 | #189 `goldengate daemon`, installed when the user opts in | L | #188 | Nov 22 | in progress | |
+| D2 | #189 `goldengate daemon`, installed when the user opts in | L | #188 | Nov 22 | in review | #192 |
 
 ## Log
 
@@ -328,3 +328,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-19: v1.1.7 released (fix for #185: sent sessions the model skips are no longer offered for re-summarizing). README and REFERENCE versions moved from 1.1.3 to 1.1.7.
 - 2026-11-21: #188 and #189 filed at the user's request (people will not send by hand every day): unattended sync made safe to run all day, then a daemon the user opts into. Plan reviewed by a second agent; its corrections (settle check after the unchanged check, a pointer for `settle_minutes`, lock only real sends and never unlink it, no busy loop on inbox sessions, `doctor` not `status`) are part of the plan. #188 in progress.
 - 2026-11-21: #188 done (#190): `sync --auto` holds sessions changed within `[sync] settle_minutes` (default 10), takes an OS lock on `sync.lock` for every real send, and backs off from an unreachable server (1, 2, 4 … minutes, at most an hour; `sync_meta`). The Claude Code hook now passes `--settle 0`; users who installed it before should run `install-hook claude-code` again. Roadmap page has a Background sync section. #189 in progress.
+- 2026-11-21: #189 implemented (#192): `goldengate daemon` looks every two minutes and runs the same `autoPass` as `sync --auto` only when sessions, config, an inbox decision, a settled session or a failed send's wait changed (a waiting inbox session is not a trigger); `install-service`/`uninstall-service`; one switch (`setDaemon`) for the service and `[sync] daemon`; asked once at trust auto, a rule offer, `--auto-approve` or init; TUI Settings row, web Settings card and Overview prompt. Not verified on a real systemd, launchd or Task Scheduler, and the web screens were not walked in a browser. Open: the TUI shows the question only as a Settings row hint (no dialog), and trust is still not changeable from the TUI or web UI.
