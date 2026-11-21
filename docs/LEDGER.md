@@ -219,6 +219,15 @@ The web UI takes the finalized app design (sidebar, page heads, framed cards, dr
 | R7 | #156 Web UI: Setup shows the connected server, key-first summarizer, Server status colours | S | | Nov 18 | in review | |
 | R8 | #157 Agents: add, rename and remove agents, and remove OAuth apps (web UI and TUI) | M | | Nov 19 | todo | |
 
+### Background sync
+
+People will not remember to send at the end of the day: once the user chooses automatic sending, a background process sends on its own. Nothing new may leave: only approved, rule-approved or trust-auto sessions, each with a receipt.
+
+| # | Issue | Size | After | Planned | Status | PR |
+|---|---|---|---|---|---|---|
+| D1 | #188 `sync --auto`: settle window, single-run lock, offline handling | M | | Nov 21 | in progress | |
+| D2 | #189 `goldengate daemon`, installed when the user opts in | L | #188 | Nov 22 | todo | |
+
 ## Log
 
 Newest last. One line per event: date, what happened, PR or issue.
@@ -317,3 +326,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-18: #173 (Inbox and Send pages took ~20s): the user saw "Loading…" for minutes with 418 pending sessions. Cause measured, not guessed: a never-sent session has no state row, so every offline plan re-ran `Adapter.Load` and `Build` for it (19.7 of 20.7s cold; 0.4s warm). Fix: `plan_cache` table keyed by size, mtime and a fingerprint of share level, redaction, issues, summarizer, model-answer stamp and project; used by offline plans and by the Send review without a model, never by a send. A first open after upgrading still takes the cold time once. Not done: reading transcripts in parallel.
 - 2026-11-18: #185 ("Include them" seemed to do nothing): measured, the 38 stale sessions were ~600-byte payloads the model skips on purpose (under 120 characters of conversation), so they kept the rules' summary and counted as stale forever. New `model_skipped` table remembers content the model left alone; they stop counting as stale after one pass. The web review now shows how many sent sessions the button checked. `govulncheck` could not run locally (toolchain mismatch); CI runs it.
 - 2026-11-19: v1.1.7 released (fix for #185: sent sessions the model skips are no longer offered for re-summarizing). README and REFERENCE versions moved from 1.1.3 to 1.1.7.
+- 2026-11-21: #188 and #189 filed at the user's request (people will not send by hand every day): unattended sync made safe to run all day, then a daemon the user opts into. Plan reviewed by a second agent; its corrections (settle check after the unchanged check, a pointer for `settle_minutes`, lock only real sends and never unlink it, no busy loop on inbox sessions, `doctor` not `status`) are part of the plan. #188 in progress.
