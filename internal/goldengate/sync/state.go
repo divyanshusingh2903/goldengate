@@ -60,7 +60,7 @@ CREATE TABLE IF NOT EXISTS import_stats(import_id INTEGER PRIMARY KEY, total INT
 CREATE TABLE IF NOT EXISTS offers_dismissed(key TEXT PRIMARY KEY, dismissed_at INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS imports(
   id INTEGER PRIMARY KEY AUTOINCREMENT, source TEXT NOT NULL, path TEXT NOT NULL, added_at INTEGER NOT NULL, UNIQUE(source, path));
-` + planCacheSchema
+` + planCacheSchema + metaSchema
 
 // OpenState opens (creating if needed) the state database at path. Use
 // ":memory:" in tests.

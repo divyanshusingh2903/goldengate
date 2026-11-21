@@ -219,3 +219,39 @@ func TestMembersLimitedToConversations(t *testing.T) {
 		t.Error("a conversation cannot be added next to the whole grouping")
 	}
 }
+
+// The settle window defaults to ten minutes, and a saved 0 stays 0 (an
+// omitted field would read back as the default).
+func TestSyncSettingsRoundTrip(t *testing.T) {
+	p := filepath.Join(t.TempDir(), "config.toml")
+	c := Default()
+	if c.Sync.Settle() != 10*time.Minute || c.Sync.Daemon != "" {
+		t.Fatalf("defaults: %+v", c.Sync)
+	}
+	if err := Save(p, c); err != nil {
+		t.Fatal(err)
+	}
+	if b, _ := os.ReadFile(p); strings.Contains(string(b), "[sync]") {
+		t.Errorf("an untouched [sync] is not written:\n%s", b)
+	}
+	zero := 0
+	c.Sync = Sync{SettleMinutes: &zero, Daemon: "off"}
+	if err := Save(p, c); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Sync.Settle() != 0 || got.Sync.Daemon != "off" {
+		t.Fatalf("round trip: %+v", got.Sync)
+	}
+	for _, bad := range []string{"[sync]\nsettle_minutes = -1\n", "[sync]\nsettle_minutes = 2000\n", "[sync]\ndaemon = \"yes\"\n"} {
+		if err := os.WriteFile(p, []byte(bad), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := Load(p); err == nil || !strings.Contains(err.Error(), "sync.") {
+			t.Errorf("%q must be refused: %v", bad, err)
+		}
+	}
+}

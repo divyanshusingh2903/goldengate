@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"os"
 	"strings"
 	stdsync "sync"
 	"time"
@@ -252,6 +253,11 @@ type RunOpts struct {
 	// also the sessions the user approved by hand earlier, since they too
 	// leave while the user is away.
 	Unattended bool
+	// Settle holds back new or changed sessions that changed less than this
+	// long ago, so a session still being written is not summarized and sent
+	// on every run. Only unattended runs set it: someone pressing Send wants
+	// everything now. A held session is not recorded; a later run sends it.
+	Settle time.Duration
 }
 
 // Report summarizes a run. Counts only: no project names or content.
@@ -308,6 +314,11 @@ type Report struct {
 	// the user has decided about their edit; they are listed in
 	// PendingItems with Conflict set.
 	Conflicts int
+	// Settling counts new or changed sessions held back by RunOpts.Settle;
+	// SettledAt is the earliest time one of them may be sent (zero when none
+	// is held).
+	Settling  int
+	SettledAt time.Time
 }
 
 // AutoItem is a session sent by a project's trust level and rules.
@@ -444,6 +455,18 @@ func (s *Syncer) Plan(ctx context.Context, o RunOpts) (Batch, Report, error) {
 				}
 				rep.Resummarized++
 				resum = true
+			}
+			// Only new or changed sessions get this far (unchanged ones were
+			// counted above): one that changed a moment ago is probably still
+			// being written, so an unattended run leaves it for later.
+			if o.Settle > 0 && !resum {
+				if ready := lastChange(ref).Add(o.Settle); ready.After(s.now()) {
+					rep.Settling++
+					if rep.SettledAt.IsZero() || ready.Before(rep.SettledAt) {
+						rep.SettledAt = ready
+					}
+					continue
+				}
 			}
 			if cacheOK && !resum {
 				listed[[2]string{ref.Source, ref.ID}] = true
@@ -970,6 +993,18 @@ func (s *Syncer) serverKey(ref model.SessionRef) string {
 		return root
 	}
 	return ref.ProjectKey
+}
+
+// lastChange is when a session last changed: what its tool records, or else
+// its file's modification time.
+func lastChange(ref model.SessionRef) time.Time {
+	if !ref.UpdatedAt.IsZero() || ref.Path == "" {
+		return ref.UpdatedAt
+	}
+	if fi, err := os.Stat(ref.Path); err == nil {
+		return fi.ModTime()
+	}
+	return time.Time{}
 }
 
 func sameProject(a, b string, ci bool) bool {

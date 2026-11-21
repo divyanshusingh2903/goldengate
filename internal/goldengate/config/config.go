@@ -31,6 +31,7 @@ type Config struct {
 	Redact    Redact    `toml:"redact"`
 	UI        UI        `toml:"ui"`
 	Summarize Summarize `toml:"summarize"`
+	Sync      Sync      `toml:"sync,omitempty"`
 	// Projects are the user's named projects; their members are what is
 	// shared. Share.Allow and Share.SourceDeny are derived from them in
 	// memory (see Flatten and Fold) and are not written once projects exist.
@@ -75,6 +76,31 @@ type UI struct {
 	// NotifyReceipts shows a desktop notification after a sync that sent
 	// sessions automatically: counts only, never titles. Off by default.
 	NotifyReceipts bool `toml:"notify_receipts,omitempty"`
+}
+
+// DefaultSettleMinutes is how long a session must be left alone before an
+// unattended run sends it, when the config says nothing.
+const DefaultSettleMinutes = 10
+
+// Sync holds settings for unattended sends (timers, hooks, the daemon).
+type Sync struct {
+	// SettleMinutes is how long a session must go unchanged before an
+	// unattended run sends it, so a session still being written is not
+	// summarized and sent again and again. nil means DefaultSettleMinutes;
+	// 0 sends at once. A pointer, so that a saved 0 stays 0.
+	SettleMinutes *int `toml:"settle_minutes,omitempty"`
+	// Daemon is the user's answer about sending in the background: "" (not
+	// asked yet), "on" or "off".
+	Daemon string `toml:"daemon,omitempty"`
+}
+
+// Settle is the settle window as a duration.
+func (s Sync) Settle() time.Duration {
+	m := DefaultSettleMinutes
+	if s.SettleMinutes != nil {
+		m = *s.SettleMinutes
+	}
+	return time.Duration(m) * time.Minute
 }
 
 // Server is the bridge endpoint. The token is never stored here.
@@ -185,6 +211,14 @@ func (c Config) Validate() error {
 	}
 	if u := c.Summarize.BaseURL; u != "" && !strings.HasPrefix(u, "http://") && !strings.HasPrefix(u, "https://") {
 		return fmt.Errorf("config: summarize.base_url must be an http(s) URL, got %q", u)
+	}
+	if m := c.Sync.SettleMinutes; m != nil && (*m < 0 || *m > 24*60) {
+		return fmt.Errorf("config: sync.settle_minutes must be between 0 and 1440, got %d", *m)
+	}
+	switch c.Sync.Daemon {
+	case "", "on", "off":
+	default:
+		return fmt.Errorf("config: sync.daemon must be on or off, got %q", c.Sync.Daemon)
 	}
 	for _, sd := range c.Share.SourceDeny {
 		if _, _, ok := selection.SplitSourceRule(sd); !ok {

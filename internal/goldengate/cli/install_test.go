@@ -179,7 +179,7 @@ func TestInstallHookKeepsTheRestOfClaudeCodeSettings(t *testing.T) {
 	if err := json.Unmarshal(raw, &doc); err != nil {
 		t.Fatalf("the result is valid JSON: %v\n%s", err, raw)
 	}
-	const cmd = `"/opt/golden gate/bin/goldengate" sync --auto --quiet --source claude-code`
+	const cmd = `"/opt/golden gate/bin/goldengate" sync --auto --quiet --source claude-code --settle 0`
 	end := doc.Hooks["SessionEnd"]
 	if doc.Model != "opus" || doc.N.String() != "12345678901234567890" || doc.Permissions["allow"][0] != "Bash(go test:*)" ||
 		doc.Hooks["PreToolUse"][0].Hooks[0].Command != "echo pre" || len(end) != 2 || end[0].Hooks[0].Command != "echo bye" ||
@@ -208,6 +208,20 @@ func TestInstallHookKeepsTheRestOfClaudeCodeSettings(t *testing.T) {
 	raw, _ = os.ReadFile(path)
 	if strings.Count(string(raw), "sync --auto") != 1 || !strings.Contains(string(raw), "/usr/local/bin/goldengate sync --auto --quiet --source claude-code") {
 		t.Fatalf("one hook, with the new path:\n%s", raw)
+	}
+
+	// a hook written by a build before the settle window (no --settle) is
+	// replaced too: the session has ended, so it must not wait
+	old := strings.Replace(string(raw), " --settle 0", "", 1)
+	if err := os.WriteFile(path, []byte(old), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.run("install-hook", "claude-code"); err != nil {
+		t.Fatal(err)
+	}
+	raw, _ = os.ReadFile(path)
+	if strings.Count(string(raw), "sync --auto") != 1 || !strings.Contains(string(raw), "claude-code --settle 0") {
+		t.Fatalf("the old hook is replaced:\n%s", raw)
 	}
 
 	// uninstall removes only ours

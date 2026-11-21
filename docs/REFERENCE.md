@@ -191,6 +191,8 @@ goldengate uninstall-schedule            # and uninstall-hook claude-code
 
 Both run `goldengate sync --auto`. It sends only what you approved in the inbox or what your rules approve, never what is still waiting, and everything it sends is in a receipt. With every project at trust level ask, the background sync only delivers what you approve by hand.
 
+A background send waits until a new or changed session has been left alone for 10 minutes (`settle_minutes` under `[sync]`, 0 for no wait; `--settle 5m` for one run), so a session still being written is not sent again and again; the Claude Code hook uses `--settle 0`, since its session has ended. Only one send runs at a time. When the server cannot be reached, the run says so in one line and later runs wait 1, 2, 4 … minutes (at most an hour) before trying it again.
+
 A rule matches on facts your tools recorded: the tool, the folder or chat grouping, the repository remote, the branch, and issue or pull request keys (`--work-item linear:ENG`). It acts only inside the project: it cannot share anything you did not share, and a block always wins. An exclude rule keeps its matches on your machine. Even at auto, the first session from a folder or chat you did not name yourself (one reached through a parent folder or a pattern such as `chatgpt:*`) waits for you; after you send one, the rest follow automatically.
 
 **Which assistant sees what.** Each assistant you connect is an *agent* with its own assistant token and its own list of projects. The assistant you set up first sees every project you share; any other starts with nothing. These commands ask for the admin secret (or read `GOLDENGATE_ADMIN_TOKEN`) and never store it:

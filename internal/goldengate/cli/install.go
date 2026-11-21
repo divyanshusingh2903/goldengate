@@ -264,13 +264,17 @@ func (a *app) claudeSettings() string {
 	return filepath.Join(dir, "settings.json")
 }
 
+// hookMarker finds our hook in Claude Code's settings, also as written by
+// earlier builds (without --settle).
 const hookMarker = "sync --auto --quiet --source claude-code"
 
+// hookCommand runs when a Claude Code session ends. The session is finished,
+// so it need not wait for the settle window (--settle 0).
 func hookCommand(exe string) string {
 	if strings.ContainsAny(exe, " \t") {
 		exe = `"` + exe + `"`
 	}
-	return exe + " " + hookMarker
+	return exe + " " + hookMarker + " --settle 0"
 }
 
 // editHook adds (or removes) the SessionEnd hook in a Claude Code settings
