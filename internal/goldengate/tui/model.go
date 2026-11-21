@@ -187,7 +187,13 @@ type (
 		s   Settings
 		err error
 	}
-	savedMsg  struct{ err error }
+	savedMsg struct{ err error }
+	// daemonSetMsg is the answer to SetDaemon.
+	daemonSetMsg struct {
+		on   bool
+		warn string
+		err  error
+	}
 	detectMsg struct {
 		tools []ToolStatus
 		err   error
@@ -286,6 +292,8 @@ func (m *Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.onSettings(msg)
 	case savedMsg:
 		return m, m.onSaved(msg)
+	case daemonSetMsg:
+		return m, m.onDaemonSet(msg)
 	case keySavedMsg:
 		return m, m.onKeySaved(msg)
 	case testDoneMsg:

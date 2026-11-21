@@ -86,6 +86,21 @@ func TestEveryBackendMethodIsReachableOverTheWebAPI(t *testing.T) {
 	c.JSON("GET", "/api/settings", nil, &set)
 	set.Level = "titles-only"
 	c.JSON("POST", "/api/settings", set, nil)
+	// SetDaemon: the answer carries the warning; the settings then show it on
+	var dres map[string]string
+	c.JSON("POST", "/api/daemon", map[string]bool{"On": true}, &dres)
+	if _, ok := dres["warning"]; !ok {
+		t.Fatalf("daemon answer: %v", dres)
+	}
+	c.JSON("GET", "/api/settings", nil, &set)
+	if set.Daemon.Mode != "on" || !set.Daemon.Running {
+		t.Fatalf("settings after turning the daemon on: %+v", set.Daemon)
+	}
+	c.JSON("POST", "/api/daemon", map[string]bool{"On": false}, &dres)
+	c.JSON("GET", "/api/settings", nil, &set)
+	if set.Daemon.Mode != "off" {
+		t.Fatalf("settings after turning it off: %+v", set.Daemon)
+	}
 	// SetSummarizerKey: the key goes in and does not come back
 	res, body := c.Do("POST", "/api/summarizer/key", map[string]string{"Provider": "anthropic", "Key": "sk-TOPSECRET-KEY"}, nil)
 	if res.StatusCode != 200 || strings.Contains(string(body), "TOPSECRET") || !strings.Contains(string(body), `"set":true`) {

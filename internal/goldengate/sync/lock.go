@@ -13,8 +13,12 @@ import (
 // ErrBusy is returned when another send holds the run lock.
 var ErrBusy = errors.New("another send is running")
 
-// lockName is the run lock's file in the state directory.
-const lockName = "sync.lock"
+// lockName is the run lock's file in the state directory; DaemonLockName is
+// the one the background daemon holds for as long as it runs.
+const (
+	lockName       = "sync.lock"
+	DaemonLockName = "daemon.lock"
+)
 
 // RunLock keeps a second send (a timer, a hook, the daemon, someone pressing
 // Send) from running while one is under way, so no session is sent twice and
@@ -28,11 +32,14 @@ type RunLock struct{ f *os.File }
 
 // AcquireRunLock takes the run lock in dir without waiting. It returns
 // ErrBusy when another send holds it.
-func AcquireRunLock(dir string) (*RunLock, error) {
+func AcquireRunLock(dir string) (*RunLock, error) { return AcquireLock(dir, lockName) }
+
+// AcquireLock takes the named lock in dir without waiting; see RunLock.
+func AcquireLock(dir, name string) (*RunLock, error) {
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("lock: mkdir: %w", err)
 	}
-	path := filepath.Join(dir, lockName)
+	path := filepath.Join(dir, name)
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600) //nolint:gosec // G304: our own state directory
 	if err != nil {
 		return nil, fmt.Errorf("lock: open %s: %w", path, err)

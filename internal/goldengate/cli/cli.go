@@ -134,7 +134,7 @@ func New(d Deps) *cobra.Command {
 	root.SetOut(d.Stdout)
 	root.SetErr(d.Stderr)
 	root.PersistentFlags().StringVar(&a.configPath, "config", "", "config file (default: XDG config dir)")
-	root.AddCommand(a.syncCmd(), a.shareCmd(), a.projectsCmd(), a.uiCmd(), a.chatsCmd(), a.rulesCmd(), a.receiptsCmd(), a.installScheduleCmd(), a.uninstallScheduleCmd(), a.hookCmd(false), a.hookCmd(true), a.agentsCmd(), a.inboxCmd(), a.sessionsCmd(), a.doctorCmd(), a.summarizerCmd(), a.initCmd(), a.tokenCmd(), a.purgeCmd(), a.importsCmd(), &cobra.Command{
+	root.AddCommand(a.syncCmd(), a.shareCmd(), a.projectsCmd(), a.uiCmd(), a.chatsCmd(), a.rulesCmd(), a.receiptsCmd(), a.installScheduleCmd(), a.uninstallScheduleCmd(), a.serviceCmd(false), a.serviceCmd(true), a.daemonCmd(), a.hookCmd(false), a.hookCmd(true), a.agentsCmd(), a.inboxCmd(), a.sessionsCmd(), a.doctorCmd(), a.summarizerCmd(), a.initCmd(), a.tokenCmd(), a.purgeCmd(), a.importsCmd(), &cobra.Command{
 		Use: "version", Short: "Print the version",
 		Run: func(*cobra.Command, []string) {
 			fmt.Fprintln(a.Stdout, "goldengate", Version, runtime.GOOS+"/"+runtime.GOARCH)
@@ -317,17 +317,20 @@ func (a *app) syncCmd() *cobra.Command {
 			if resummarize && s.Summarizer == nil {
 				return errors.New("--resummarize needs a model summarizer: run `goldengate summarizer use anthropic` (or openai) first")
 			}
+			if auto && !dry {
+				// the pass the background daemon also runs
+				res, err := a.autoPass(cmd.Context(), autoOpts{Project: project, Source: source, Since: sinceD, Settle: settleD})
+				if err != nil {
+					return err
+				}
+				if !quiet {
+					fmt.Fprintln(a.Stderr, res.Line)
+				}
+				return nil
+			}
 			var sink gsync.Sink = gsync.DryRunSink{W: a.Stdout}
 			if !dry {
-				// One send at a time: a timer, a hook and a person pressing
-				// Send must not send the same session twice.
-				lock, err := a.runLock(cmd.Context(), auto)
-				if errors.Is(err, gsync.ErrBusy) && auto {
-					if !quiet {
-						fmt.Fprintln(a.Stderr, "goldengate background send: another send is running; nothing done")
-					}
-					return nil
-				}
+				lock, err := a.runLock(cmd.Context(), false)
 				if err != nil {
 					return err
 				}
@@ -335,14 +338,6 @@ func (a *app) syncCmd() *cobra.Command {
 				cl, err := a.ingestClient(cfg)
 				if err != nil {
 					return err
-				}
-				if auto {
-					if line, ok := a.serverReachable(cmd.Context(), st, cl); !ok {
-						if !quiet {
-							fmt.Fprintln(a.Stderr, "goldengate background send: "+line)
-						}
-						return nil
-					}
 				}
 				sink = cl
 			}
@@ -425,7 +420,15 @@ func (a *app) shareCmd() *cobra.Command {
 	}
 	var auto bool
 	add := &cobra.Command{Use: "add <path>", Short: "Share a folder (and everything under it); its sessions wait in the inbox unless --auto-approve", Args: cobra.ExactArgs(1),
-		RunE: func(c *cobra.Command, args []string) error { return a.shareAdd(c.Context(), args[0], auto) }}
+		RunE: func(c *cobra.Command, args []string) error {
+			if err := a.shareAdd(c.Context(), args[0], auto); err != nil {
+				return err
+			}
+			if auto {
+				a.offerDaemon(c.Context())
+			}
+			return nil
+		}}
 	add.Flags().BoolVar(&auto, "auto-approve", false, "send this folder's new and changed sessions without asking")
 	cmd.AddCommand(add, remove, deny, a.shareListCmd())
 	return cmd
@@ -852,6 +855,7 @@ func (a *app) doctorCmd() *cobra.Command {
 			} else {
 				fmt.Fprintf(w, "config  ok    %s (default=%s, level=%s)\n", a.cfgPath(), cfg.Share.Default, cfg.Share.Level)
 				fmt.Fprintf(w, "summary ok    %s\n", a.summarizerLine(cfg))
+				fmt.Fprintf(w, "daemon  %s\n", a.daemonLine(cfg))
 			}
 			if st, err := a.openState(); err != nil {
 				fmt.Fprintf(w, "state   FAIL  %v\n", err)

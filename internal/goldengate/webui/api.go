@@ -147,6 +147,14 @@ func (s *Server) routes(mux *http.ServeMux) {
 		}
 		out(w, message{"saved"}, be.SaveSettings(r.Context(), in))
 	})
+	mux.HandleFunc("POST /api/daemon", func(w http.ResponseWriter, r *http.Request) {
+		var in struct{ On bool }
+		if !decode(w, r, &in) {
+			return
+		}
+		warn, err := be.SetDaemon(r.Context(), in.On)
+		out(w, map[string]string{"warning": warn}, err)
+	})
 	// a secret goes in and never comes back: the answer says only that it is set
 	mux.HandleFunc("POST /api/summarizer/key", func(w http.ResponseWriter, r *http.Request) {
 		var in struct{ Provider, Key string }

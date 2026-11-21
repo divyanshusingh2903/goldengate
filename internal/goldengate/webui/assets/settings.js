@@ -192,6 +192,28 @@ export async function render(main, app) {
         },
       }, "Save and test")));
 
+  // Background sending is not part of the form: it installs or removes a
+  // service, so it happens at once and says if it could not.
+  const d = s.Daemon || {};
+  const bg = h("input", { type: "checkbox", class: "switch", checked: d.Mode === "on", "aria-label": "Send in the background" });
+  bg.addEventListener("change", async () => {
+    bg.disabled = true;
+    const want = bg.checked;
+    try {
+      const r = await api("/api/daemon", { On: want });
+      app.say(want ? (r.warning ? "Background sending is on, but " + r.warning.split("\n")[0] : "Background sending is on.") : "Background sending is off.", !!(want && r.warning));
+      await app.go("settings");
+    } catch (e) {
+      bg.checked = !want;
+      bg.disabled = false;
+      app.say(String(e.message || e), true);
+    }
+  });
+  const bgState = d.LastError && d.Mode === "on" ? "Problem: " + d.LastError
+    : d.Mode === "on" && d.Running ? "Running. " + (d.LastResult || "Nothing sent yet.")
+      : d.Mode === "on" ? "Turned on, but no background process is running: run goldengate daemon status."
+        : d.Ask ? "A project already sends on its own: turn this on so you do not have to remember to send."
+          : "Not running.";
   const row = (title, desc, control) => h("div", { class: "set-row" }, h("div", null, h("div", { class: "t" }, title), desc ? h("div", { class: "d" }, desc) : null), control);
   fill(main,
     h("form", { onsubmit: (e) => { e.preventDefault(); save(); } },
@@ -207,6 +229,9 @@ export async function render(main, app) {
           cardBody(h("div", { class: "field" }, h("label", { for: "set-patterns" }, "Extra patterns to redact, one per line"), patterns,
             h("p", { class: "hint" }, "Secrets, keys and home paths are always redacted. Add regular expressions for anything else, such as a client's name."))),
           row("Read git metadata", "Each folder's HEAD and config, to recognise worktrees, remotes and branches.", git)),
+        card("Send in the background", null,
+          h("p", { class: "card-body hint" }, "A small background process sends what you or your rules approved, so nothing depends on remembering to send. It never sends what waits in the inbox, and every send is listed in Receipts."),
+          row("Send automatically", bgState, bg)),
         card("Who writes the summaries", null,
           cardBody(h("div", { class: "field" }, h("label", { for: "set-provider" }, "Summaries by"), provider), modelNote, h("div", { class: "gap-top" }, modelFields))))),
   );

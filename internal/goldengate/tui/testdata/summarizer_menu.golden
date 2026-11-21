@@ -11,8 +11,8 @@
 │ Source AI claude.ai               │    Anthropic API (Claude)     Claude Haiku · small and cheap              │      │
 │ + add a redaction pattern (regex) │    OpenAI API (ChatGPT)       GPT nano · OpenAI's cheapest model          │      │
 │ Verify commits with local git     │    Google Gemini API          Gemini Flash-Lite · Google AI Studio key    │      │
-│ Session hook / schedule           │    OpenCode Zen API           OpenCode's gateway · free and paid models   │      │
-│                                   │    Ollama (this machine)      not running here · install from ollama.com  │      │
+│ Send in the background            │    OpenCode Zen API           OpenCode's gateway · free and paid models   │      │
+│ Session hook / schedule           │    Ollama (this machine)      not running here · install from ollama.com  │      │
 │                                   │    Custom (OpenAI-compatible) LM Studio, OpenRouter, any endpoint         │      │
 │                                   └───────────────────────────────────────────────────────────────────────────┘      │
 │                                                                                                                      │

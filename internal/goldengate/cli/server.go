@@ -272,6 +272,7 @@ Next:
     goldengate sync --dry-run     # see exactly what would be sent
     goldengate sync
 `)
+	a.offerDaemon(ctx)
 	return nil
 }
 

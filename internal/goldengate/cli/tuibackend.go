@@ -93,20 +93,26 @@ func (b *tuiBackend) notice(msg string) {
 }
 
 func (b *tuiBackend) syncer(ctx context.Context, cfg config.Config) (*gsync.Syncer, func(), error) {
-	m, err := b.a.matcher(cfg)
+	return b.a.newSyncer(ctx, cfg)
+}
+
+// newSyncer builds a Syncer over the real sources and the local state; the
+// returned function closes the state.
+func (a *app) newSyncer(ctx context.Context, cfg config.Config) (*gsync.Syncer, func(), error) {
+	m, err := a.matcher(cfg)
 	if err != nil {
 		return nil, nil, err
 	}
-	reg, err := b.a.registry(ctx)
+	reg, err := a.registry(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
-	st, err := b.a.openState()
+	st, err := a.openState()
 	if err != nil {
 		return nil, nil, err
 	}
-	s := &gsync.Syncer{Registry: reg, Config: cfg, Matcher: m, State: st, Home: b.a.Home, Now: b.a.Now, Resolver: b.a.resolver(cfg),
-		Summarizer: b.a.summarizer(cfg)}
+	s := &gsync.Syncer{Registry: reg, Config: cfg, Matcher: m, State: st, Home: a.Home, Now: a.Now, Resolver: a.resolver(cfg),
+		Summarizer: a.summarizer(cfg)}
 	return s, func() { _ = st.Close() }, nil
 }
 
@@ -804,7 +810,13 @@ func (b *tuiBackend) Settings(ctx context.Context) (tui.Settings, error) {
 		return tui.Settings{}, err
 	}
 	return tui.Settings{Level: cfg.Share.Level, Since: cfg.Share.Since, Sources: srcs, ExtraPatterns: slices.Clone(cfg.Redact.ExtraPatterns), EnrichGit: cfg.Enrich.Git,
-		Theme: cfg.UI.Theme, Summarize: b.summarizeSettings(cfg)}, nil
+		Theme: cfg.UI.Theme, Summarize: b.summarizeSettings(cfg), Daemon: b.a.daemonSettings(cfg)}, nil
+}
+
+// SetDaemon implements tui.Backend: the same switch as `goldengate
+// install-service` and `uninstall-service`.
+func (b *tuiBackend) SetDaemon(ctx context.Context, on bool) (string, error) {
+	return b.a.setDaemon(ctx, on, false)
 }
 
 func (b *tuiBackend) summarizeSettings(cfg config.Config) tui.SummarizeSettings {
