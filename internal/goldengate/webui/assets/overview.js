@@ -6,10 +6,11 @@ import { h, fill, head, card, cardBody, note, stat, empty, table, when, plural, 
 
 export async function render(main, app) {
   const snap = await app.refresh();
-  const [inbox, server, receipts] = await Promise.all([
+  const [inbox, server, receipts, settings] = await Promise.all([
     api("/api/inbox").catch(() => ({})),
     api("/api/server").catch(() => null),
     api("/api/receipts").catch(() => []),
+    api("/api/settings").catch(() => ({})),
   ]);
   const rows = snap.Rows || [];
   const shared = rows.filter((r) => r.State === 1 || r.State === 2);
@@ -42,10 +43,20 @@ export async function render(main, app) {
     })))
     : empty(null, null, "Nothing was sent automatically. A project sends on its own only at trust level auto.");
 
+  // asked once, when a project already sends on its own and nothing was chosen
+  const daemonAsk = (settings.Daemon || {}).Ask
+    ? card("Send automatically in the background?", null,
+      cardBody(h("p", null, "Golden Gate can run a small background process that sends only what you or your rules approved, so nothing depends on remembering to send. Each send is listed in Receipts, and nothing else is read or sent."),
+        h("div", { class: "row gap-top" },
+          h("button", { type: "button", class: "primary", onclick: (e) => chooseDaemon(app, e.currentTarget, true) }, "Turn on"),
+          h("button", { type: "button", onclick: (e) => chooseDaemon(app, e.currentTarget, false) }, "Not now"))))
+    : null;
+
   fill(main,
     head("Overview", "What your assistants can see, and what is waiting on you.",
       h("button", { type: "button", onclick: () => app.go("inbox") }, "Open inbox"),
       snap.Server ? null : h("button", { type: "button", class: "primary", onclick: () => app.go("setup") }, "Connect a server")),
+    daemonAsk,
     h("div", { class: "grid g4" },
       stat("Waiting for you", String(pending.length), "in the inbox"),
       stat("Shared projects", String(shared.length), `of ${rows.length} on this computer`),
@@ -55,4 +66,19 @@ export async function render(main, app) {
       card("Needs a decision", h("button", { type: "button", class: "ghost sm", onclick: () => app.go("inbox") }, "View all"), waiting),
       card("Sent automatically", h("button", { type: "button", class: "ghost sm", onclick: () => app.go("receipts") }, "Receipts"), activity)),
     note("Nothing leaves this computer until you send, or a rule you approved does."));
+}
+
+// chooseDaemon answers the question: on installs the background service, not
+// now is remembered and asks again never. The setting changes only if the
+// service could be installed; an error says why and leaves the question.
+async function chooseDaemon(app, button, on) {
+  button.disabled = true;
+  try {
+    const r = await api("/api/daemon", { On: on });
+    app.say(on ? (r.warning ? "Background sending is on, but " + r.warning.split("\n")[0] : "Background sending is on.") : "Not now. You can turn it on in Settings.", !!(on && r.warning));
+    await app.go("overview");
+  } catch (e) {
+    button.disabled = false;
+    app.say(String(e.message || e), true);
+  }
 }

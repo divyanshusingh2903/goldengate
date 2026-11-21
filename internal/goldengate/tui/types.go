@@ -242,6 +242,26 @@ type Settings struct {
 	EnrichGit     bool
 	Theme         string // color preset; "" is the default (Golden Gate Light)
 	Summarize     SummarizeSettings
+	// Daemon is background sending as it stands (read-only; SaveSettings
+	// ignores it, SetDaemon changes it).
+	Daemon DaemonSettings
+}
+
+// DaemonSettings is the background daemon as a settings screen shows it.
+type DaemonSettings struct {
+	// Mode is the user's answer: "" (not chosen yet), "on" or "off".
+	Mode string
+	// Running is whether a daemon is running now.
+	Running bool
+	// LastResult is the daemon's one-line report of its last send; LastError
+	// is what is wrong, if anything.
+	LastResult, LastError string
+	LastRun, NextRun      time.Time
+	// Reachable is whether the server answered last time; nil if not asked yet.
+	Reachable *bool
+	// Ask is true when the user has not chosen and some project already sends
+	// on its own: the moment to ask "send automatically in the background?".
+	Ask bool
 }
 
 // SummarizeSettings choose how summaries are written. Provider "" is the local
@@ -309,6 +329,12 @@ type Backend interface {
 	DeleteServerProject(ctx context.Context, ref string) error
 	Settings(ctx context.Context) (Settings, error)
 	SaveSettings(ctx context.Context, s Settings) error
+	// SetDaemon turns background sending on (installs the service of the
+	// user's system and starts it) or off (stops and removes it). The setting
+	// changes only when that worked. The warning, if any, says the service
+	// was installed but could not pass its own check (for example it cannot
+	// read the upload token).
+	SetDaemon(ctx context.Context, on bool) (warning string, err error)
 	// SetSummarizerKey stores a provider's API key in the OS keyring; an
 	// empty key removes it.
 	SetSummarizerKey(ctx context.Context, provider, key string) error

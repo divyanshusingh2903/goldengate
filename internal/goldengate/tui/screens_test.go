@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -235,6 +236,42 @@ func TestSettingsChangesAreSavedImmediately(t *testing.T) {
 		t.Fatalf("source toggled: %+v", s)
 	}
 	h.contains("Source CC Claude Code", "off")
+}
+
+// The background-sending row turns the daemon on and off through the
+// backend; a failure is shown and nothing looks changed.
+func TestSettingsBackgroundSending(t *testing.T) {
+	h := newHarness(t, 100, 30)
+	h.key("4")
+	h.contains("Send in the background", "not chosen yet")
+	// move to the row: it sits after the git row, before the hook note
+	for i := 0; i < 20 && !strings.Contains(h.m.settingRows()[h.m.st.cursor].label, "Send in the background"); i++ {
+		h.key("down")
+	}
+	h.key("enter")
+	if h.be.daemon.Mode != "on" {
+		t.Fatalf("enter turns it on: %+v", h.be.daemon)
+	}
+	h.contains("● on", "running", "background sending is on")
+	h.key("enter")
+	if h.be.daemon.Mode != "off" {
+		t.Fatalf("enter again turns it off: %+v", h.be.daemon)
+	}
+	h.contains("background sending is off")
+
+	// where it cannot be installed: the error is shown, the row stays off
+	h.be.daemonErr = errors.New("no systemd user session")
+	h.key("enter")
+	h.contains("background sending not changed", "no systemd user session")
+	if h.be.daemon.Mode == "on" {
+		t.Fatal("a failed install must not look on")
+	}
+
+	// the moment to ask: nothing chosen and a project already sends by itself
+	h2 := newHarness(t, 100, 30)
+	h2.be.daemon = DaemonSettings{Ask: true}
+	h2.key("4")
+	h2.contains("enter to send automatically")
 }
 
 func TestSettingsPatternsAddAndRemove(t *testing.T) {

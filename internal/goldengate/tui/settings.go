@@ -27,6 +27,7 @@ const (
 	setSumLength
 	setSumKey
 	setSumTest
+	setDaemon
 )
 
 type settingRow struct {
@@ -158,6 +159,7 @@ func (m *Model) settingRows() []settingRow {
 	}
 	rows = append(rows,
 		settingRow{kind: setGit, label: "Verify commits with local git", value: git},
+		settingRow{kind: setDaemon, label: "Send in the background", value: s.Daemon.Mode},
 		settingRow{kind: setNote, label: "Session hook / schedule", value: "goldengate install-hook · install-schedule"},
 	)
 	return rows
@@ -181,6 +183,36 @@ func orNone(s string) string {
 	if s == "" {
 		return "no limit"
 	}
+	return s
+}
+
+// setDaemon turns background sending on or off; the service is installed or
+// removed first, and the setting changes only if that worked.
+func (m *Model) setDaemon(on bool) tea.Cmd {
+	be, ctx := m.be, m.ctx
+	return func() tea.Msg {
+		warn, err := be.SetDaemon(ctx, on)
+		return daemonSetMsg{on, warn, err}
+	}
+}
+
+func (m *Model) onDaemonSet(msg daemonSetMsg) tea.Cmd {
+	switch {
+	case msg.err != nil:
+		m.st.err = msg.err.Error()
+		m.setStatus("background sending not changed: "+msg.err.Error(), true)
+	case msg.warn != "":
+		m.setStatus("background sending is on, but "+oneLine(msg.warn), true)
+	case msg.on:
+		m.setStatus("background sending is on: only what you or your rules approved is sent", false)
+	default:
+		m.setStatus("background sending is off", false)
+	}
+	return tea.Batch(m.openSettingsKeepScreen(), m.loadSnapshot())
+}
+
+func oneLine(s string) string {
+	s, _, _ = strings.Cut(strings.TrimSpace(s), "\n")
 	return s
 }
 
@@ -281,6 +313,8 @@ func (m *Model) onKeySettings(k tea.KeyMsg) (tea.Model, tea.Cmd) {
 		case setGit:
 			s.EnrichGit = !s.EnrichGit
 			return m, m.save(s)
+		case setDaemon:
+			return m, m.setDaemon(s.Daemon.Mode != "on")
 		case setPattern:
 			if k.String() == "x" || k.String() == "enter" {
 				s.ExtraPatterns = slices.Delete(slices.Clone(s.ExtraPatterns), row.idx, row.idx+1)
@@ -319,6 +353,22 @@ func (m *Model) settingLine(r settingRow, cur bool, w int) string {
 		return label + v
 	case setGit:
 		return label + m.toggle(m.st.s.EnrichGit)
+	case setDaemon:
+		d := m.st.s.Daemon
+		v := m.toggle(d.Mode == "on")
+		switch {
+		case d.LastError != "" && d.Mode == "on":
+			v += m.th.Bad.Render("  " + clip(oneLine(d.LastError), 44))
+		case d.Mode == "on" && d.Running:
+			v += m.th.Dim.Render("  running · only what you or your rules approved")
+		case d.Mode == "on":
+			v += m.th.Warn.Render("  not running: goldengate daemon status")
+		case d.Ask:
+			v += m.th.Accent.Render("  enter to send automatically")
+		case d.Mode == "":
+			v += m.th.Dim.Render("  not chosen yet")
+		}
+		return label + v
 	case setSummarizer:
 		name := r.value
 		if m.st.dd == menuSummarizer {

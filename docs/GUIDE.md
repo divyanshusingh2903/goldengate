@@ -339,6 +339,21 @@ TUI: `c` in the inbox. Browser: Inbox → Receipts.
 
 ### 5.4 Send in the background
 
+The easiest way is the background daemon: a small process of your user that looks every two minutes and sends what you or your rules approved, so you never have to remember.
+
+```bash
+goldengate install-service --print   # look first: what it would install
+goldengate install-service           # systemd user service, launchd agent, or a Task Scheduler task at logon
+goldengate daemon status             # is it running, what did it send last, when does it look next
+goldengate uninstall-service         # off again
+```
+
+You are asked once, right where it matters: when you set a project to trust `auto` (or accept a rule offer, or share a folder with `--auto-approve`), the terminal asks "Send automatically in the background?". The TUI (Settings, "Send in the background") and the browser (Overview card, Settings) offer the same switch. "Not now" is remembered; it is off until you say yes. `goldengate doctor` shows it too.
+
+It runs the same `goldengate sync --auto` as the timer and the hook: only what you approved or your rules approved is sent, never what waits in the inbox, each send is in a receipt, it opens no network port and reads nothing outside the folders you share. It sends only when something changed: a shared session, your settings, or an inbox decision (approving a waiting session sends it at the next look). Waiting sessions do not make it run again and again. A service that cannot read the upload token (it is in a desktop keyring a service cannot reach, as over SSH) is told apart at install: `install-service` runs `goldengate daemon --check` the way the service will, and says how to fix it.
+
+If you prefer a timer or a hook, they still work (and the installers replace each other: installing the service removes the timer):
+
 ```bash
 goldengate install-schedule --print      # look first: what it would install
 goldengate install-schedule              # every 30 minutes (systemd on Linux)
@@ -357,6 +372,8 @@ Background runs are safe to repeat often:
 - [ ] At trust auto with a rule, a new session is sent by `sync` and listed in a receipt.
 - [ ] At trust ask, `sync --auto` leaves new sessions in the inbox.
 - [ ] A session changed a minute ago is reported as waiting to settle, and sent by a run 10 minutes later.
+- [ ] `goldengate install-service` then a finished session appears on the server within a few minutes, with a receipt.
+- [ ] `goldengate daemon status` shows it running, and `uninstall-service` stops it.
 
 ---
 
@@ -435,7 +452,7 @@ Tick these off in order; each line points to its section.
 ## 10. Clean up after testing
 
 1. Stop `goldengate ui` and the server (Ctrl-C in their terminals).
-2. Remove what you installed: `goldengate uninstall-schedule`, `goldengate uninstall-hook claude-code`, `claude mcp remove goldengate`.
+2. Remove what you installed: `goldengate uninstall-service`, `goldengate uninstall-schedule`, `goldengate uninstall-hook claude-code`, `claude mcp remove goldengate`.
 3. Remove the upload token from the OS keyring:
    ```bash
    secret-tool clear service goldengate username ingest-token@127.0.0.1:8080

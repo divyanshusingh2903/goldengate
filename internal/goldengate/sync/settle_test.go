@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	gsync "github.com/divyanshusingh2903/goldengate/internal/goldengate/sync"
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/selection"
+	gsync "github.com/divyanshusingh2903/goldengate/internal/goldengate/sync"
 )
 
 // A session that changed less than the settle window ago is held back by

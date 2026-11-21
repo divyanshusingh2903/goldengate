@@ -17,20 +17,22 @@ var clock = time.Date(2026, 1, 6, 12, 0, 0, 0, time.UTC)
 type fakeBackend struct {
 	mu sync.Mutex
 
-	rows     []Row
-	sources  []SourceStatus
-	level    string
-	since    string
-	server   string
-	firstRun bool
-	patterns []string
-	git      bool
-	theme    string
-	summ     SummarizeSettings
-	keys     map[string]string // summarizer keys by provider
-	testErr  error
-	tests    int
-	models   map[string][]string // by provider; absent: an error, like a server that is not running
+	rows      []Row
+	sources   []SourceStatus
+	level     string
+	since     string
+	server    string
+	firstRun  bool
+	patterns  []string
+	git       bool
+	theme     string
+	daemon    DaemonSettings // background sending, as SetDaemon left it
+	daemonErr error          // what SetDaemon fails with, when set
+	summ      SummarizeSettings
+	keys      map[string]string // summarizer keys by provider
+	testErr   error
+	tests     int
+	models    map[string][]string // by provider; absent: an error, like a server that is not running
 
 	previews map[string]Preview
 	srvInfo  ServerInfo
@@ -319,7 +321,20 @@ func (f *fakeBackend) DeleteServerProject(_ context.Context, label string) error
 func (f *fakeBackend) Settings(context.Context) (Settings, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return Settings{Level: f.level, Since: f.since, Sources: append([]SourceStatus(nil), f.sources...), ExtraPatterns: append([]string(nil), f.patterns...), EnrichGit: f.git, Theme: f.theme, Summarize: f.summarize()}, nil
+	return Settings{Level: f.level, Since: f.since, Sources: append([]SourceStatus(nil), f.sources...), ExtraPatterns: append([]string(nil), f.patterns...), EnrichGit: f.git, Theme: f.theme, Summarize: f.summarize(), Daemon: f.daemon}, nil
+}
+
+func (f *fakeBackend) SetDaemon(_ context.Context, on bool) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.daemonErr != nil {
+		return "", f.daemonErr
+	}
+	f.daemon.Mode, f.daemon.Running = "off", false
+	if on {
+		f.daemon.Mode, f.daemon.Running = "on", true
+	}
+	return "", nil
 }
 
 // summarize adds every provider's key state, as the real backend does.

@@ -270,6 +270,7 @@ func (a *app) offerCmds() []*cobra.Command {
 			msg, err := a.decideOffer(c.Context(), args[0], true)
 			if err == nil {
 				fmt.Fprintln(a.Stdout, msg+"\nundo with `goldengate rules remove` and `goldengate projects trust`")
+				a.offerDaemon(c.Context())
 			}
 			return err
 		}}
