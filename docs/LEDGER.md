@@ -225,8 +225,8 @@ People will not remember to send at the end of the day: once the user chooses au
 
 | # | Issue | Size | After | Planned | Status | PR |
 |---|---|---|---|---|---|---|
-| D1 | #188 `sync --auto`: settle window, single-run lock, offline handling | M | | Nov 21 | in progress | |
-| D2 | #189 `goldengate daemon`, installed when the user opts in | L | #188 | Nov 22 | todo | |
+| D1 | #188 `sync --auto`: settle window, single-run lock, offline handling | M | | Nov 21 | done | #190 |
+| D2 | #189 `goldengate daemon`, installed when the user opts in | L | #188 | Nov 22 | in progress | |
 
 ## Log
 
@@ -327,3 +327,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-18: #185 ("Include them" seemed to do nothing): measured, the 38 stale sessions were ~600-byte payloads the model skips on purpose (under 120 characters of conversation), so they kept the rules' summary and counted as stale forever. New `model_skipped` table remembers content the model left alone; they stop counting as stale after one pass. The web review now shows how many sent sessions the button checked. `govulncheck` could not run locally (toolchain mismatch); CI runs it.
 - 2026-11-19: v1.1.7 released (fix for #185: sent sessions the model skips are no longer offered for re-summarizing). README and REFERENCE versions moved from 1.1.3 to 1.1.7.
 - 2026-11-21: #188 and #189 filed at the user's request (people will not send by hand every day): unattended sync made safe to run all day, then a daemon the user opts into. Plan reviewed by a second agent; its corrections (settle check after the unchanged check, a pointer for `settle_minutes`, lock only real sends and never unlink it, no busy loop on inbox sessions, `doctor` not `status`) are part of the plan. #188 in progress.
+- 2026-11-21: #188 done (#190): `sync --auto` holds sessions changed within `[sync] settle_minutes` (default 10), takes an OS lock on `sync.lock` for every real send, and backs off from an unreachable server (1, 2, 4 … minutes, at most an hour; `sync_meta`). The Claude Code hook now passes `--settle 0`; users who installed it before should run `install-hook claude-code` again. Roadmap page has a Background sync section. #189 in progress.
