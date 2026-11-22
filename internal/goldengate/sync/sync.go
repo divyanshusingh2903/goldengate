@@ -258,6 +258,12 @@ type RunOpts struct {
 	// on every run. Only unattended runs set it: someone pressing Send wants
 	// everything now. A held session is not recorded; a later run sends it.
 	Settle time.Duration
+	// ResendGap is the least time between two sends of the same session: a
+	// session already on the server that changed again is refreshed only
+	// when this long has passed since it was last sent. New sessions are not
+	// held. Only unattended runs set it. A held session is not recorded; a
+	// later run sends it.
+	ResendGap time.Duration
 }
 
 // Report summarizes a run. Counts only: no project names or content.
@@ -319,6 +325,11 @@ type Report struct {
 	// is held).
 	Settling  int
 	SettledAt time.Time
+	// Resending counts changed sessions already on the server that are held
+	// back by RunOpts.ResendGap; ResendAt is the earliest time one of them
+	// may be sent (zero when none is held).
+	Resending int
+	ResendAt  time.Time
 }
 
 // AutoItem is a session sent by a project's trust level and rules.
@@ -464,6 +475,17 @@ func (s *Syncer) Plan(ctx context.Context, o RunOpts) (Batch, Report, error) {
 					rep.Settling++
 					if rep.SettledAt.IsZero() || ready.Before(rep.SettledAt) {
 						rep.SettledAt = ready
+					}
+					continue
+				}
+			}
+			// A session already on the server is refreshed at most once per
+			// gap, however often it changes.
+			if o.ResendGap > 0 && seen && !resum && !prev.SyncedAt.IsZero() {
+				if ready := prev.SyncedAt.Add(o.ResendGap); ready.After(s.now()) {
+					rep.Resending++
+					if rep.ResendAt.IsZero() || ready.Before(rep.ResendAt) {
+						rep.ResendAt = ready
 					}
 					continue
 				}

@@ -269,12 +269,12 @@ func (a *app) claudeSettings() string {
 const hookMarker = "sync --auto --quiet --source claude-code"
 
 // hookCommand runs when a Claude Code session ends. The session is finished,
-// so it need not wait for the settle window (--settle 0).
+// so it need not wait for the settle window or the re-send gap (--settle 0 --resend-gap 0).
 func hookCommand(exe string) string {
 	if strings.ContainsAny(exe, " \t") {
 		exe = `"` + exe + `"`
 	}
-	return exe + " " + hookMarker + " --settle 0"
+	return exe + " " + hookMarker + " --settle 0 --resend-gap 0"
 }
 
 // editHook adds (or removes) the SessionEnd hook in a Claude Code settings

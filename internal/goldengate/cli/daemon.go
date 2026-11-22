@@ -119,6 +119,7 @@ type daemonMemory struct {
 	cfgMod   time.Time // the config file's modification time
 	decided  int64     // newest inbox decision
 	settleAt time.Time // when a session the last pass held back may be sent
+	resendAt time.Time // when a changed session held for the re-send gap may be sent
 	retryAt  time.Time // when to try again after a failed or blocked pass
 }
 
@@ -185,7 +186,7 @@ func (d *daemon) step(ctx context.Context) (stop bool) {
 		return false
 	}
 	fmt.Fprintf(a.Stderr, "goldengate daemon: looking at the sessions (%s)\n", reason)
-	res, perr := a.autoPass(ctx, autoOpts{Settle: cfg.Sync.Settle()})
+	res, perr := a.autoPass(ctx, autoOpts{Settle: cfg.Sync.Settle(), ResendGap: cfg.Sync.Resend()})
 	d.status.LastRun = a.Now()
 	// what was seen before the pass: anything that changed during it is
 	// noticed at the next look
@@ -210,6 +211,7 @@ func (d *daemon) step(ctx context.Context) (stop bool) {
 		t := true
 		d.status.Reachable, d.status.LastResult = &t, res.Line
 		d.mem.settleAt = res.Report.SettledAt
+		d.mem.resendAt = res.Report.ResendAt
 		fmt.Fprintln(a.Stderr, res.Line)
 	}
 	return false
@@ -259,6 +261,8 @@ func (d *daemon) due(ctx context.Context, cfg config.Config, now time.Time) (rea
 		reason = "inbox decisions changed"
 	case !m.settleAt.IsZero() && !m.settleAt.After(now):
 		reason = "a held session has settled"
+	case !m.resendAt.IsZero() && !m.resendAt.After(now):
+		reason = "the wait before sending a session again is over"
 	case !m.retryAt.IsZero() && !m.retryAt.After(now):
 		reason = "trying again"
 	}

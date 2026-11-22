@@ -365,6 +365,7 @@ Both run `goldengate sync --auto`, which sends only what you approved or your ru
 Background runs are safe to repeat often:
 
 - **A session still being written waits.** A new or changed session is sent once it has been left alone for 10 minutes, so it is not summarized and sent again every few minutes. Change it with `settle_minutes` under `[sync]` in the config (0 sends at once). The Claude Code hook runs when a session has ended, so it does not wait (`--settle 0`).
+- **A session already on the server is refreshed at most every 3 hours.** A session you keep working in changes all day; unattended runs send it again only when 3 hours have passed since its last send (`resend_minutes` under `[sync]`, 0 for no gap). New sessions are not held, and neither are sends you start yourself or the Claude Code hook (`--resend-gap 0`). If you installed the hook before this version, run `goldengate install-hook claude-code` again.
 - **One send at a time.** If a send is already running, a background run does nothing; pressing Send waits a few seconds, then says so.
 - **An unreachable server is left alone for a while.** The run says so in one line and ends without an error; the next tries come after 1, 2, 4 … minutes, at most an hour apart, and the first success resets that.
 

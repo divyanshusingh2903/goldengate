@@ -82,6 +82,10 @@ type UI struct {
 // unattended run sends it, when the config says nothing.
 const DefaultSettleMinutes = 10
 
+// DefaultResendMinutes is the least time between two sends of the same
+// session by an unattended run.
+const DefaultResendMinutes = 180
+
 // Sync holds settings for unattended sends (timers, hooks, the daemon).
 type Sync struct {
 	// SettleMinutes is how long a session must go unchanged before an
@@ -89,6 +93,11 @@ type Sync struct {
 	// summarized and sent again and again. nil means DefaultSettleMinutes;
 	// 0 sends at once. A pointer, so that a saved 0 stays 0.
 	SettleMinutes *int `toml:"settle_minutes,omitempty"`
+	// ResendMinutes is the least time between two sends of the same session
+	// by an unattended run: a session already on the server that changed
+	// again is refreshed only after this long. nil means
+	// DefaultResendMinutes; 0 refreshes whenever it has settled.
+	ResendMinutes *int `toml:"resend_minutes,omitempty"`
 	// Daemon is the user's answer about sending in the background: "" (not
 	// asked yet), "on" or "off".
 	Daemon string `toml:"daemon,omitempty"`
@@ -99,6 +108,15 @@ func (s Sync) Settle() time.Duration {
 	m := DefaultSettleMinutes
 	if s.SettleMinutes != nil {
 		m = *s.SettleMinutes
+	}
+	return time.Duration(m) * time.Minute
+}
+
+// Resend is the re-send gap as a duration.
+func (s Sync) Resend() time.Duration {
+	m := DefaultResendMinutes
+	if s.ResendMinutes != nil {
+		m = *s.ResendMinutes
 	}
 	return time.Duration(m) * time.Minute
 }
@@ -214,6 +232,9 @@ func (c Config) Validate() error {
 	}
 	if m := c.Sync.SettleMinutes; m != nil && (*m < 0 || *m > 24*60) {
 		return fmt.Errorf("config: sync.settle_minutes must be between 0 and 1440, got %d", *m)
+	}
+	if m := c.Sync.ResendMinutes; m != nil && (*m < 0 || *m > 7*24*60) {
+		return fmt.Errorf("config: sync.resend_minutes must be between 0 and 10080, got %d", *m)
 	}
 	switch c.Sync.Daemon {
 	case "", "on", "off":

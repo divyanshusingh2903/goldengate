@@ -200,3 +200,46 @@ func TestRunLockFreedWhenHolderDies(t *testing.T) {
 	}
 	_ = l.Release()
 }
+
+// A session already on the server that changed again is refreshed at most
+// once per gap: it is held without being read, and sent when the gap since
+// its last send has passed. A session never sent is not held by the gap.
+func TestResendGapHoldsRefreshesOfSentSessions(t *testing.T) {
+	e := setup(t, selection.Policy{Allow: []string{"~/code/app"}}, sess("a", "/home/u/code/app", "build"))
+	ctx := context.Background()
+	sentAt := t0.Add(time.Hour)
+	now := sentAt
+	e.s.Now = func() time.Time { return now }
+	e.f.mtime = now.Add(-time.Minute)
+	gap := 3 * time.Hour
+	sink := &capture{}
+	// never sent: the gap does not hold it
+	rep, err := e.s.Run(ctx, gsync.RunOpts{ResendGap: gap}, sink, false)
+	if err != nil || len(sink.got) != 1 || rep.Resending != 0 {
+		t.Fatalf("first send: %v %d %+v", err, len(sink.got), rep)
+	}
+	// it changes an hour later: held, not read, not recorded again
+	now = sentAt.Add(time.Hour)
+	e.f.mtime = now.Add(-time.Minute)
+	e.f.sessions[0].Ref.SizeBytes = 20
+	e.f.sessions[0].Turns[0].Text = "build, and then also the second part"
+	loads := e.f.loads["/home/u/code/app"]
+	rep, err = e.s.Run(ctx, gsync.RunOpts{ResendGap: gap}, sink, false)
+	if err != nil || len(sink.got) != 1 || rep.Resending != 1 || !rep.ResendAt.Equal(sentAt.Add(gap)) {
+		t.Fatalf("held: %v %d %+v", err, len(sink.got), rep)
+	}
+	if e.f.loads["/home/u/code/app"] != loads {
+		t.Error("a held session was read")
+	}
+	// someone pressing Send, or the hook (gap 0), is not held
+	if _, rep, err := e.s.Plan(ctx, gsync.RunOpts{}); err != nil || rep.Resending != 0 || rep.Planned != 1 {
+		t.Fatalf("no gap: %v %+v", err, rep)
+	}
+	// once the gap has passed it goes
+	now = sentAt.Add(gap)
+	e.f.mtime = now.Add(-time.Minute)
+	rep, err = e.s.Run(ctx, gsync.RunOpts{ResendGap: gap}, sink, false)
+	if err != nil || len(sink.got) != 2 || rep.Resending != 0 {
+		t.Fatalf("after the gap: %v %d %+v", err, len(sink.got), rep)
+	}
+}
