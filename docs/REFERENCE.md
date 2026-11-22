@@ -4,10 +4,10 @@ The full install, quickstart, command and screen reference. The short version is
 
 ## Install
 
-The server is a versioned Docker image, `ghcr.io/divyanshusingh2903/goldengatebridge` (pin `:1.1.7`, or `:1.1` / `:1` to follow patch / minor releases, or `:latest`). The laptop app is one Go program (Go 1.26 or later):
+The server is a versioned Docker image, `ghcr.io/divyanshusingh2903/goldengatebridge` (pin `:1.2.0`, or `:1.2` / `:1` to follow patch / minor releases, or `:latest`). The laptop app is one Go program (Go 1.26 or later):
 
 ```bash
-go install github.com/divyanshusingh2903/goldengate/cmd/goldengate@v1.1.7
+go install github.com/divyanshusingh2903/goldengate/cmd/goldengate@v1.2.0
 ```
 
 ## Quickstart (about ten minutes)
@@ -27,7 +27,7 @@ go install github.com/divyanshusingh2903/goldengate/cmd/goldengate@v1.1.7
      ghcr.io/divyanshusingh2903/goldengatebridge:latest
    ```
 
-   Images are versioned: pin `:1.1.7` (or `:1.1`) for a server you do not want to change under you; `:latest` follows the newest release and `:edge` follows `main`. It is built by `.github/workflows/release-image.yml`: pushing a tag `vX.Y.Z` publishes that version for amd64 and arm64. Run one container per database.
+   Images are versioned: pin `:1.2.0` (or `:1.2`) for a server you do not want to change under you; `:latest` follows the newest release and `:edge` follows `main`. It is built by `.github/workflows/release-image.yml`: pushing a tag `vX.Y.Z` publishes that version for amd64 and arm64. Run one container per database.
 
 2. **Connect your laptop.** Paste the admin secret when asked (it is never written to disk):
 
