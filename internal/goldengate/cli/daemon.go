@@ -372,6 +372,9 @@ func (a *app) printDaemonStatus(w io.Writer, cfg config.Config) {
 		if cfg.Sync.Daemon == "on" {
 			fmt.Fprintln(w, "  it is on in the config but no daemon is running: check the service (systemctl --user status goldengate-daemon)")
 		}
+	} else if st.PID == 0 {
+		// the lock is held but the daemon has not written its status yet
+		fmt.Fprintln(w, "daemon: starting")
 	} else {
 		fmt.Fprintf(w, "daemon: running (pid %d, since %s)\n", st.PID, st.StartedAt.Local().Format("2006-01-02 15:04"))
 	}

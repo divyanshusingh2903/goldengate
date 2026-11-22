@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/divyanshusingh2903/goldengate/internal/goldengate/config"
 	gsync "github.com/divyanshusingh2903/goldengate/internal/goldengate/sync"
 )
 
@@ -66,5 +67,22 @@ func TestServerReachableBacksOffAndRecovers(t *testing.T) {
 	}
 	if o, _ := st.Offline(ctx); o.Failures != 0 {
 		t.Fatalf("a success clears the record: %+v", o)
+	}
+}
+
+// Between the daemon taking its lock and writing its status file, the status
+// must say it is starting, not "running (pid 0)".
+func TestDaemonStatusWhileStarting(t *testing.T) {
+	h := newHarness(t)
+	a := &app{Deps: h.deps}
+	held, err := gsync.AcquireLock(a.dirs().State, gsync.DaemonLockName)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = held.Release() }()
+	var out strings.Builder
+	a.printDaemonStatus(&out, config.Config{})
+	if !strings.Contains(out.String(), "daemon: starting") || strings.Contains(out.String(), "pid 0") {
+		t.Errorf("status while starting:\n%s", out.String())
 	}
 }
