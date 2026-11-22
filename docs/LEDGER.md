@@ -227,7 +227,7 @@ People will not remember to send at the end of the day: once the user chooses au
 |---|---|---|---|---|---|---|
 | D1 | #188 `sync --auto`: settle window, single-run lock, offline handling | M | | Nov 21 | done | #190 |
 | D2 | #189 `goldengate daemon`, installed when the user opts in | L | #188 | Nov 22 | done | #192 |
-| D3 | #197 Minimum gap between re-sends of the same session (v1.2.1) | S | #189 | Nov 22 | in review | |
+| D3 | #197 Minimum gap between re-sends of the same session (v1.2.1) | S | #189 | Nov 22 | done | #198 |
 
 ## Log
 
@@ -334,3 +334,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-22: verified by hand on the user's Linux laptop: `install-service` on a real systemd user service ran the daemon, whose first pass sent 8 rule-approved sessions with a receipt; the web Settings card renders and a failed switch shows the error and stays off (the Overview prompt and a successful web switch were not walked). Found and fixed in #194: `daemon status` printed "running (pid 0)" before the daemon wrote its status file; it says "starting". macOS and Windows services are still untested on real machines.
 - 2026-11-22: v1.2.0 released: background sending (#188, #189, #194): the settle window, run lock and offline backoff for unattended sends, `goldengate daemon` with `install-service` / `uninstall-service`, and the TUI and web switch. The laptop app is the only part that changed; the server image is rebuilt unchanged. Users with the Claude Code hook should run `install-hook claude-code` again. README and REFERENCE versions moved from 1.1.7 to 1.2.0.
 - 2026-11-22: #197 implemented: `[sync] resend_minutes` (default 180, 0 = no gap) and `sync --auto --resend-gap`: an unattended run sends a session already on the server again only when the gap since its last send has passed; it is held before being read, counted as `Resending`/`ResendAt`, and the daemon looks again when the gap ends. New sessions, manual sends and the hook (now `--settle 0 --resend-gap 0`; installed hooks need `install-hook claude-code` again) are not held. A session whose file was only touched is also held, and turns out unchanged when the gap ends. Release as v1.2.1 after merge.
+- 2026-11-22: #197 done (#198). v1.2.1 released: unattended sends refresh a session already on the server at most every `resend_minutes` (default 180). The Claude Code hook is now `--settle 0 --resend-gap 0`; installed hooks need `install-hook claude-code` again. README and REFERENCE versions moved from 1.2.0 to 1.2.1.
