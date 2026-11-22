@@ -246,6 +246,10 @@ func autoReport(rep gsync.Report, dry bool) string {
 		parts = append(parts, fmt.Sprintf("%d session(s) changed too recently and wait until they settle (the first from %s)",
 			rep.Settling, rep.SettledAt.Local().Format("15:04")))
 	}
+	if rep.Resending > 0 {
+		parts = append(parts, fmt.Sprintf("%d changed session(s) were sent recently and are sent again later (the first from %s)",
+			rep.Resending, rep.ResendAt.Local().Format("15:04")))
+	}
 	if rep.Pending > 0 {
 		parts = append(parts, fmt.Sprintf("%d session(s) wait in the inbox and were not sent (goldengate inbox)", rep.Pending))
 	}
@@ -263,7 +267,7 @@ func autoReport(rep gsync.Report, dry bool) string {
 
 func (a *app) syncCmd() *cobra.Command {
 	var dry, quiet, resummarize, approve, auto bool
-	var project, source, since, settle string
+	var project, source, since, settle, resend string
 	cmd := &cobra.Command{
 		Use:     "sync",
 		Aliases: []string{"send"},
@@ -302,6 +306,15 @@ func (a *app) syncCmd() *cobra.Command {
 					return fmt.Errorf("--settle takes a duration such as 10m or 0, got %q", settle)
 				}
 			}
+			if resend != "" && !auto {
+				return errors.New("--resend-gap is for unattended runs: use it with --auto")
+			}
+			resendD := cfg.Sync.Resend()
+			if resend != "" {
+				if resendD, err = time.ParseDuration(resend); err != nil || resendD < 0 {
+					return fmt.Errorf("--resend-gap takes a duration such as 3h or 0, got %q", resend)
+				}
+			}
 			if auto && (approve || resummarize) {
 				return errors.New("--auto is for unattended runs: it never approves what waits (--approve) and never re-sends old sessions to a model (--resummarize)")
 			}
@@ -319,7 +332,7 @@ func (a *app) syncCmd() *cobra.Command {
 			}
 			if auto && !dry {
 				// the pass the background daemon also runs
-				res, err := a.autoPass(cmd.Context(), autoOpts{Project: project, Source: source, Since: sinceD, Settle: settleD})
+				res, err := a.autoPass(cmd.Context(), autoOpts{Project: project, Source: source, Since: sinceD, Settle: settleD, ResendGap: resendD})
 				if err != nil {
 					return err
 				}
@@ -344,6 +357,7 @@ func (a *app) syncCmd() *cobra.Command {
 			opts := gsync.RunOpts{Project: project, Source: source, Since: sinceD, Resummarize: resummarize, Approve: approve, Unattended: auto}
 			if auto {
 				opts.Settle = settleD
+				opts.ResendGap = resendD
 			}
 			rep, err := s.Run(cmd.Context(), opts, sink, dry)
 			if err != nil {
@@ -372,6 +386,8 @@ func (a *app) syncCmd() *cobra.Command {
 			"lists everything it sent in a receipt and prints one line saying what happened")
 	cmd.Flags().StringVar(&settle, "settle", "",
 		"with --auto: how long a new or changed session must be left alone before it is sent (default: sync.settle_minutes, 10m; 0 sends at once)")
+	cmd.Flags().StringVar(&resend, "resend-gap", "",
+		"with --auto: the least time between two sends of the same session (default: sync.resend_minutes, 3h; 0 sends whenever it changed)")
 	cmd.Flags().StringVar(&project, "project", "", "only this project folder")
 	cmd.Flags().StringVar(&source, "source", "", "only this source (e.g. claude-code)")
 	cmd.Flags().StringVar(&since, "since", "", "override the since window (e.g. 7d)")

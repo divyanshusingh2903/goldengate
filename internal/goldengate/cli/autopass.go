@@ -15,6 +15,8 @@ type autoOpts struct {
 	Since           time.Duration
 	// Settle is how long a new or changed session must be left alone.
 	Settle time.Duration
+	// ResendGap is the least time between two sends of the same session.
+	ResendGap time.Duration
 }
 
 // autoResult says what an unattended pass did.
@@ -80,7 +82,7 @@ func (a *app) autoPass(ctx context.Context, o autoOpts) (autoResult, error) {
 		res.Line = "goldengate background send: " + line
 		return res, nil
 	}
-	rep, err := s.Run(ctx, gsync.RunOpts{Project: o.Project, Source: o.Source, Since: o.Since, Unattended: true, Settle: o.Settle}, cl, false)
+	rep, err := s.Run(ctx, gsync.RunOpts{Project: o.Project, Source: o.Source, Since: o.Since, Unattended: true, Settle: o.Settle, ResendGap: o.ResendGap}, cl, false)
 	if err != nil {
 		return res, err
 	}

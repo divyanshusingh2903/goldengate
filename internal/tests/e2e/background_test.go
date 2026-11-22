@@ -137,3 +137,50 @@ func TestUnattendedSyncSettlesLocksAndBacksOff(t *testing.T) {
 		t.Fatalf("--settle without --auto: %v", err)
 	}
 }
+
+// A session already on the server that keeps changing is refreshed at most
+// once per gap by unattended runs; --resend-gap 0 (the Claude Code hook) and
+// the gap running out send it (#197).
+func TestUnattendedSyncResendsOnlyAfterTheGap(t *testing.T) {
+	b := startBridge(t)
+	l := newLaptop(t)
+	now := time.Now()
+	l.now = func() time.Time { return now }
+	l.must(l.initEnv(b), "init", "--non-interactive")
+	l.must(nil, "share", "add", "~/projects/demo", "--auto-approve")
+
+	id := "55555555-5555-4555-8555-555555555555"
+	l.addClaudeSession(id, "/home/user/projects/demo", "FIRSTDRAFT work")
+	l.touchSessions(now.Add(-30 * time.Minute))
+	if line := l.autoLine(); !strings.Contains(line, "session(s) sent") {
+		t.Fatalf("first send: %q", line)
+	}
+
+	// the session grows an hour later: sent recently, so it waits
+	now = now.Add(time.Hour)
+	l.addClaudeSession(id, "/home/user/projects/demo", "SECONDDRAFT work")
+	l.touchSessions(now.Add(-30 * time.Minute))
+	line := l.autoLine()
+	if !strings.Contains(line, "nothing new was sent") || !strings.Contains(line, "changed session(s) were sent recently and are sent again later") {
+		t.Fatalf("held: %q", line)
+	}
+	if strings.Contains(everythingTheServerHolds(t, b), "SECONDDRAFT") {
+		t.Fatal("a session sent an hour ago was sent again")
+	}
+	// the hook sends it at once
+	if line := l.autoLine("--resend-gap", "0"); !strings.Contains(line, "session(s) sent") {
+		t.Fatalf("--resend-gap 0: %q", line)
+	}
+	if err := l.run(nil, "sync", "--resend-gap", "0"); err == nil || !strings.Contains(err.Error(), "--auto") {
+		t.Fatalf("--resend-gap without --auto: %v", err)
+	}
+
+	// and with the gap switched off in the settings, an hour is enough
+	l.appendConfig("[sync]\nresend_minutes = 0\n")
+	now = now.Add(time.Hour)
+	l.addClaudeSession(id, "/home/user/projects/demo", "THIRDDRAFT work")
+	l.touchSessions(now.Add(-30 * time.Minute))
+	if line := l.autoLine(); !strings.Contains(line, "session(s) sent") {
+		t.Fatalf("gap off: %q", line)
+	}
+}

@@ -225,7 +225,7 @@ func TestMembersLimitedToConversations(t *testing.T) {
 func TestSyncSettingsRoundTrip(t *testing.T) {
 	p := filepath.Join(t.TempDir(), "config.toml")
 	c := Default()
-	if c.Sync.Settle() != 10*time.Minute || c.Sync.Daemon != "" {
+	if c.Sync.Settle() != 10*time.Minute || c.Sync.Resend() != 3*time.Hour || c.Sync.Daemon != "" {
 		t.Fatalf("defaults: %+v", c.Sync)
 	}
 	if err := Save(p, c); err != nil {
@@ -235,7 +235,7 @@ func TestSyncSettingsRoundTrip(t *testing.T) {
 		t.Errorf("an untouched [sync] is not written:\n%s", b)
 	}
 	zero := 0
-	c.Sync = Sync{SettleMinutes: &zero, Daemon: "off"}
+	c.Sync = Sync{SettleMinutes: &zero, ResendMinutes: &zero, Daemon: "off"}
 	if err := Save(p, c); err != nil {
 		t.Fatal(err)
 	}
@@ -243,10 +243,10 @@ func TestSyncSettingsRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Sync.Settle() != 0 || got.Sync.Daemon != "off" {
+	if got.Sync.Settle() != 0 || got.Sync.Resend() != 0 || got.Sync.Daemon != "off" {
 		t.Fatalf("round trip: %+v", got.Sync)
 	}
-	for _, bad := range []string{"[sync]\nsettle_minutes = -1\n", "[sync]\nsettle_minutes = 2000\n", "[sync]\ndaemon = \"yes\"\n"} {
+	for _, bad := range []string{"[sync]\nsettle_minutes = -1\n", "[sync]\nsettle_minutes = 2000\n", "[sync]\nresend_minutes = -5\n", "[sync]\nresend_minutes = 20000\n", "[sync]\ndaemon = \"yes\"\n"} {
 		if err := os.WriteFile(p, []byte(bad), 0o600); err != nil {
 			t.Fatal(err)
 		}
