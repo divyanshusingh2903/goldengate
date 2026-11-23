@@ -122,6 +122,15 @@ Work one issue at a time, in queue order. For each issue:
     If `main` moved since the branch was cut, run `gh pr update-branch <pr>` and wait for CI again. If the ruleset blocks a merge while every check is green, find out which rule (`gh api repos/divyanshusingh2903/goldengate/rules/branches/main`) and fix the cause. Never merge with `--admin` without the user's explicit OK.
 11. **Sync main again** (step 1), confirm the issue closed, update the Status section (progress, done table, next up), add a log line below, update the roadmap page, and go back to step 2. Status changes ride on the next issue branch's first commit, with step 4.
 
+### Releasing
+
+Only when the user asks for a release. After the changes are merged:
+
+1. **Docs PR** `docs/release-X.Y.Z`: move the versions in README (badge and `go install`) and REFERENCE (image pins and `go install`), add a log line, and merge it like any other PR.
+2. **Tag** from the fresh main: `git tag -a vX.Y.Z -m vX.Y.Z && git push origin vX.Y.Z`. `release-image.yml` publishes the server image; wait for it (`gh run watch <id> --exit-status`).
+3. **GitHub Release**, which a tag alone does not create: `gh release create vX.Y.Z --verify-tag --title vX.Y.Z --notes-file <notes>`. The notes list the features and fixes with their issues, any upgrade order (server before laptops when a source is added), anything users must redo (such as `install-hook`), and the `go install` line and image tag.
+4. **Install on the laptop** if the user wants it: `go install github.com/divyanshusingh2903/goldengate/cmd/goldengate@vX.Y.Z`, then `systemctl --user restart goldengate-daemon.service`, and check `goldengate version` and `goldengate daemon status`.
+
 ### Updating the roadmap page
 
 The page reads all progress from one JSON block near its top, `<script id="status" type="application/json">`. Nothing else on the page needs editing when work moves.
@@ -339,3 +348,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-22: #200 implemented: `adapters/antigravity` reads the IDE (`~/.gemini/antigravity`) and `agy` (`~/.gemini/antigravity-cli`). The plan was checked against the real stores (read-only), and a second agent's review added: dedupe only after the transcript is found (the IDE index lists `agy`'s 498 conversations as its own), subagents left out, per-response tool pairing with results from the step status, the prompt cut out of `<USER_REQUEST>` without harness metadata, long lines, and listing that only stats transcripts. Exit codes make Antigravity commits and PRs evidence. Branch and remote come from the protobuf metadata (`protowire`). Older encrypted `.pb` conversations are skipped and counted, and doctor now prints a tool's notes and says when a found tool is switched off. Source added to the shared list and config v5. A dry run on the user's data planned 10 sessions from shared folders, with branches, commands and commit evidence. Server first: an older server rejects a batch with the new source.
 - 2026-11-22: #200 done (#201). v1.3.0 released: Antigravity is a source. The server image must be deployed before laptops update, since an older server rejects a batch with the new source. A config that lists its tools has to switch Antigravity on under Tools. README and REFERENCE versions moved from 1.2.1 to 1.3.0.
 - 2026-11-22: Antigravity logo fixed (#204): the web UI draws the full-colour icon from Google's press assets instead of a placeholder glyph. Daemon status fixed (#206): a look with nothing due no longer hides the backoff while the server is down, and two races in the daemon e2e test are fixed. v1.3.1 released; README and REFERENCE versions moved from 1.3.0 to 1.3.1. The server needs no update.
+- 2026-11-22: GitHub Releases were missing for v1.2.0 to v1.3.1 (only tags had been pushed), so the Releases page still showed v1.1.7 as latest. Created them from the log's release notes, and added a Releasing section to the loop.
