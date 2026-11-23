@@ -33,6 +33,11 @@ import (
 //go:embed assets
 var assetFS embed.FS
 
+// DocsURL is where the page's help links point: the Golden Gate docs. It is
+// handed to the page with its session, so the embedded assets themselves name
+// no other site (the page loads nothing from anywhere else).
+const DocsURL = "https://personal-website-479811.web.app/goldengate/docs"
+
 const (
 	launchTTL      = 2 * time.Minute
 	idleTTL        = 30 * time.Minute
@@ -305,5 +310,5 @@ func (s *Server) session(w http.ResponseWriter, r *http.Request) {
 	// Not marked Secure on purpose: the page is plain HTTP on loopback, where
 	// not every browser accepts a Secure cookie (DESIGN.md 6.1).
 	http.SetCookie(w, &http.Cookie{Name: s.cookieName(), Value: cookie, Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode}) //nolint:gosec // G124: see above
-	reply(w, map[string]string{"request_token": request})
+	reply(w, map[string]string{"request_token": request, "docs": DocsURL})
 }

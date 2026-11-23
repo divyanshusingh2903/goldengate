@@ -20,6 +20,8 @@
       <button type="button" data-screen="agents"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="9" cy="8" r="3"/><path d="M3 20a6 6 0 0 1 12 0"/><path d="M16 11a3 3 0 1 0 0-6M21 20a6 6 0 0 0-4-5.6"/></svg>Agents</button>
       <span class="nav-group">Activity</span>
       <button type="button" data-screen="send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12 20 4l-6 16-3-7z"/></svg>Send<span class="count" id="count-send"></span></button>
+      <span class="nav-group">Automation</span>
+      <button type="button" data-screen="rules"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h10M4 12h7M4 18h10"/><path d="m15 11 2 2 4-4"/></svg>Rules</button>
       <button type="button" data-screen="receipts"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 3h10v18l-5-3-5 3z"/></svg>Receipts</button>
       <span class="nav-group">Configure</span>
       <button type="button" data-screen="server"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="7" rx="1.5"/><rect x="3" y="13" width="18" height="7" rx="1.5"/></svg>Server</button>
@@ -33,15 +35,17 @@
   </aside>
   <div class="work">
     <header class="top">
-      <p id="status" class="status" role="status" aria-live="polite"></p>
+      <span class="grow"></span>
       <button type="button" id="send-btn" class="primary" hidden>Review and send</button>
     </header>
+    <div id="busy" class="busy" hidden aria-hidden="true"></div>
     <div class="scroll">
       <main id="main" class="page" tabindex="-1"><p class="dim">Connecting…</p></main>
     </div>
   </div>
 </div>
 <div id="layer"></div>
+<div id="toasts" class="toasts" role="status" aria-live="polite"></div>
 <dialog id="confirm">
   <form method="dialog">
     <h2 id="confirm-title"></h2>

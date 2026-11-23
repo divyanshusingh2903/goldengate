@@ -219,7 +219,7 @@ goldengate ui
 
 It opens your browser on `http://127.0.0.1:<port>/launch#…`. The link works once and expires after two minutes; press `Enter` in that terminal for a new one. Reloading the page ends its session on purpose; use a fresh link. The UI stops with Ctrl-C. Add `--no-open` to only print the link, or `--port 8090` for a fixed port.
 
-Top bar: **Projects · Inbox · Send · Server · Agents · Settings · Setup**, the server you are connected to, and a Dark/Light switch.
+Sidebar: **Overview · Inbox · Projects · Agents**, **Send**, **Rules · Receipts** (Automation), **Server · Settings · Setup**, the server you are connected to, and a Dark/Light switch. Feedback and errors appear as toasts in the corner (errors stay until you close them), and each screen's **Docs** link opens the matching part of the docs.
 
 | Screen | What to do there |
 |---|---|
@@ -227,17 +227,20 @@ Top bar: **Projects · Inbox · Send · Server · Agents · Settings · Setup**,
 | **Projects** | `●` shared, `○` not shared, `◐` partly, `✕` blocked. Views All / Shared / To send / Not shared, search, "Show as folders" (share a whole folder). Click a project: the card says in words what happens to it; Share, Block, Preview, tools, put in a named project. Double-click to preview. Undo. |
 | **Preview** | The exact payload per session, redactions highlighted, and what changed since the last send. |
 | **Send** | Step 1 Review (nothing leaves) then Step 2 Send, with progress per project. A failure offers review and retry; what already arrived is not sent again. |
-| **Inbox** | Offers first. Then sessions waiting, grouped by project, with "Approve all"; per session Approve, Exclude, Edit summary, Undo, Retract (asks first). Excluded, Sent or queued, Retracted below. A link to Receipts. |
-| **Receipts** | Each automatic send, the rule that sent each session, Retract per session. |
+| **Inbox** | Offers first. Then sessions waiting, grouped by project, with "Approve all"; per session Approve, Exclude, Edit summary, Undo, Retract (asks first). Excluded, Sent or queued, Retracted below. |
+| **Rules** | Per named project: the trust level (Ask, Suggest, Auto; Auto asks first) and its rules. **+ Add rule** (approve or keep local, by tool, folder, remote, branch or issue) and Remove. |
+| **Receipts** | Every automatic send in a list you can search; open one for the sessions it sent, the rule that sent each, and Retract per session. |
 | **Server** | Reachability, upload token, what the server holds, delete a project there. |
 | **Agents** | Asks for the admin secret (held by the local UI process for this run only, never shown again). Grid of projects by assistants: tick to stage, a review card lists the changes in words, nothing applies until **Apply**. Per assistant: tokens with Revoke, and "View as". "Forget the admin secret" when you are done. |
-| **Settings** | Share level, look-back, tools, redaction patterns, git metadata, summarizer (with a write-only API key and a test call). |
+| **Settings** | Share level, look-back, tools, redaction patterns, git metadata, summarizer (with a write-only API key and a test call). **Save settings** turns on only when something changed; leaving with unsaved changes asks first. |
 
 **Check**
 - [ ] Sharing a project in the browser shows `[x]` in the TUI after `r`.
 - [ ] Inbox → Edit summary: change a line, Save my version; the row says "edited by you".
 - [ ] Agents: a wrong admin secret is refused; the right one shows the grid.
 - [ ] Tick a box: a review card appears and nothing changes until Apply.
+- [ ] Rules → + Add rule on a project: the rule is listed; Remove takes it out again.
+- [ ] Settings: change a field and click another screen: you are asked before the change is lost.
 - [ ] The page works at phone width (narrow the window): no sideways scrolling.
 - [ ] Reload the page: it asks for a fresh link.
 

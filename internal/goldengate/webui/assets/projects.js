@@ -2,7 +2,7 @@
 // send would take.
 
 import { api } from "/assets/api.js";
-import { h, clear, when, plural, ask, put, fill, tag, head, card, cardBody, note } from "/assets/dom.js";
+import { h, clear, when, plural, ask, put, fill, tag, head, card, cardBody, docs, said, errText } from "/assets/dom.js";
 
 const NOT = 0, SHARED = 1, PARTIAL = 2, BLOCKED = 3;
 const ALLOW = 0, REMOVE = 1, DENY = 2, TOGGLE = 3, SETPROJECT = 4;
@@ -60,15 +60,15 @@ export async function render(main, app) {
   const act = async (action, done) => {
     try {
       const res = await api("/api/apply", action);
-      app.say(res.Message || done);
+      app.say(said(res, done));
       if (res.Remote) {
         const yes = await ask("Delete from the server too?",
           [`${plural(res.Remote.Count, "project")} you stopped sharing still ${res.Remote.Count === 1 ? "has" : "have"} data on the server.`,
             "Deleting removes it for every assistant at once. Files on this computer are not touched."], "Delete from the server");
-        if (yes) app.say((await api("/api/delete-remote", { ID: res.Remote.ID })).Message);
+        if (yes) app.say(said(await api("/api/delete-remote", { ID: res.Remote.ID }), "deleted from the server"));
       }
     } catch (e) {
-      app.say(String(e.message || e), true);
+      app.say(errText(e), true);
     }
     await render(main, app);
   };
@@ -194,7 +194,6 @@ export async function render(main, app) {
     }
     const name = h("input", { type: "text", value: r.Project || "", "aria-label": "Project name", placeholder: "Project name" });
     put(detail, card("Project", null, cardBody(
-      h("p", { class: "hint" }, "Put this folder in a named project. Doing so shares it."),
       h("form", { class: "row", onsubmit: (e) => { e.preventDefault(); if (name.value.trim()) act({ Kind: SETPROJECT, Keys: [r.Key], Project: name.value.trim() }, "moved"); } },
         h("span", { class: "grow-field" }, name), h("button", { type: "submit" }, "Put in project")))));
   }
@@ -206,10 +205,8 @@ export async function render(main, app) {
     head("Projects", "What is on this computer, and what is shared.",
       h("button", {
         type: "button",
-        onclick: async () => { try { app.say((await api("/api/undo", {})).Message); } catch (e) { app.say(String(e.message || e), true); } render(main, app); },
-      }, "Undo")),
-    (snap.Warnings || []).map((w) => h("p", { class: "banner warn" }, "⚠ " + w)),
-    (snap.Notices || []).map((w) => h("p", { class: "banner warn" }, "Note: " + w)),
+        onclick: async () => { try { app.say(said(await api("/api/undo", {}), "undone")); } catch (e) { app.say(errText(e), true); } render(main, app); },
+      }, "Undo"), docs("terminal-ui#tui-projects")),
     h("div", { class: "toolbar" },
       h("div", { class: "seg", role: "group", "aria-label": "Show" }, chip("all", "All"), chip("shared", "Shared"), chip("tosend", "To send"), chip("notshared", "Not shared")),
       search,
@@ -219,8 +216,9 @@ export async function render(main, app) {
       h("span", null, h("span", { class: "glyph good" }, "●"), " shared"), h("span", null, h("span", { class: "glyph none" }, "○"), " not shared"),
       h("span", null, h("span", { class: "glyph warn" }, "◐"), " some tools shared"), h("span", null, h("span", { class: "glyph bad" }, "✕"), " blocked"),
       h("span", null, "Double-click a project to preview it.")),
-    note("Sharing a project selects it; nothing is sent from this screen. Sessions leave this computer only when you review them and press Send."),
   );
+  for (const w of snap.Warnings || []) app.once(w, "warn");
+  for (const w of snap.Notices || []) app.once(w, "ok");
   void shown;
   drawList();
   drawDetail();

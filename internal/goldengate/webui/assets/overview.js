@@ -2,12 +2,12 @@
 // It only reads; every action is on the screen it links to.
 
 import { api } from "/assets/api.js";
-import { h, fill, head, card, cardBody, note, stat, empty, table, when, plural, tag } from "/assets/dom.js";
+import { h, fill, head, card, cardBody, stat, empty, table, when, plural, tag, docs, errText } from "/assets/dom.js";
 
 export async function render(main, app) {
-  const snap = await app.refresh();
-  const [inbox, server, receipts, settings] = await Promise.all([
-    api("/api/inbox").catch(() => ({})),
+  const [snap, inbox, server, receipts, settings] = await Promise.all([
+    app.refresh(),
+    app.inbox().catch(() => ({})),
     api("/api/server").catch(() => null),
     api("/api/receipts").catch(() => []),
     api("/api/settings").catch(() => ({})),
@@ -46,14 +46,14 @@ export async function render(main, app) {
   // asked once, when a project already sends on its own and nothing was chosen
   const daemonAsk = (settings.Daemon || {}).Ask
     ? card("Send automatically in the background?", null,
-      cardBody(h("p", null, "Golden Gate can run a small background process that sends only what you or your rules approved, so nothing depends on remembering to send. Each send is listed in Receipts, and nothing else is read or sent."),
+      cardBody(h("p", null, "Sends only what you or your rules approved, so nothing depends on remembering to send. Each send gets a receipt."),
         h("div", { class: "row gap-top" },
           h("button", { type: "button", class: "primary", onclick: (e) => chooseDaemon(app, e.currentTarget, true) }, "Turn on"),
           h("button", { type: "button", onclick: (e) => chooseDaemon(app, e.currentTarget, false) }, "Not now"))))
     : null;
 
   fill(main,
-    head("Overview", "What your assistants can see, and what is waiting on you.",
+    head("Overview", "What your assistants can see, and what is waiting on you.", docs("web-app#web-screens"),
       h("button", { type: "button", onclick: () => app.go("inbox") }, "Open inbox"),
       snap.Server ? null : h("button", { type: "button", class: "primary", onclick: () => app.go("setup") }, "Connect a server")),
     daemonAsk,
@@ -64,8 +64,7 @@ export async function render(main, app) {
       serverStat),
     h("div", { class: "grid g2 gap-top" },
       card("Needs a decision", h("button", { type: "button", class: "ghost sm", onclick: () => app.go("inbox") }, "View all"), waiting),
-      card("Sent automatically", h("button", { type: "button", class: "ghost sm", onclick: () => app.go("receipts") }, "Receipts"), activity)),
-    note("Nothing leaves this computer until you send, or a rule you approved does."));
+      card("Sent automatically", h("button", { type: "button", class: "ghost sm", onclick: () => app.go("receipts") }, "Receipts"), activity)));
 }
 
 // chooseDaemon answers the question: on installs the background service, not
@@ -75,10 +74,10 @@ async function chooseDaemon(app, button, on) {
   button.disabled = true;
   try {
     const r = await api("/api/daemon", { On: on });
-    app.say(on ? (r.warning ? "Background sending is on, but " + r.warning.split("\n")[0] : "Background sending is on.") : "Not now. You can turn it on in Settings.", !!(on && r.warning));
+    app.say(on ? (r.warning ? "Background sending is on, but " + r.warning.split("\n")[0] : "Background sending is on.") : "Not now. You can turn it on in Settings.", on && r.warning ? "warn" : "ok");
     await app.go("overview");
   } catch (e) {
     button.disabled = false;
-    app.say(String(e.message || e), true);
+    app.say(errText(e), true);
   }
 }

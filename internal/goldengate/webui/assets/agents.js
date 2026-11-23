@@ -2,7 +2,7 @@
 // admin secret, which the local server keeps in memory for this run only.
 
 import { api } from "/assets/api.js";
-import { h, fill, put, when, plural, ask, tag, head, card, cardBody, note, empty, table, drawer } from "/assets/dom.js";
+import { h, fill, put, when, plural, ask, tag, head, card, cardBody, empty, table, drawer, docs, more, errText } from "/assets/dom.js";
 
 let pending = []; // grant changes chosen but not applied yet
 
@@ -40,14 +40,14 @@ export async function render(main, app) {
     onclick: async () => { await api("/api/admin/forget", {}); pending = []; app.say("The admin secret was forgotten."); render(main, app); },
   }, "Forget the admin secret");
   fill(main,
-    head("Agents", "Each assistant sees only the projects you grant it.", forget),
+    head("Agents", "Each assistant sees only the projects you grant it.", docs("assistants#second-agent"), forget),
     card("Who can read what", null,
       h("div", { class: "tbl" }, h("table", { class: "matrix" },
         h("thead", null, h("tr", null, h("th", null, "Project"), agents.map((a) => h("th", null, a.Name)))),
         h("tbody", null,
           h("tr", null, h("td", null, h("strong", null, "Every project, including future ones")), agents.map((a) => cell(a, null))),
           projects.map((p) => h("tr", null, h("td", null, p.Name, h("small", null, plural(p.Sessions, "session"))), agents.map((a) => cell(a, p))))))),
-      pending.length ? null : h("div", { class: "card-foot" }, h("span", { class: "grow hint" }, "Ticking a box changes nothing until you review and apply."))));
+      null));
 
   if (pending.length) {
     put(main, h("div", { class: "bulk" },
@@ -65,7 +65,7 @@ export async function render(main, app) {
             app.say(`applied ${plural(pending.length, "change")}`);
             pending = [];
           } catch (e) {
-            app.say(String(e.message || e) + " Changes before the failure were applied.", true);
+            app.say(errText(e) + " Changes before the failure were applied.", true);
             pending = [];
           }
           render(main, app);
@@ -74,8 +74,7 @@ export async function render(main, app) {
   }
 
   put(main, h("h2", { class: "section-title" }, "Each agent"),
-    agents.length ? h("div", { class: "grid g3" }, agents.map((a) => agentCard(main, app, a))) : h("div", { class: "card" }, empty(null, null, "No agents yet.")),
-    note("Agents only read. New projects are visible to no agent until you grant them."));
+    agents.length ? h("div", { class: "grid g3" }, agents.map((a) => agentCard(main, app, a))) : h("div", { class: "card" }, empty(null, null, "No agents yet.")));
 }
 
 function agentCard(main, app, a) {
@@ -95,7 +94,7 @@ function agentCard(main, app, a) {
           type: "button", class: "sm danger",
           onclick: async () => {
             if (!await ask(`Revoke ${t.ID}?`, [`${a.Name} can no longer read with this token. This cannot be undone; a new token has to be created.`], "Revoke")) return;
-            try { await api("/api/agents/revoke-token", { TokenID: t.ID }); app.say(`revoked ${t.ID}`); } catch (e) { app.say(String(e.message || e), true); }
+            try { await api("/api/agents/revoke-token", { TokenID: t.ID }); app.say(`revoked ${t.ID}`); } catch (e) { app.say(errText(e), true); }
             render(main, app);
           },
 }, "Revoke")))) : h("p", { class: "hint" }, "No tokens yet: make one with New token.")),
@@ -112,7 +111,7 @@ async function newToken(main, app, a) {
   try {
     t = await api("/api/agents/new-token", { AgentID: a.ID });
   } catch (e) {
-    app.say(String(e.message || e), true);
+    app.say(errText(e), true);
     return;
   }
   app.say(`made ${t.ID} for ${a.Name}: copy it now, it is shown once`);
@@ -139,7 +138,7 @@ async function newToken(main, app, a) {
 function askSecret(main, app) {
   const secret = h("input", { type: "password", id: "admin-secret", autocomplete: "off" });
   fill(main,
-    head("Agents", "Each assistant sees only the projects you grant it."),
+    head("Agents", "Each assistant sees only the projects you grant it.", docs("assistants#second-agent")),
     card("Admin secret needed", null, cardBody(
       h("form", {
         onsubmit: async (e) => {
@@ -147,15 +146,14 @@ function askSecret(main, app) {
           try {
             await api("/api/admin", { Secret: secret.value });
             secret.value = "";
-            app.say("");
             await render(main, app);
           } catch (err) {
-            app.say(String(err.message || err), true);
+            app.say(errText(err), true);
           }
         },
       }, h("div", { class: "field" }, h("label", { for: "admin-secret" }, "Admin secret"), secret),
-      h("div", { class: "row" }, h("button", { type: "submit", class: "primary" }, "Continue"))))),
-    note("Seeing and changing who can read what needs the admin secret. It is kept in memory by the local server for this run only: never stored, never sent back to this page."));
+      h("div", { class: "row" }, h("button", { type: "submit", class: "primary" }, "Continue")),
+      more("It is kept in memory by the local server for this run only: never stored, never sent back to this page.")))));
   secret.focus();
 }
 
@@ -164,7 +162,7 @@ async function view(main, app, a) {
   try {
     v = await api(`/api/agents/view?agent=${encodeURIComponent(a.ID)}`);
   } catch (e) {
-    app.say(String(e.message || e), true);
+    app.say(errText(e), true);
     return;
   }
   const ps = v.Projects || [];

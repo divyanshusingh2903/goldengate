@@ -17,6 +17,7 @@ func NewFake(editDir string) *FakeBackend {
 	f.inbox = sampleInbox()
 	f.inbox.Offers = []RuleOffer{{ID: "o_1a2b3c4d", Question: "Share sessions from ~/code/app automatically?"}}
 	f.receipts = []Receipt{{ID: "rc_0a1b2c3d", Items: []ReceiptItem{{Source: "codex", ID: "s-auto-1", Project: "Forge", Title: "Add health checks", Why: "rule r_1"}}}}
+	f.rules = []ProjectRules{{Name: "Forge", Trust: "auto", Members: []string{"~/code/forge"}, Rules: []RuleInfo{{ID: "r_1", Action: "approve", Source: "codex", Words: "approve sessions from codex"}}}}
 	f.editDir = editDir
 	f.models = map[string][]string{"anthropic": {"model-a", "model-b"}}
 	f.remote = &RemotePrompt{Count: 1, Handle: []string{"opaque-handle"}}

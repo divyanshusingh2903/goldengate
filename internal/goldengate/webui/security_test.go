@@ -375,7 +375,7 @@ func TestThePagesScriptsAllExistAndAreServed(t *testing.T) {
 		}
 		return nil
 	})
-	for _, screen := range []string{"inbox", "receipts", "agents"} {
+	for _, screen := range []string{"inbox", "receipts", "rules", "agents"} {
 		if !seen["/assets/"+screen+".js"] {
 			t.Errorf("the %s screen is not imported", screen)
 		}
@@ -417,7 +417,7 @@ func TestEveryPathTheScreensCallIsServed(t *testing.T) {
 		}
 		return nil
 	})
-	for _, want := range []string{"/api/inbox", "/api/inbox/decide", "/api/edit/begin", "/api/edit/finish", "/api/offers/decide", "/api/receipts", "/api/admin", "/api/admin/forget", "/api/agents", "/api/agents/view", "/api/agents/grants", "/api/agents/revoke-token", "/api/agents/new-token"} {
+	for _, want := range []string{"/api/inbox", "/api/inbox/decide", "/api/edit/begin", "/api/edit/finish", "/api/offers/decide", "/api/receipts", "/api/rules", "/api/rules/add", "/api/rules/remove", "/api/rules/trust", "/api/admin", "/api/admin/forget", "/api/agents", "/api/agents/view", "/api/agents/grants", "/api/agents/revoke-token", "/api/agents/new-token"} {
 		if !called[want] {
 			t.Errorf("no screen calls %s", want)
 		}
@@ -517,5 +517,46 @@ func TestNewAgentTokenNeedsTheAdminSecret(t *testing.T) {
 	}
 	if len(be.minted) != 1 || be.minted[0] != "admin-ok/agt_default" {
 		t.Fatalf("one token, for that agent, with the held secret: %v", be.minted)
+	}
+}
+
+// Help links point at the docs, whose address the page learns with its
+// session: the embedded assets still name no other site (#208).
+func TestThePageLearnsTheDocsAddressWithItsSession(t *testing.T) {
+	c, _ := start(t, webui.Options{})
+	c.Launch()
+	if c.Docs != webui.DocsURL || !strings.HasPrefix(c.Docs, "https://") {
+		t.Fatalf("docs address: %q", c.Docs)
+	}
+}
+
+// Feedback is toasts, Settings keeps Save off until something changed and
+// asks before unsaved changes are left, and Rules is a screen of its own
+// (#208).
+func TestThePageUsesToastsAndGuardsUnsavedSettings(t *testing.T) {
+	read := func(name string) string {
+		b, err := fs.ReadFile(webui.AssetFS, "assets/"+name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+	page := read("index.html")
+	for _, want := range []string{`id="toasts"`, `data-screen="rules"`, `data-screen="receipts"`} {
+		if !strings.Contains(page, want) {
+			t.Errorf("index.html lacks %s", want)
+		}
+	}
+	if strings.Contains(page, `id="status"`) || strings.Contains(read("app.js"), "statusEl") {
+		t.Error("feedback still goes to the line in the top bar")
+	}
+	settings := read("settings.js")
+	for _, want := range []string{"app.leave =", "app.dirty =", "disabled: true"} {
+		if !strings.Contains(settings, want) {
+			t.Errorf("settings.js lacks %q", want)
+		}
+	}
+	if !strings.Contains(read("app.js"), "app.leave && !(await app.leave())") {
+		t.Error("app.go does not ask a screen with unsaved changes before leaving it")
 	}
 }

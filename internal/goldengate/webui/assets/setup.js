@@ -1,7 +1,7 @@
 // Setup: find the tools on this computer and connect to your server.
 
 import { api } from "/assets/api.js";
-import { h, clear, put, fill, head, card, cardBody, note, table } from "/assets/dom.js";
+import { h, clear, put, fill, head, card, cardBody, table, docs, errText } from "/assets/dom.js";
 
 export async function render(main, app) {
   const [tools, snap] = await Promise.all([api("/api/detect"), app.refresh()]);
@@ -15,7 +15,7 @@ export async function render(main, app) {
     onsubmit: async (e) => {
       e.preventDefault();
       connect.disabled = true;
-      app.say("Connecting…");
+      app.say("Connecting…", "busy");
       try {
         const r = await api("/api/init", { ServerURL: url.value.trim(), AdminToken: admin.value, PairCode: pair.value.trim() });
         admin.value = ""; // it was used for this one call and is not kept anywhere
@@ -24,16 +24,16 @@ export async function render(main, app) {
         app.say("Connected.");
         showResult(result, r, app);
       } catch (err) {
-        app.say(String(err.message || err), true);
+        app.say(errText(err), true);
       }
       connect.disabled = false;
     },
   },
   h("div", { class: "field" }, h("label", { for: "srv-url" }, "Server address"), url),
   h("div", { class: "field" }, h("label", { for: "srv-admin" }, "Admin secret"), admin,
-    h("p", { class: "hint" }, "Used once to create this computer's upload token and your assistant's token. It is not stored, here or on disk.")),
+    h("p", { class: "hint" }, "Used once, never stored.")),
   h("div", { class: "field" }, h("label", { for: "srv-pair" }, "Or a pairing code"), pair,
-    h("p", { class: "hint" }, "From `goldengatebridge pair` on the server, when you would rather not type the admin secret here.")),
+    h("p", { class: "hint" }, "From `goldengatebridge pair` on the server.")),
   h("div", { class: "row" }, connect));
 
   const tools_ = card("Tools found on this computer", null, table(["Tool", "Found", h("th", { class: "num" }, "Sessions"), "Note"],
@@ -44,9 +44,8 @@ export async function render(main, app) {
 
   if (!snap.Server) {
     fill(main,
-      head("Setup", "Find the tools on this computer and connect to your server."),
-      h("div", { class: "grid setup" }, tools_, formCard("Connect to your server")),
-      note("Nothing leaves this computer during setup. Connecting only creates tokens; you choose what is shared on the Projects screen, and it is sent only when you press Send."));
+      head("Setup", "Find the tools on this computer and connect to your server.", docs("start#setup")),
+      h("div", { class: "grid setup" }, tools_, formCard("Connect to your server")));
     return;
   }
 
@@ -68,17 +67,15 @@ export async function render(main, app) {
       h("dt", null, "Upload token"), token,
       h("dt", null, "Connector"), h("dd", null, h("code", null, mcp), " ",
         h("button", { type: "button", class: "sm", onclick: async () => { try { await navigator.clipboard.writeText(mcp); copied.textContent = "copied"; } catch { copied.textContent = "select the text and copy it"; } } }, "Copy"), " ", copied)),
-    h("p", { class: "hint gap-top" }, "Assistants connect to the connector address. Make tokens for them, and choose what each one reads, on the Agents screen."),
     h("div", { class: "row gap-top" },
       h("button", { type: "button", onclick: () => app.go("agents") }, "Agents"),
       h("button", { type: "button", onclick: () => app.go("server") }, "What the server holds"),
       change)));
 
   fill(main,
-    head("Setup", "This computer is connected. Choose what to share next.",
+    head("Setup", "This computer is connected. Choose what to share next.", docs("start#setup"),
       h("button", { type: "button", class: "primary", onclick: () => app.go("projects") }, "Next: choose what to share →")),
-    h("div", { class: "grid setup" }, tools_, h("div", null, connected, other)),
-    note("Nothing leaves this computer during setup. Connecting only creates tokens; you choose what is shared on the Projects screen, and it is sent only when you press Send."));
+    h("div", { class: "grid setup" }, tools_, h("div", null, connected, other)));
 
   try {
     const info = await api("/api/server");
@@ -86,7 +83,7 @@ export async function render(main, app) {
     fill(token, info.TokenOK ? h("span", { class: "good" }, "● accepted", info.TokenStore ? h("span", { class: "dim" }, ` · kept in the ${info.TokenStore}`) : null) : h("span", { class: "bad" }, "✕ refused: connect again to make a new one"));
     status.className = token.className = "";
   } catch (e) {
-    fill(status, h("span", { class: "bad" }, String(e.message || e)));
+    fill(status, h("span", { class: "bad" }, errText(e)));
     fill(token, "unknown");
   }
 }

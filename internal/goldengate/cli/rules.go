@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strings"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/config"
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/rules"
+	"github.com/divyanshusingh2903/goldengate/internal/goldengate/tui"
 )
 
 // rulesCmd manages the rules that automate approval inside a project.
@@ -119,42 +121,52 @@ func (a *app) rulesList(ref string) error {
 }
 
 func (a *app) rulesAdd(ref string, r rules.Rule) error {
+	lines, err := a.addRule(ref, r)
+	for _, l := range lines {
+		fmt.Fprintln(a.Stdout, l)
+	}
+	return err
+}
+
+// addRule adds r to the project ref names and says what changed, in lines.
+// The CLI prints them; the web UI shows them.
+func (a *app) addRule(ref string, r rules.Rule) ([]string, error) {
 	cfg, err := a.load()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	i := cfg.ProjectIndex(ref)
 	if i < 0 {
-		return fmt.Errorf("no project named %q", ref)
+		return nil, fmt.Errorf("no project named %q", ref)
 	}
 	p := &cfg.Projects[i]
 	for _, have := range p.Rules {
 		same := have
 		same.ID = ""
 		if same == r {
-			return fmt.Errorf("%q already has this rule (%s)", p.Name, have.ID)
+			return nil, fmt.Errorf("%q already has this rule (%s)", p.Name, have.ID)
 		}
 	}
 	if r.Action == rules.ActionExclude && r.Unconditional() {
-		return errors.New("an exclude rule needs a condition: to stop sharing the whole project, remove its members (`goldengate projects remove`)")
+		return nil, errors.New("an exclude rule needs a condition: to stop sharing the whole project, remove its members (`goldengate projects remove`)")
 	}
 	r.ID = rules.NewID()
 	if err := r.Validate(); err != nil {
-		return err
+		return nil, err
 	}
 	p.Rules = append(p.Rules, r)
 	if err := config.Save(a.cfgPath(), cfg); err != nil {
-		return err
+		return nil, err
 	}
-	fmt.Fprintf(a.Stdout, "%q: added rule %s: %s\n", p.Name, r.ID, r)
+	lines := []string{fmt.Sprintf("%q: added rule %s: %s", p.Name, r.ID, r)}
 	if r.Folder != "" && !coveredByMember(*p, r.Folder) {
-		fmt.Fprintf(a.Stdout, "note: a rule acts only on sessions the project already shares. If %s is not under one of its members, share it first (`goldengate projects add %q %s`).\n", r.Folder, p.Name, r.Folder)
+		lines = append(lines, fmt.Sprintf("note: a rule acts only on sessions the project already shares. If %s is not under one of its members, share it first (`goldengate projects add %q %s`).", r.Folder, p.Name, r.Folder))
 	}
-	fmt.Fprintf(a.Stdout, "trust %s\n", trustWords(*p))
+	lines = append(lines, "trust "+trustWords(*p))
 	if r.Action == rules.ActionApprove && p.TrustLevel() == rules.TrustAsk {
-		fmt.Fprintf(a.Stdout, "to let the rule act: goldengate projects trust %q suggest   (or auto)\n", p.Name)
+		lines = append(lines, fmt.Sprintf("to let the rule act: goldengate projects trust %q suggest   (or auto)", p.Name))
 	}
-	return nil
+	return lines, nil
 }
 
 // coveredByMember is a cheap check that a rule's folder is one of the
@@ -169,13 +181,23 @@ func coveredByMember(p config.Project, folder string) bool {
 }
 
 func (a *app) rulesRemove(ref, id string) error {
-	cfg, err := a.load()
+	msg, err := a.removeRule(ref, id)
 	if err != nil {
 		return err
 	}
+	fmt.Fprintln(a.Stdout, msg)
+	return nil
+}
+
+// removeRule removes the rule id from the project ref names.
+func (a *app) removeRule(ref, id string) (string, error) {
+	cfg, err := a.load()
+	if err != nil {
+		return "", err
+	}
 	i := cfg.ProjectIndex(ref)
 	if i < 0 {
-		return fmt.Errorf("no project named %q", ref)
+		return "", fmt.Errorf("no project named %q", ref)
 	}
 	p := &cfg.Projects[i]
 	for j, r := range p.Rules {
@@ -184,31 +206,87 @@ func (a *app) rulesRemove(ref, id string) error {
 		}
 		p.Rules = append(p.Rules[:j:j], p.Rules[j+1:]...)
 		if err := config.Save(a.cfgPath(), cfg); err != nil {
-			return err
+			return "", err
 		}
-		fmt.Fprintf(a.Stdout, "%q: removed rule %s (%s)\ntrust %s\n", p.Name, id, r, trustWords(*p))
-		return nil
+		return fmt.Sprintf("%q: removed rule %s (%s)\ntrust %s", p.Name, id, r, trustWords(*p)), nil
 	}
-	return fmt.Errorf("%q has no rule %s (see `goldengate rules list`)", p.Name, id)
+	return "", fmt.Errorf("%q has no rule %s (see `goldengate rules list`)", p.Name, id)
 }
 
 func (a *app) projectsTrust(ref, level string) error {
-	level = strings.ToLower(level)
-	if level == "" || !rules.ValidTrust(level) {
-		return fmt.Errorf("say ask, suggest or auto, got %q", level)
-	}
-	cfg, err := a.load()
+	msg, err := a.setTrust(ref, level)
 	if err != nil {
 		return err
 	}
+	fmt.Fprintln(a.Stdout, msg)
+	return nil
+}
+
+// setTrust sets the trust level of the project ref names.
+func (a *app) setTrust(ref, level string) (string, error) {
+	level = strings.ToLower(level)
+	if level == "" || !rules.ValidTrust(level) {
+		return "", fmt.Errorf("say ask, suggest or auto, got %q", level)
+	}
+	cfg, err := a.load()
+	if err != nil {
+		return "", err
+	}
 	i := cfg.ProjectIndex(ref)
 	if i < 0 {
-		return fmt.Errorf("no project named %q", ref)
+		return "", fmt.Errorf("no project named %q", ref)
 	}
 	cfg.Projects[i].Trust = level
 	if err := config.Save(a.cfgPath(), cfg); err != nil {
-		return err
+		return "", err
 	}
-	fmt.Fprintf(a.Stdout, "%q: trust %s\n", cfg.Projects[i].Name, trustWords(cfg.Projects[i]))
-	return nil
+	return fmt.Sprintf("%q: trust %s", cfg.Projects[i].Name, trustWords(cfg.Projects[i])), nil
+}
+
+// Rules implements tui.Backend.
+func (b *tuiBackend) Rules(context.Context) ([]tui.ProjectRules, error) {
+	cfg, err := b.a.load()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]tui.ProjectRules, 0, len(cfg.Projects))
+	for _, p := range cfg.Projects {
+		pr := tui.ProjectRules{Name: p.Name, Trust: p.TrustLevel(), Words: trustWords(p), Rules: []tui.RuleInfo{}, Members: []string{}}
+		for _, m := range p.Members {
+			pr.Members = append(pr.Members, m.Path)
+		}
+		for _, r := range p.Rules {
+			pr.Rules = append(pr.Rules, tui.RuleInfo{ID: r.ID, Action: r.Action, Source: r.Source, Folder: r.Folder, Remote: r.Remote, Branch: r.Branch, WorkItem: r.WorkItem, Words: r.String()})
+		}
+		out = append(out, pr)
+	}
+	return out, nil
+}
+
+// AddRule implements tui.Backend.
+func (b *tuiBackend) AddRule(_ context.Context, project string, ri tui.RuleInfo) (string, error) {
+	b.forgetReview()
+	r := rules.Rule{Action: ri.Action, Source: strings.TrimSpace(ri.Source), Folder: strings.TrimSpace(ri.Folder), Remote: strings.TrimSpace(ri.Remote), Branch: strings.TrimSpace(ri.Branch), WorkItem: strings.TrimSpace(ri.WorkItem)}
+	lines, err := b.a.addRule(project, r)
+	return strings.Join(lines, "\n"), err
+}
+
+// RemoveRule implements tui.Backend.
+func (b *tuiBackend) RemoveRule(_ context.Context, project, id string) (string, error) {
+	b.forgetReview()
+	return b.a.removeRule(project, id)
+}
+
+// SetTrust implements tui.Backend.
+func (b *tuiBackend) SetTrust(_ context.Context, project, level string) (string, error) {
+	b.forgetReview()
+	return b.a.setTrust(project, level)
+}
+
+// forgetReview drops the last review: a rule or trust change can change what
+// the next send takes.
+func (b *tuiBackend) forgetReview() {
+	b.mu.Lock()
+	b.reviewed = nil
+	b.mu.Unlock()
 }
