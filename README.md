@@ -10,7 +10,7 @@
   <a href="https://github.com/divyanshusingh2903/goldengate/actions/workflows/ci.yml"><img src="https://github.com/divyanshusingh2903/goldengate/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-Apache--2.0-C0362C" alt="License: Apache-2.0"></a>
   <img src="https://img.shields.io/badge/go-1.26-1F5E80" alt="Go 1.26">
-  <img src="https://img.shields.io/badge/version-1.2.1-2D6A4A" alt="Version 1.2.1">
+  <img src="https://img.shields.io/badge/version-1.3.0-2D6A4A" alt="Version 1.3.0">
 </p>
 
 <p align="center">
@@ -30,7 +30,7 @@ Nothing leaves your computer until you approve it, raw transcripts are never sen
 ## Get started
 
 ```bash
-go install github.com/divyanshusingh2903/goldengate/cmd/goldengate@v1.2.1
+go install github.com/divyanshusingh2903/goldengate/cmd/goldengate@v1.3.0
 goldengate ui        # setup, projects, preview and send, in your browser
 ```
 
