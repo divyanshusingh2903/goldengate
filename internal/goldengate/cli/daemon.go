@@ -163,6 +163,11 @@ func (d *daemon) step(ctx context.Context) (stop bool) {
 	now := a.Now()
 	d.status.UpdatedAt = now
 	d.status.NextRun = now.Add(d.tick)
+	if d.mem.retryAt.After(d.status.NextRun) {
+		// still leaving a down server alone: a look with nothing due must not
+		// hide the backoff from `daemon status`
+		d.status.NextRun = d.mem.retryAt
+	}
 	defer func() { _ = a.writeDaemonStatus(d.status) }()
 	cfg, err := a.load() // read afresh: a switch or a new trust level counts at once
 	if err != nil {

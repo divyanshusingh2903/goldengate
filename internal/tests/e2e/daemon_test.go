@@ -93,9 +93,15 @@ func TestDaemonSendsByItself(t *testing.T) {
 
 	// a finished session goes out without anyone asking
 	waitFor(t, "the first session on the server", holds("widget"))
-	if out := l.must(nil, "receipts"); strings.Contains(out, "no receipts") {
-		t.Errorf("the daemon's send has a receipt: %s", out)
-	}
+	// the server holds the session as soon as the upload lands; the receipt
+	// and the daemon's status are written after the reply
+	waitFor(t, "the daemon's send to have a receipt", func() bool {
+		return !strings.Contains(l.must(nil, "receipts"), "no receipts")
+	})
+	waitFor(t, "the status to show the server reachable", func() bool {
+		st := l.daemonStatus(t)
+		return st.Reachable != nil && *st.Reachable
+	})
 
 	// a second daemon is refused while this one runs
 	if err := l.run(nil, "daemon", "--interval", "15ms"); err == nil || !strings.Contains(err.Error(), "already running") {
@@ -153,6 +159,8 @@ func TestDaemonSendsByItself(t *testing.T) {
 		st := l.daemonStatus(t)
 		return st.Reachable != nil && !*st.Reachable
 	})
+	// a few more looks with nothing due must keep showing the backoff
+	time.Sleep(150 * time.Millisecond)
 	if st := l.daemonStatus(t); st.NextRun.Before(clk.Now().Add(50*time.Second)) || !strings.Contains(st.LastResult, "not reachable") {
 		t.Errorf("next_run shows the backoff (%s from now): %+v", st.NextRun.Sub(clk.Now()), st)
 	}
