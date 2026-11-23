@@ -238,7 +238,7 @@ People will not remember to send at the end of the day: once the user chooses au
 | D2 | #189 `goldengate daemon`, installed when the user opts in | L | #188 | Nov 22 | done | #192 |
 | D3 | #197 Minimum gap between re-sends of the same session (v1.2.1) | S | #189 | Nov 22 | done | #198 |
 | S1 | #200 Antigravity adapter (IDE and `agy` CLI), v1.3.0 | L | | Nov 22 | done | #201 |
-| S2 | #208 Web UI: Rules and Receipts screens, toasts, skeletons, unsaved-changes guard, docs links | L | | Nov 22 | in progress | |
+| S2 | #208 Web UI: Rules and Receipts screens, toasts, skeletons, unsaved-changes guard, docs links | L | | Nov 22 | done | #209 |
 
 ## Log
 
@@ -351,3 +351,4 @@ Newest last. One line per event: date, what happened, PR or issue.
 - 2026-11-22: Antigravity logo fixed (#204): the web UI draws the full-colour icon from Google's press assets instead of a placeholder glyph. Daemon status fixed (#206): a look with nothing due no longer hides the backoff while the server is down, and two races in the daemon e2e test are fixed. v1.3.1 released; README and REFERENCE versions moved from 1.3.0 to 1.3.1. The server needs no update.
 - 2026-11-22: GitHub Releases were missing for v1.2.0 to v1.3.1 (only tags had been pushed), so the Releases page still showed v1.1.7 as latest. Created them from the log's release notes, and added a Releasing section to the loop.
 - 2026-11-22: #208 implemented, from the user walking the web UI. Rules gets a screen of its own (trust level and rules per named project, over new `tui.Backend` methods `Rules`, `AddRule`, `RemoveRule`, `SetTrust`, which share the CLI's checks), and Receipts becomes a searchable list with a drawer; both sit in a new Automation group in the sidebar. Feedback is toasts (errors stay until closed), footer notes and long hints moved behind Docs links to the personal site (address handed over with the session, so the assets still name no other site) or a Why? toggle. Screens show a skeleton first and their previous content on return; `/api/inbox` (about 1 s on this laptop) is requested once for the whole page, and inbox tabs switch from loaded data. Settings disables Save without changes and asks before unsaved changes are left. Also fixed: replies from Undo, the summarizer test, offers and summary edits were never shown (the page read `Message`, the server sends `message`).
+- 2026-11-22: #208 done (#209). v1.3.2 released: the web UI's Rules and Receipts screens, toasts, skeletons, the Settings unsaved-changes guard and docs links. README and REFERENCE versions moved from 1.3.1 to 1.3.2. The server needs no update.
