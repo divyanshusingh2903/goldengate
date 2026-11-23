@@ -359,6 +359,8 @@ func pretty(source string) string {
 		return "OpenCode"
 	case "cursor":
 		return "Cursor"
+	case "antigravity":
+		return "Antigravity"
 	case "claude-ai":
 		return "claude.ai"
 	case "chatgpt":

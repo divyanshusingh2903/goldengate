@@ -41,7 +41,7 @@ const (
 )
 
 var (
-	validSources   = map[string]bool{"claude-code": true, "codex": true, "opencode": true, "cursor": true, "claude-ai": true, "chatgpt": true}
+	validSources   = map[string]bool{"claude-code": true, "codex": true, "opencode": true, "cursor": true, "antigravity": true, "claude-ai": true, "chatgpt": true}
 	validKinds     = map[string]bool{KindCommit: true, KindPR: true, KindIssue: true, KindFile: true, KindArtifact: true}
 	validProviders = map[string]bool{"": true, "github": true, "gitlab": true, "linear": true, "jira": true}
 	validStatuses  = map[string]bool{StatusMentioned: true, StatusCreated: true, StatusUpdated: true, StatusMerged: true, StatusClosed: true, StatusCompleted: true, StatusCanceled: true}

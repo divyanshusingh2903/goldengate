@@ -22,6 +22,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/adapters"
+	"github.com/divyanshusingh2903/goldengate/internal/goldengate/adapters/antigravity"
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/adapters/claudecode"
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/cli"
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/secrets"
@@ -99,11 +100,14 @@ func (u *uniqueClients) RoundTrip(r *http.Request) (*http.Response, error) {
 
 // laptop is one user's machine: config, state, secret store, session history.
 type laptop struct {
-	t       *testing.T
-	root    string
-	claude  string
-	secrets *secrets.Memory
-	turns   int // messages appended by addClaudeTurn
+	t      *testing.T
+	root   string
+	claude string
+	// antigravity, when set, is an Antigravity data directory the laptop
+	// also reads.
+	antigravity string
+	secrets     *secrets.Memory
+	turns       int // messages appended by addClaudeTurn
 	// edit stands in for the user's editor: it gets the form and returns
 	// what the user saved. forms records every form that was opened.
 	edit  func(form string) string
@@ -157,7 +161,13 @@ func (l *laptop) deps(env map[string]string) cli.Deps {
 		Stdout: l.out, Stderr: l.errOut, Home: l.home, Getenv: func(k string) string { return e[k] },
 		NewRegistry: func(string, func(string) string) (*adapters.Registry, error) {
 			var r adapters.Registry
-			return &r, r.Register(claudecode.New(claudecode.Options{ConfigDir: l.claude}))
+			if err := r.Register(claudecode.New(claudecode.Options{ConfigDir: l.claude})); err != nil {
+				return nil, err
+			}
+			if l.antigravity != "" {
+				return &r, r.Register(antigravity.New(antigravity.Options{Dirs: []string{l.antigravity}}))
+			}
+			return &r, nil
 		},
 		Now: l.clock, HTTP: l.http, Hostname: func() string { return "testbox" },
 		SecretStore: func(string, func(string)) secrets.Store { return l.secrets },

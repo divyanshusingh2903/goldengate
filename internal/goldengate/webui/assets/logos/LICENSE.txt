@@ -8,5 +8,9 @@ released under CC0 1.0 Universal (public domain dedication):
   codex.svg        "OpenAI"       simple-icons 13.21.0
   chatgpt.svg      "OpenAI"       simple-icons 13.21.0
 
+antigravity.svg is not from Simple Icons, which has no Antigravity mark: it is
+a plain glyph drawn for Golden Gate, also released under CC0, and not the
+product's logo.
+
 CC0 covers the drawings, not the marks: each logo is a trademark of its owner
 and is used here only to name the tool a session came from.

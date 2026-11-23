@@ -453,3 +453,13 @@ func TestSettingsKeySourceIsTheFileFallback(t *testing.T) {
 		t.Errorf("per-provider key sources = %v", got)
 	}
 }
+
+func TestDefaultRegistryHasAntigravity(t *testing.T) {
+	r, err := DefaultRegistry("", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := r.Get("antigravity"); !ok {
+		t.Error("antigravity is not registered")
+	}
+}

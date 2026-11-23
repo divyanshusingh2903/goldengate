@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -20,6 +21,7 @@ import (
 	"golang.org/x/term"
 
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/adapters"
+	"github.com/divyanshusingh2903/goldengate/internal/goldengate/adapters/antigravity"
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/adapters/claudecode"
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/adapters/codex"
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/adapters/cursor"
@@ -95,7 +97,7 @@ func DefaultDeps() Deps {
 // DefaultRegistry registers every adapter this build ships.
 func DefaultRegistry(_ string, _ func(string) string) (*adapters.Registry, error) {
 	var r adapters.Registry
-	for _, ad := range []adapters.Adapter{claudecode.New(claudecode.Options{}), codex.New(codex.Options{}), opencode.New(opencode.Options{}), cursor.New(cursor.Options{})} {
+	for _, ad := range []adapters.Adapter{claudecode.New(claudecode.Options{}), codex.New(codex.Options{}), opencode.New(opencode.Options{}), cursor.New(cursor.Options{}), antigravity.New(antigravity.Options{})} {
 		if err := r.Register(ad); err != nil {
 			return nil, err
 		}
@@ -903,6 +905,12 @@ func (a *app) doctorCmd() *cobra.Command {
 						n++
 					}
 					fmt.Fprintf(w, "%-8s ok    %s: %d sessions, %d skipped (unknown shape or too large)\n", ad.Name(), filepath.ToSlash(pathutil.Scrub(det.Root, a.Home)), n, skipped)
+					for _, note := range det.Notes {
+						fmt.Fprintf(w, "         %s\n", note)
+					}
+					if len(cfg.Share.IncludeSources) > 0 && !slices.Contains(cfg.Share.IncludeSources, ad.Name()) {
+						fmt.Fprintf(w, "         switched off: not read until it is on under Tools in the settings (goldengate tui, or goldengate ui)\n")
+					}
 				}
 			}
 			if cfg.Server.URL == "" {

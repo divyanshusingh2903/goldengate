@@ -57,7 +57,7 @@ export function when(iso) {
 // /assets/logos/<source>.svg, drawn as a mask in the text colour (app.css).
 const SOURCES = {
   "claude-code": "Claude Code", codex: "Codex", opencode: "OpenCode", cursor: "Cursor",
-  "claude-ai": "claude.ai", chatgpt: "ChatGPT",
+  antigravity: "Antigravity", "claude-ai": "claude.ai", chatgpt: "ChatGPT",
 };
 export function toolName(source) { return SOURCES[source] || String(source || "unknown"); }
 
