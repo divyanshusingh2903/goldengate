@@ -3,11 +3,12 @@
 // time you send.
 
 import { api } from "/assets/api.js";
-import { h, fill, put, clear, when, plural, ask, tag, head, card, note, empty, drawer } from "/assets/dom.js";
+import { h, fill, put, clear, when, plural, ask, tag, head, empty, drawer, docs, more, said, errText, batched } from "/assets/dom.js";
 
 const CONFLICT = "edit needs review";
 
-const ui = { tab: "waiting", sel: new Set() };
+// data is the last inbox loaded: switching tabs draws from it at once.
+const ui = { tab: "waiting", sel: new Set(), data: null };
 const keyOf = (it) => `${it.Source}|${it.ID}`;
 
 // badge says a session's state in words, with the colour as a second cue.
@@ -29,15 +30,22 @@ async function decide(app, main, items, decision, done) {
     await api("/api/inbox/decide", { Items: items, Decision: decision });
     app.say(done);
   } catch (e) {
-    app.say(String(e.message || e), true);
+    app.say(errText(e), true);
   }
   ui.sel.clear();
   await render(main, app);
 }
 
+// render loads the inbox and draws it. The counts in the sidebar follow.
 export async function render(main, app) {
-  const inbox = await api("/api/inbox");
-  await app.refresh();
+  const [inbox] = await Promise.all([app.inbox(), app.refresh()]);
+  ui.data = inbox;
+  draw(main, app);
+}
+
+// draw shows the loaded inbox; switching tabs only redraws.
+function draw(main, app) {
+  const inbox = ui.data || {};
   const lists = {
     waiting: inbox.Pending || [], sent: inbox.Sent || [], excluded: inbox.Excluded || [], retracted: inbox.Retracted || [],
   };
@@ -48,8 +56,7 @@ export async function render(main, app) {
   const plain = lists.waiting.filter((it) => it.State !== CONFLICT);
 
   fill(main,
-    head("Inbox", "New and changed sessions from your shared projects.",
-      h("button", { type: "button", onclick: () => app.go("receipts") }, "Receipts"),
+    head("Inbox", "New and changed sessions from your shared projects.", docs("terminal-ui#tui-inbox"),
       ui.tab === "waiting" && plain.length > 1
         ? h("button", { type: "button", class: "primary", onclick: () => decide(app, main, plain, "approve", `approved ${plural(plain.length, "session")}: they go out the next time you send`) }, `Approve all ${plain.length}`)
         : null));
@@ -66,7 +73,7 @@ export async function render(main, app) {
 
   put(main, h("div", { class: "tabs", role: "tablist", "aria-label": "Sessions" }, tabs.map(([id, label]) => h("button", {
     type: "button", role: "tab", "aria-selected": String(ui.tab === id),
-    onclick: () => { ui.tab = id; ui.sel.clear(); render(main, app); },
+    onclick: () => { ui.tab = id; ui.sel.clear(); draw(main, app); },
   }, label, h("span", { class: "c" }, String(lists[id].length))))));
 
   const pickable = ui.tab === "waiting";
@@ -80,7 +87,7 @@ export async function render(main, app) {
       h("span", null, `${ui.sel.size} selected`),
       h("button", { type: "button", class: "sm", onclick: () => decide(app, main, chosen, "exclude", `kept ${plural(chosen.length, "session")} on this computer`) }, "Keep local"),
       approvable.length ? h("button", { type: "button", class: "sm primary", onclick: () => decide(app, main, approvable, "approve", `approved ${plural(approvable.length, "session")}: they go out the next time you send`) }, `Approve ${approvable.length}`) : null,
-      h("button", { type: "button", class: "sm icon", "aria-label": "Clear the selection", onclick: () => { ui.sel.clear(); render(main, app); } }, "✕")));
+      h("button", { type: "button", class: "sm icon", "aria-label": "Clear the selection", onclick: () => { ui.sel.clear(); draw(main, app); } }, "✕")));
   };
 
   if (!list.length) {
@@ -98,16 +105,16 @@ export async function render(main, app) {
       groups.set(it.Project, g);
     }
     const all = h("input", { type: "checkbox", "aria-label": "Select every session", checked: list.every((it) => ui.sel.has(keyOf(it))) });
-    all.addEventListener("change", () => { for (const it of list) all.checked ? ui.sel.add(keyOf(it)) : ui.sel.delete(keyOf(it)); render(main, app); });
+    all.addEventListener("change", () => { for (const it of list) all.checked ? ui.sel.add(keyOf(it)) : ui.sel.delete(keyOf(it)); draw(main, app); });
     for (const [project, items] of groups) {
       const groupPlain = items.filter((it) => it.State !== CONFLICT);
-      rows.push(h("tr", { class: "group" },
+      rows.push(() => h("tr", { class: "group" },
         pickable ? h("td", { class: "w" }) : null,
         h("td", { colspan: "3" }, project || "(no project)", h("span", { class: "faint" }, ` · ${plural(items.length, "session")}`)),
         h("td", { class: "w" }, pickable && groupPlain.length > 1
           ? h("button", { type: "button", class: "sm", onclick: () => decide(app, main, groupPlain, "approve", `approved ${plural(groupPlain.length, "session")}: they go out the next time you send`) }, `Approve ${groupPlain.length}`)
           : null)));
-      for (const it of items) {
+      for (const it of items) rows.push(() => {
         const k = keyOf(it);
         const box = pickable ? h("input", { type: "checkbox", checked: ui.sel.has(k), "aria-label": `Select ${it.Title || it.ID}` }) : null;
         if (box) {
@@ -121,23 +128,24 @@ export async function render(main, app) {
           h("td", { class: "w" }, badge(it)),
           h("td", { class: "w faint mono" }, when(it.Updated)),
           h("td", { class: "w" }, h("button", { type: "button", class: "ghost sm", onclick: (e) => { e.stopPropagation(); open(app, main, it); } }, "Open")));
-        rows.push(tr);
-      }
+        return tr;
+      });
     }
+    const body = h("tbody");
     put(main, h("div", { class: "card" }, h("div", { class: "tbl" }, h("table", null,
       h("thead", null, h("tr", null, pickable ? h("th", { class: "w" }, all) : null, h("th", null, "Session"), h("th", null, "State"), h("th", null, "Updated"), h("th", { class: "w" }, h("span", { class: "skip" }, "Open")))),
-      h("tbody", null, rows)))));
+      body))));
+    batched(body, rows, (r) => r());
   }
-  put(main, bulk,
-    note("Nothing here has been sent by being listed. Approving records your decision; an approved session goes out the next time you send, and a session that changes afterwards comes back here."));
+  put(main, bulk);
   drawBulk();
 }
 
 async function offer(app, main, id, accept) {
   try {
-    app.say((await api("/api/offers/decide", { ID: id, Accept: accept })).Message);
+    app.say(said(await api("/api/offers/decide", { ID: id, Accept: accept }), accept ? "accepted" : "not now"));
   } catch (e) {
-    app.say(String(e.message || e), true);
+    app.say(errText(e), true);
   }
   await render(main, app);
 }
@@ -159,8 +167,7 @@ function open(app, main, it) {
       h("dt", null, "Tool"), h("dd", null, it.Source),
       h("dt", null, "Updated"), h("dd", null, when(it.Updated) || "unknown"),
       h("dt", null, "Session"), h("dd", { class: "mono small" }, it.ID),
-      it.Note ? [h("dt", null, "Your rules"), h("dd", null, it.Note)] : null),
-    h("p", { class: "hint" }, "Projects → Preview shows the exact text that would be sent."));
+      it.Note ? [h("dt", null, "Your rules"), h("dd", null, it.Note)] : null));
 
   const sent = it.State === "sent" || it.State === "changed";
   const kept = it.State === "excluded" || it.State === "retracted";
@@ -196,7 +203,7 @@ async function edit(app, main, it, d) {
   try {
     form = await api("/api/edit/begin", { Item: it });
   } catch (e) {
-    app.say(String(e.message || e), true);
+    app.say(errText(e), true);
     return;
   }
   d.editing.id = form.id;
@@ -204,16 +211,16 @@ async function edit(app, main, it, d) {
   const finish = async (body, fallback) => {
     d.editing.id = "";
     try {
-      app.say((await api("/api/edit/finish", { ID: form.id, ...body })).Message || fallback);
+      app.say(said(await api("/api/edit/finish", { ID: form.id, ...body }), fallback));
     } catch (e) {
-      app.say(String(e.message || e), true);
+      app.say(errText(e), true);
     }
     d.close();
     await render(main, app);
   };
   fill(d.body,
-    h("p", { class: "note" }, "Your version is what is sent for this session, after the same redaction as everything else, and no summarizer replaces it. Nothing is sent by saving."),
-    h("p", { class: "hint" }, "Change the text, delete a line to strike it, delete a work-item line to unlink it. Lines starting with # are notes and are not sent."),
+    h("p", { class: "hint" }, "Delete a line to strike it. Lines starting with # are not sent."),
+    more("Your version is what is sent for this session, after the same redaction as everything else, and no summarizer replaces it. Nothing is sent by saving. Delete a work-item line to unlink it."),
     area);
   fill(d.foot,
     h("button", { type: "button", onclick: () => finish({ Cancel: true }, "edit cancelled") }, "Cancel"),

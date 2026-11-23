@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"time"
 )
 
@@ -283,4 +284,59 @@ func (f *fakeBackend) MintAgentToken(_ context.Context, admin, agentID string) (
 		}
 	}
 	return NewAgentToken{}, errors.New("that agent no longer exists")
+}
+
+func (f *fakeBackend) Rules(context.Context) ([]ProjectRules, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return slices.Clone(f.rules), nil
+}
+
+func (f *fakeBackend) projectRules(name string) (*ProjectRules, error) {
+	for i := range f.rules {
+		if f.rules[i].Name == name {
+			return &f.rules[i], nil
+		}
+	}
+	return nil, fmt.Errorf("no project named %q", name)
+}
+
+func (f *fakeBackend) AddRule(_ context.Context, project string, r RuleInfo) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	p, err := f.projectRules(project)
+	if err != nil {
+		return "", err
+	}
+	r.ID = fmt.Sprintf("r_%d", len(p.Rules)+1)
+	r.Words = r.Action + " sessions"
+	p.Rules = append(p.Rules, r)
+	return fmt.Sprintf("%q: added rule %s", project, r.ID), nil
+}
+
+func (f *fakeBackend) RemoveRule(_ context.Context, project, id string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	p, err := f.projectRules(project)
+	if err != nil {
+		return "", err
+	}
+	for i, r := range p.Rules {
+		if r.ID == id {
+			p.Rules = slices.Delete(p.Rules, i, i+1)
+			return fmt.Sprintf("%q: removed rule %s", project, id), nil
+		}
+	}
+	return "", fmt.Errorf("%q has no rule %s", project, id)
+}
+
+func (f *fakeBackend) SetTrust(_ context.Context, project, level string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	p, err := f.projectRules(project)
+	if err != nil {
+		return "", err
+	}
+	p.Trust = level
+	return fmt.Sprintf("%q: trust %s", project, level), nil
 }

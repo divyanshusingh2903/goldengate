@@ -73,7 +73,7 @@ The UI cannot do anything the commands cannot: it runs on the same code, so sele
 - It opens with a single-use launch token that expires in two minutes and never appears in a request line or a log. After that, every request needs both a session cookie (`HttpOnly`, `SameSite=Strict`) and a request token held in the page's memory, and passes exact Host and Origin checks. There is no CORS.
 - It is a front end on the same code as the TUI and the commands: it cannot share, send or change anything they cannot, and everything still leaves through the one push path.
 - Secrets can be set from the page and are never sent back to it. The one exception is a value you must copy elsewhere, shown once when it is created (the assistant token at the end of setup), as in the terminal.
-- The page loads nothing from any other site, and shows session text as text, never as markup.
+- The page loads nothing from any other site, and shows session text as text, never as markup. Its Docs links open the Golden Gate docs in a new tab only when clicked, with no referrer.
 
 ## Sources and imports
 - **Cursor** keeps conversations in a database that also holds its sign-in state. Golden Gate opens it read-only and reads only the conversation list, the messages and one version entry; tests plant decoy sign-in values and keys there and check that they never surface.

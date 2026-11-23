@@ -2,7 +2,7 @@
 // redacted, and who writes the summaries.
 
 import { api } from "/assets/api.js";
-import { h, plural, put, fill, ask, head, card, cardBody, note } from "/assets/dom.js";
+import { h, plural, put, fill, ask, head, card, cardBody, docs, more, said, errText, tag } from "/assets/dom.js";
 
 const PROVIDERS = [
   ["", "Local rules (nothing is sent to a model)"],
@@ -30,7 +30,7 @@ export async function render(main, app) {
 
   const level = select("set-level", [["summary", "Summary: title, goals, outcomes, files and work items"], ["titles-only", "Titles only: the session title and work items"]], s.Level);
   const since = h("input", { type: "text", id: "set-since", value: s.Since || "" });
-  const patterns = h("textarea", { id: "set-patterns" }, (s.ExtraPatterns || []).join("\n"));
+  const patterns = h("textarea", { id: "set-patterns", placeholder: "one regular expression per line, e.g. Acme Corp" }, (s.ExtraPatterns || []).join("\n"));
   const git = h("input", { type: "checkbox", class: "switch", checked: !!s.EnrichGit, "aria-label": "Read git metadata" });
   const sources = (s.Sources || []).map((src) => ({ src, box: h("input", { type: "checkbox", class: "switch", checked: !!src.Enabled, "aria-label": `Read ${src.Name}` }) }));
 
@@ -54,6 +54,9 @@ export async function render(main, app) {
   const models0 = { [provider0]: sum.Model || "" };
   let model = sum.Model || "";
   let typed = false; // the user chose to type a model name
+  // the model counts as a change only once the user picked one: the list
+  // choosing its default for a provider with no saved model is not a change
+  let modelTouched = false;
 
   const reloadKeys = async () => { infos = ((await api("/api/settings")).Summarize || {}).Providers || infos; };
 
@@ -61,7 +64,7 @@ export async function render(main, app) {
     const name = label();
     const input = h("input", { type: "password", id: "set-key", autocomplete: "off", placeholder: `paste your ${name} API key` });
     const store = async () => {
-      if (!input.value) { app.say("Paste a key first.", true); return; }
+      if (!input.value) { app.say("Paste a key first.", "warn"); input.focus(); return; }
       try {
         await api("/api/summarizer/key", { Provider: provider.value, Key: input.value });
         input.value = "";
@@ -69,7 +72,7 @@ export async function render(main, app) {
         app.say(`Key stored for ${name}.`);
         drawKey(false);
         loadModels();
-      } catch (e) { app.say(String(e.message || e), true); }
+      } catch (e) { app.say(errText(e), true); }
     };
     input.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); store(); } });
     const src = info().KeySource;
@@ -83,16 +86,16 @@ export async function render(main, app) {
             type: "button", class: "danger",
             onclick: async () => {
               if (!await ask(`Remove the ${name} key?`, ["It is deleted from this computer. Summaries by this provider stop working until a key is stored again."], "Remove key")) return;
-              try { await api("/api/summarizer/key", { Provider: provider.value, Key: "" }); await reloadKeys(); app.say("Key removed."); drawKey(false); loadModels(); } catch (e) { app.say(String(e.message || e), true); }
+              try { await api("/api/summarizer/key", { Provider: provider.value, Key: "" }); await reloadKeys(); app.say("Key removed."); drawKey(false); loadModels(); } catch (e) { app.say(errText(e), true); }
             },
           }, "Remove key") : null)];
     } else {
       body = [
-        info().KeyOptional && !hasKey() ? h("p", { class: "hint" }, "A server on this computer usually needs no key. Store one only if yours asks for it.") : null,
+        info().KeyOptional && !hasKey() ? h("p", { class: "hint" }, "Usually not needed for a server on this computer.") : null,
         h("div", { class: "row" }, h("span", { class: "grow-field" }, input),
           h("button", { type: "button", class: hasKey() || info().KeyOptional ? "" : "primary", onclick: store }, "Store key"),
           replacing ? h("button", { type: "button", class: "ghost", onclick: () => drawKey(false) }, "Cancel") : null),
-        h("p", { class: "hint" }, "It stays on this computer: in its keyring, or in a file only you can read when there is no keyring. It is never shown again and never sent to your server.")];
+        more("It stays on this computer: in its keyring, or in a file only you can read when there is no keyring. It is never shown again and never sent to your server.")];
     }
     fill(keyBox, h("label", { for: "set-key" }, "API key"), body);
   };
@@ -103,18 +106,18 @@ export async function render(main, app) {
     const lbl = h("label", { for: "set-model" }, "Model");
     if (state === "wait") { fill(modelBox, lbl, h("p", { class: "hint" }, hasKey() || info().KeyOptional ? "Loading the models…" : "Store a key above and the models load here.")); return; }
     const text = h("input", { type: "text", id: "set-model", value: model, autocomplete: "off", placeholder: info().DefaultModel ? `for example ${info().DefaultModel}` : "the model's name" });
-    text.addEventListener("input", () => { model = text.value.trim(); });
+    text.addEventListener("input", () => { model = text.value.trim(); modelTouched = true; changed(); });
     if (typed || !items.length) {
       fill(modelBox, lbl, text,
-        state ? h("p", { class: "hint bad" }, state) : null,
         h("div", { class: "row" },
           (list || []).length ? h("button", { type: "button", class: "sm", onclick: () => { typed = false; drawModels(list); } }, "Choose from the list") : null,
           h("button", { type: "button", class: "sm", onclick: () => loadModels() }, "Load the models again")));
       return;
     }
     const sel = h("select", { id: "set-model" }, items.map((m) => h("option", { value: m, selected: m === model }, m === info().DefaultModel ? `${m} (default)` : m)));
-    sel.addEventListener("change", () => { model = sel.value; });
+    sel.addEventListener("change", () => { model = sel.value; modelTouched = true; changed(); });
     model = sel.value;
+    changed();
     fill(modelBox, lbl, sel,
       h("p", { class: "hint" }, `${plural(list.length, "model")} offered by ${label()}. `,
         h("button", { type: "button", class: "link", onclick: () => { typed = true; drawModels(list); } }, "Type a name instead"), " · ",
@@ -136,7 +139,8 @@ export async function render(main, app) {
     } catch (e) {
       if (me !== seq) return;
       typed = true;
-      drawModels([], `The models could not be listed: ${e.message || e}. Type the model's name.`);
+      app.say(`The models could not be listed: ${errText(e)}. Type the model's name.`, "warn");
+      drawModels([], "failed");
     }
   };
 
@@ -153,11 +157,12 @@ export async function render(main, app) {
     const on = provider.value !== "";
     modelFields.hidden = !on;
     modelNote.textContent = on
-      ? "With a model on, the redacted conversation of each session you send goes to that provider so it can write the summary. Sessions that wait for your approval are never sent to it."
-      : "Summaries are written by rules on this computer. Nothing is sent to any model.";
+      ? "The redacted conversation of each session you send goes to this provider."
+      : "Nothing is sent to any model.";
   };
   let shown = provider0;
   provider.addEventListener("change", () => {
+    modelTouched = true;
     models0[shown] = model;
     shown = provider.value;
     model = models0[shown] ?? "";
@@ -176,9 +181,29 @@ export async function render(main, app) {
     EnrichGit: git.checked, Theme: s.Theme || "",
     Summarize: { Provider: provider.value, Model: provider.value ? model.trim() : "", BaseURL: baseURL.value.trim(), Length: length.value, KeySource: sum.KeySource || "" },
   });
-  const save = async () => {
-    try { await api("/api/settings", collect()); app.say("Saved."); await app.refresh(); return true; } catch (e) { app.say(String(e.message || e), true); return false; }
+  // What the form holds, as it would be saved, for telling whether anything
+  // changed since it was loaded or saved.
+  const state = () => {
+    const c = collect();
+    if (!modelTouched) c.Summarize.Model = provider.value === provider0 ? (sum.Model || "") : "";
+    return JSON.stringify(c);
   };
+  let baseline = "";
+  const saveBtn = h("button", { type: "submit", class: "primary", disabled: true }, "Save settings");
+  const dirty = () => baseline !== "" && state() !== baseline;
+  function changed() { if (baseline !== "") saveBtn.disabled = !dirty(); }
+  const save = async () => {
+    try {
+      await api("/api/settings", collect());
+      baseline = state();
+      changed();
+      app.say("Settings saved.");
+      app.refresh().catch(() => {});
+      return true;
+    } catch (e) { app.say(errText(e), true); return false; }
+  };
+  app.dirty = dirty;
+  app.leave = async () => !dirty() || app.unsaved();
 
   put(modelFields, keyBox, modelBox, urlBox,
     h("div", { class: "field gap-top" }, h("label", { for: "set-length" }, "Narrative length"), length),
@@ -187,8 +212,8 @@ export async function render(main, app) {
         type: "button",
         onclick: async () => {
           if (!await save()) return;
-          app.say("Testing with a tiny sample (not your data)…");
-          try { app.say((await api("/api/summarizer/test", {})).Message); } catch (e) { app.say(String(e.message || e), true); }
+          app.say("Testing with a tiny sample (not your data)…", "busy");
+          try { app.say(said(await api("/api/summarizer/test", {}), "The summarizer answered.")); } catch (e) { app.say(errText(e), true); }
         },
       }, "Save and test")));
 
@@ -201,40 +226,44 @@ export async function render(main, app) {
     const want = bg.checked;
     try {
       const r = await api("/api/daemon", { On: want });
-      app.say(want ? (r.warning ? "Background sending is on, but " + r.warning.split("\n")[0] : "Background sending is on.") : "Background sending is off.", !!(want && r.warning));
-      await app.go("settings");
+      app.say(want ? (r.warning ? "Background sending is on, but " + r.warning.split("\n")[0] : "Background sending is on.") : "Background sending is off.", want && r.warning ? "warn" : "ok");
+      const fresh = await api("/api/settings").catch(() => null);
+      if (fresh) bgDesc.textContent = bgWords(fresh.Daemon || {});
+      bg.disabled = false;
     } catch (e) {
       bg.checked = !want;
       bg.disabled = false;
-      app.say(String(e.message || e), true);
+      app.say(errText(e), true);
     }
   });
-  const bgState = d.LastError && d.Mode === "on" ? "Problem: " + d.LastError
+  const bgWords = (d) => (d.LastError && d.Mode === "on" ? "Problem: " + d.LastError
     : d.Mode === "on" && d.Running ? "Running. " + (d.LastResult || "Nothing sent yet.")
       : d.Mode === "on" ? "Turned on, but no background process is running: run goldengate daemon status."
         : d.Ask ? "A project already sends on its own: turn this on so you do not have to remember to send."
-          : "Not running.";
-  const row = (title, desc, control) => h("div", { class: "set-row" }, h("div", null, h("div", { class: "t" }, title), desc ? h("div", { class: "d" }, desc) : null), control);
+          : "Not running.");
+  const bgDesc = h("div", { class: "d" }, bgWords(d));
+  if (d.LastError && d.Mode === "on") app.once("Background sending: " + d.LastError, "bad");
+  const row = (title, desc, control) => h("div", { class: "set-row" }, h("div", null, h("div", { class: "t" }, title), desc ? (desc instanceof Node ? desc : h("div", { class: "d" }, desc)) : null), control);
   fill(main,
-    h("form", { onsubmit: (e) => { e.preventDefault(); save(); } },
-      head("Settings", "What is read, what is sent, and who writes the summaries.", h("button", { type: "submit", class: "primary" }, "Save settings")),
+    h("form", { onsubmit: (e) => { e.preventDefault(); if (dirty()) save(); }, oninput: () => changed(), onchange: () => changed() },
+      head("Settings", "What is read, what is sent, and who writes the summaries.", docs("terminal-ui#tui-settings"), saveBtn),
       h("div", { class: "grid" },
         card("What is sent", null,
           row(h("label", { for: "set-level" }, "How much of each session"), null, level),
-          row(h("label", { for: "set-since" }, "How far back"), "For example 90d. Older sessions are not sent.", since)),
+          row(h("label", { for: "set-since" }, "How far back"), "For example 90d.", since)),
         card("Tools", null,
-          h("p", { class: "card-body hint" }, "A tool that is off is never read for sending, whatever is shared."),
-          sources.map(({ src, box }) => row(src.Name, src.Note || (src.Installed ? "" : "Not found on this computer"), box))),
+          sources.map(({ src, box }) => row(tag(src.Name, { name: true }), src.Note || (src.Installed ? "" : "Not found on this computer"), box))),
         card("Redaction", null,
-          cardBody(h("div", { class: "field" }, h("label", { for: "set-patterns" }, "Extra patterns to redact, one per line"), patterns,
-            h("p", { class: "hint" }, "Secrets, keys and home paths are always redacted. Add regular expressions for anything else, such as a client's name."))),
-          row("Read git metadata", "Each folder's HEAD and config, to recognise worktrees, remotes and branches.", git)),
-        card("Send in the background", null,
-          h("p", { class: "card-body hint" }, "A small background process sends what you or your rules approved, so nothing depends on remembering to send. It never sends what waits in the inbox, and every send is listed in Receipts."),
-          row("Send automatically", bgState, bg)),
+          cardBody(h("div", { class: "field" }, h("label", { for: "set-patterns" }, "Extra patterns to redact"), patterns,
+            h("p", { class: "hint" }, "Secrets, keys and home paths are always redacted."))),
+          row("Read git metadata", "Worktrees, remotes and branches.", git)),
+        card("Send in the background", docs("automation#background"),
+          row("Send automatically", bgDesc, bg)),
         card("Who writes the summaries", null,
           cardBody(h("div", { class: "field" }, h("label", { for: "set-provider" }, "Summaries by"), provider), modelNote, h("div", { class: "gap-top" }, modelFields))))),
   );
   describe();
   if (provider.value) { drawKey(false); drawURL(); loadModels(); }
+  baseline = state();
+  changed();
 }

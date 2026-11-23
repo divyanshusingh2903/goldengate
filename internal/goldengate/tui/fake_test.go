@@ -63,6 +63,7 @@ type fakeBackend struct {
 	inboxDecs               []string // "decision:id" in order
 	inboxErr                error
 	receipts                []Receipt
+	rules                   []ProjectRules
 	offerDecs               []string // "accept:id" or "dismiss:id"
 	editBegun, editFinished []string
 	editDir                 string // when set, EditBegin writes a real form file there (the web API reads it)

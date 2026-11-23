@@ -2,7 +2,7 @@
 // every session exactly as a send would, and nothing leaves the computer.
 
 import { api, events } from "/assets/api.js";
-import { h, clear, plural, put, fill, head, card, cardBody, note, empty, table, tag, ask, drawer, workCounts, stamp } from "/assets/dom.js";
+import { h, clear, plural, put, fill, head, card, cardBody, empty, table, tag, ask, drawer, workCounts, stamp, docs, errText } from "/assets/dom.js";
 import { sessionView } from "/assets/session.js";
 
 const PLANNED = 0, PROJECT_START = 1, PROJECT_DONE = 2, PROJECT_FAILED = 3, FINISHED = 4, PREPARED = 5, PROGRESS = 6, QUEUED = 7;
@@ -30,7 +30,7 @@ export async function render(main, app) {
   const snap = await app.refresh();
   const box = h("div", null);
   const host = (snap.Server || "").replace(/^https?:\/\//, "");
-  fill(main, head("Send", host ? `Review what leaves, then send it to ${host}.` : "Review what leaves, then send it to your server."), box);
+  fill(main, head("Send", host ? `Review what leaves, then send it to ${host}.` : "Review what leaves, then send it to your server.", docs("terminal-ui#tui-send")), box);
   if (!snap.Server) {
     put(box, h("div", { class: "card" }, empty("↗", "No server yet", "No server is connected yet, so nothing can be sent.",
       h("button", { type: "button", class: "primary", onclick: () => app.go("setup") }, "Connect to your server"))));
@@ -49,8 +49,7 @@ async function review(box, app, resummarize) {
   const cancel = h("button", { type: "button", onclick: () => { if (runID) api(`/api/sync/${runID}/cancel`, {}).catch(() => {}); } }, "Cancel");
   fill(box,
     stepper(1),
-    card(null, null, cardBody(h("div", { class: "prog" }, h("div", { class: "prog-line" }, count, now), bar)), h("div", { class: "card-foot" }, cancel)),
-    note("Nothing leaves this computer during the review."));
+    card(null, null, cardBody(h("div", { class: "prog" }, h("div", { class: "prog-line" }, count, now), bar)), h("div", { class: "card-foot" }, h("span", { class: "grow dim small" }, "Nothing leaves this computer during the review."), cancel)));
   let plan = null;
   let queued = 0, done = 0;
   const update = () => {
@@ -67,9 +66,10 @@ async function review(box, app, resummarize) {
       if (e.Kind === PLANNED && e.Plan) plan = e.Plan;
     }, (id) => { runID = id; });
   } catch (e) {
-    error = String(e.message || e);
+    error = errText(e);
   }
   if (error || !plan) {
+    if (error) app.say(`The review did not finish: ${error}`, true);
     fill(box, stepper(1), h("div", { class: "card" }, empty("✕", "The review did not finish", error || "It was cancelled.",
       h("button", { type: "button", onclick: () => review(box, app, resummarize) }, "Review again"))));
     return;
@@ -87,7 +87,6 @@ function showPlan(box, app, plan, resummarize) {
   if (plan.NotSelected) facts.push(`${plural(plan.NotSelected, "session")} in projects you do not share: staying on this computer.`);
   if (plan.Excluded) facts.push(`${plural(plan.Excluded, "session")} excluded: never sent.`);
   if (resummarize && plan.Resummarized) facts.push(`${plural(plan.Resummarized, "sent session")} checked by ${plan.Summarizer}: only those whose summary changed are sent again.`);
-  if (plan.Warnings) facts.push(`${plural(plan.Warnings, "warning")} while reading sessions.`);
   if (plan.Summarizer) facts.push(`Summaries are written by ${plan.Summarizer}: the redacted conversations of the sessions being sent go to that model.`);
 
   const projects = plan.Projects || [];
@@ -131,8 +130,8 @@ function showPlan(box, app, plan, resummarize) {
       h("div", { class: "card-foot" },
         h("span", { class: "grow dim" }, plan.Sessions ? `Pressing Send uploads them to ${host}. Nothing has been sent yet.` : ""),
         h("button", { type: "button", onclick: () => review(box, app, resummarize) }, "Review again"),
-        plan.Sessions ? h("button", { type: "button", class: "primary", onclick: () => sendNow(box, app, plan, resummarize) }, `Send ${plural(plan.Sessions, "session")}`) : null)),
-    note("Only the summaries reviewed here leave. Raw transcripts stay on this computer."));
+        plan.Sessions ? h("button", { type: "button", class: "primary", onclick: () => sendNow(box, app, plan, resummarize) }, `Send ${plural(plan.Sessions, "session")}`) : null)));
+  if (plan.Warnings) app.once(`${plural(plan.Warnings, "warning")} while reading sessions.`, "warn");
 }
 
 // openItem shows one session of the review as it will be sent, and lets you
@@ -151,7 +150,7 @@ function openItem(box, app, it, resummarize) {
           await api("/api/inbox/decide", { Items: [{ Source: it.Source, ID: it.ID, Project: it.Project, Title: it.Title }], Decision: "exclude" });
           app.say(`kept "${it.Title || it.ID}" on this computer`);
         } catch (e) {
-          app.say(String(e.message || e), true);
+          app.say(errText(e), true);
           return;
         }
         d.close();
@@ -199,7 +198,7 @@ async function sendNow(box, app, plan, resummarize) {
       draw();
     }, (id) => { runID = id; });
   } catch (e) {
-    error = String(e.message || e);
+    error = errText(e);
   }
   cancel.remove();
   const failed = [...state.values()].filter((s) => s.err).length;
@@ -208,7 +207,7 @@ async function sendNow(box, app, plan, resummarize) {
     put(box, h("div", { class: "card gap-top" }, empty("✕", error ? "The send stopped" : `${plural(failed, "project")} failed`,
       `${error ? error + ". " : ""}What already arrived is not sent again.`,
       h("button", { type: "button", class: "primary", onclick: () => review(box, app, resummarize) }, "Review and retry"))));
-    app.say("Some of it was not sent.", true);
+    app.say(error ? `The send stopped: ${error}` : `${plural(failed, "project")} failed to send.`, true);
     return;
   }
   const sentN = [...state.values()].reduce((n, s) => n + s.sent, 0);

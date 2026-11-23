@@ -2,7 +2,7 @@
 // Each session opens as it will be read, with the exact JSON a tab away.
 
 import { api } from "/assets/api.js";
-import { h, when, plural, put, fill, tag, head, card, note, empty, drawer } from "/assets/dom.js";
+import { h, when, plural, put, fill, tag, head, card, empty, drawer } from "/assets/dom.js";
 import { sessionView } from "/assets/session.js";
 
 const STATUS = {
@@ -31,8 +31,9 @@ export async function render(main, app, params) {
   const reds = Object.entries(pv.Redactions || {}).map(([k, n]) => `${k} ×${n}`).join(", ");
   fill(main,
     head(`Preview: ${params.label || params.key}`,
-      `${plural(pv.Total || items.length, "session")} in this project${items.length < (pv.Total || 0) ? `, the newest ${items.length} shown` : ""}. ${reds ? `Redacted: ${reds}.` : "Nothing needed redacting."}${pv.Warnings ? ` ${plural(pv.Warnings, "warning")}.` : ""}`,
+      `${plural(pv.Total || items.length, "session")} in this project${items.length < (pv.Total || 0) ? `, the newest ${items.length} shown` : ""}. ${reds ? `Redacted: ${reds}.` : "Nothing needed redacting."}`,
       h("button", { type: "button", onclick: () => app.go("projects") }, "← Projects")));
+  if (pv.Warnings) app.once(`${params.label || params.key}: ${plural(pv.Warnings, "warning")} while reading sessions.`, "warn");
   if (!items.length) {
     put(main, h("div", { class: "card" }, empty(null, "No sessions to show", "This project has no sessions in the look-back window.")));
     return;
@@ -51,6 +52,5 @@ export async function render(main, app, params) {
     card(plural(items.length, "session"), h("span", { class: "faint small" }, `share level: ${pv.Level || "summary"}`),
       h("div", { class: "tbl" }, h("table", null,
         h("thead", null, h("tr", null, h("th", null, "Session"), h("th", null, "State"), h("th", null, "Updated"), h("th", { class: "w" }, h("span", { class: "skip" }, "Read")))),
-        h("tbody", null, rows)))),
-    note("Open a session to read exactly what would leave this computer for it. Looking sends nothing and records nothing."));
+        h("tbody", null, rows)))));
 }

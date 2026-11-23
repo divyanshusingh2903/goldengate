@@ -225,6 +225,39 @@ func (s *Server) routes(mux *http.ServeMux) {
 		out(w, v, err)
 	})
 
+	// --- rules: per project, the trust level and the rules ---
+	mux.HandleFunc("GET /api/rules", func(w http.ResponseWriter, r *http.Request) {
+		v, err := be.Rules(r.Context())
+		out(w, v, err)
+	})
+	mux.HandleFunc("POST /api/rules/add", func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Project string
+			Rule    tui.RuleInfo
+		}
+		if !decode(w, r, &in) {
+			return
+		}
+		msg, err := be.AddRule(r.Context(), in.Project, in.Rule)
+		out(w, message{msg}, err)
+	})
+	mux.HandleFunc("POST /api/rules/remove", func(w http.ResponseWriter, r *http.Request) {
+		var in struct{ Project, ID string }
+		if !decode(w, r, &in) {
+			return
+		}
+		msg, err := be.RemoveRule(r.Context(), in.Project, in.ID)
+		out(w, message{msg}, err)
+	})
+	mux.HandleFunc("POST /api/rules/trust", func(w http.ResponseWriter, r *http.Request) {
+		var in struct{ Project, Trust string }
+		if !decode(w, r, &in) {
+			return
+		}
+		msg, err := be.SetTrust(r.Context(), in.Project, in.Trust)
+		out(w, message{msg}, err)
+	})
+
 	// --- agents: every call needs the admin secret, held here for the run ---
 	mux.HandleFunc("POST /api/admin", func(w http.ResponseWriter, r *http.Request) {
 		var in struct{ Secret string }

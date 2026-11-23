@@ -152,6 +152,26 @@ func TestEveryBackendMethodIsReachableOverTheWebAPI(t *testing.T) {
 		t.Fatalf("receipts: %+v", receipts)
 	}
 
+	// Rules, AddRule, RemoveRule, SetTrust
+	var rs []tui.ProjectRules
+	c.JSON("GET", "/api/rules", nil, &rs)
+	if len(rs) != 1 || rs[0].Name != "Forge" || len(rs[0].Rules) != 1 {
+		t.Fatalf("rules: %+v", rs)
+	}
+	c.JSON("POST", "/api/rules/add", map[string]any{"Project": "Forge", "Rule": tui.RuleInfo{Action: "exclude", Branch: "wip/*"}}, &msg)
+	if !strings.Contains(msg.Message, "added rule r_2") {
+		t.Fatalf("add rule: %+v", msg)
+	}
+	c.JSON("POST", "/api/rules/trust", map[string]string{"Project": "Forge", "Trust": "suggest"}, &msg)
+	c.JSON("POST", "/api/rules/remove", map[string]string{"Project": "Forge", "ID": "r_1"}, &msg)
+	c.JSON("GET", "/api/rules", nil, &rs)
+	if rs[0].Trust != "suggest" || len(rs[0].Rules) != 1 || rs[0].Rules[0].Branch != "wip/*" {
+		t.Fatalf("rules after changes: %+v", rs)
+	}
+	if res, _ := c.Do("POST", "/api/rules/remove", map[string]string{"Project": "Nope", "ID": "r_1"}, nil); res.StatusCode != http.StatusUnprocessableEntity {
+		t.Errorf("removing from a missing project: %d", res.StatusCode)
+	}
+
 	// Agents: nothing without the admin secret, and a wrong one is not kept
 	if res, body := c.Do("GET", "/api/agents", nil, nil); res.StatusCode != http.StatusUnauthorized || !strings.Contains(string(body), "admin_required") {
 		t.Fatalf("agents without the admin secret: %d %s", res.StatusCode, body)

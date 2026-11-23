@@ -22,6 +22,7 @@ type Client struct {
 	S       *webui.Server
 	HTTP    *http.Client
 	Request string // the request token; empty before Launch
+	Docs    string // where the page's help links point, from the session reply
 }
 
 // Start serves be on a loopback port for the length of the test.
@@ -46,9 +47,11 @@ func (c *Client) Launch() {
 	}
 	var out struct {
 		RequestToken string `json:"request_token"`
+		Docs         string `json:"docs"`
 	}
 	_ = json.Unmarshal(body, &out)
 	c.Request = out.RequestToken
+	c.Docs = out.Docs
 }
 
 // Do sends one request the way the page would. edit may change it first, to

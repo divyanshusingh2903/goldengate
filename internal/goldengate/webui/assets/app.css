@@ -1,6 +1,6 @@
 /* The Golden Gate look, as on the project's web pages: Art Deco faces for
    words, Plex Mono for data, square edges, double-rule frames, one accent.
-   Layout: a sidebar of screens, a top bar with the status line and the send
+   Layout: a sidebar of screens, a top bar with the send
    action, a scrolling page, and a drawer for one session.
    Colour never carries meaning alone: every state also has a glyph or a word. */
 
@@ -87,10 +87,12 @@ p { margin: 0; }
 
 .work { display: flex; flex-direction: column; min-width: 0; overflow: hidden; }
 .top { flex: none; display: flex; align-items: center; gap: 16px; min-height: 58px; padding: 8px var(--gutter); padding-right: max(var(--gutter), env(safe-area-inset-right, 0px)); border-bottom: 1px solid var(--line); background: var(--bg); }
-.status { flex: 1; min-width: 0; color: var(--cypress); font-weight: 600; overflow-wrap: anywhere; }
-.status.bad { color: var(--alarm); }
-.status.bad:not(:empty)::before { content: "✕ "; }
+.top .grow { flex: 1; }
 .top .primary { margin-left: auto; }
+/* A screen fetching fresh data: a thin moving line under the top bar */
+.work { position: relative; }
+.busy { position: absolute; left: 0; right: 0; top: 58px; z-index: 6; height: 2px; background: linear-gradient(90deg, transparent, var(--orange), transparent) 0 0 / 30% 100% no-repeat; animation: gg-slide 1.1s ease-in-out infinite; pointer-events: none; }
+@media (max-width: 760px) { .busy { top: 48px; } }
 .scroll { flex: 1; overflow-y: auto; }
 .page { max-width: 1440px; margin: 0 auto; padding-block: 8px 72px; padding-left: max(var(--gutter), env(safe-area-inset-left, 0px)); padding-right: max(var(--gutter), env(safe-area-inset-right, 0px)); }
 .page:focus { outline: none; }
@@ -458,3 +460,55 @@ button.link { display: inline; min-height: 0; padding: 0; border: 0; background:
 button.link:hover { color: var(--ink); }
 details.more > summary { cursor: pointer; color: var(--pacific); font-size: 0.9rem; }
 .key-state { margin-bottom: 8px; }
+
+/* Toasts: feedback, warnings and errors, bottom right; errors stay */
+.toasts { position: fixed; right: max(16px, env(safe-area-inset-right, 0px)); bottom: max(16px, env(safe-area-inset-bottom, 0px)); z-index: 30; display: grid; gap: 8px; width: min(420px, calc(100vw - 32px)); pointer-events: none; }
+.toast { pointer-events: auto; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: start; gap: 10px; padding: 10px 6px 8px 14px; background: var(--surface); color: var(--ink); border: 1px solid var(--line); border-left: 3px solid var(--cypress); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.18); animation: gg-toast 0.16s ease-out; }
+.toast .tg { padding-top: 1px; font: 500 0.9rem var(--mono); color: var(--cypress); }
+.toast .tt { padding-top: 2px; white-space: pre-line; overflow-wrap: anywhere; font-size: 0.93rem; }
+.toast .tx { width: 28px; min-height: 28px; font-size: 0.8rem; }
+.toast.warn { border-left-color: var(--headland); }
+.toast.warn .tg { color: var(--headland); }
+.toast.bad { border-left-color: var(--alarm); }
+.toast.bad .tg { color: var(--alarm); }
+.toast.busy { border-left-color: var(--pacific); }
+.toast.busy .tg { color: var(--pacific); }
+.toast.out { opacity: 0; transform: translateY(6px); transition: opacity 0.15s, transform 0.15s; }
+@keyframes gg-toast { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .toast, .busy { animation: none; } }
+
+/* Help: a small link to the docs where a paragraph used to be */
+a.docs { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 6px; font-size: 0.88rem; font-weight: 600; color: var(--dim); text-decoration: none; }
+a.docs span { display: grid; place-items: center; width: 18px; height: 18px; padding-top: 1px; border: 1px solid currentColor; border-radius: 50%; font: 500 0.7rem var(--mono); }
+a.docs:hover { color: var(--orange); }
+.card-head a.docs { min-height: 0; }
+
+/* Skeletons: the shape of a screen while its data loads */
+.bone { display: block; height: 12px; background: linear-gradient(90deg, var(--sunk) 0%, var(--line) 40%, var(--sunk) 80%) 0 0 / 300% 100%; animation: gg-shimmer 1.3s linear infinite; }
+@keyframes gg-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+@media (prefers-reduced-motion: reduce) { .bone { animation: none; } }
+.skeleton .page-head { align-items: center; }
+.bone.h1 { width: 220px; height: 30px; }
+.bone.line { width: min(380px, 60vw); margin-top: 10px; }
+.bone.btn { width: 120px; height: 36px; }
+.bone.h2 { width: 160px; height: 16px; }
+.bone.k { width: 90px; height: 10px; }
+.bone.v { width: 60px; height: 30px; margin-top: 10px; }
+.bone.tab { width: 90px; height: 14px; }
+.bone.dot { width: 16px; height: 16px; flex: none; }
+.bone.w10 { width: 10%; margin-left: auto; } .bone.w45 { width: 45%; } .bone.w60 { width: 60%; } .bone.w70 { width: 70%; }
+.sk-row { display: flex; align-items: center; gap: 14px; padding: 14px 18px; border-bottom: 1px solid var(--line); }
+.sk-row:last-child { border-bottom: 0; }
+.sk-tabs { display: flex; gap: 22px; margin-bottom: 18px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+
+/* Rules: a card per project, its trust level on the right */
+.rule-cards { display: grid; gap: 16px; }
+.rule-cards > .card + .card { margin-top: 0; }
+.trust-words { padding-block: 10px; border-bottom: 1px solid var(--line); }
+.chips .chip code { background: none; padding: 0; }
+.chips .chip .tool .tn { font-weight: 500; }
+fieldset.plain { border: 0; padding: 0; margin: 0; }
+fieldset.plain legend { padding: 0; font-weight: 600; }
+fieldset.plain .row { margin-top: 4px; gap: 18px; }
+.grid.g3.stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (max-width: 640px) { .grid.g3.stats { grid-template-columns: minmax(0, 1fr); } }

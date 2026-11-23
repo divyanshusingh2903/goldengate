@@ -371,6 +371,16 @@ type Backend interface {
 	// InboxDecide and InboxRetract.
 	Receipts(ctx context.Context) ([]Receipt, error)
 
+	// Rules lists every named project with its trust level and rules.
+	Rules(ctx context.Context) ([]ProjectRules, error)
+	// AddRule adds a rule to a project; the backend gives it its ID. It
+	// says what changed.
+	AddRule(ctx context.Context, project string, r RuleInfo) (string, error)
+	// RemoveRule removes one of a project's rules.
+	RemoveRule(ctx context.Context, project, ruleID string) (string, error)
+	// SetTrust sets a project's trust level: ask, suggest or auto.
+	SetTrust(ctx context.Context, project, level string) (string, error)
+
 	// The agents methods manage which assistant sees which project. Each
 	// takes the admin secret, which the UI holds in memory for the run and
 	// the backend uses for that call only; it is never stored.
@@ -463,6 +473,27 @@ type ReceiptItem struct {
 	Title      string // redacted, as sent
 	Why        string // the rule in words, or that the whole project is automatic
 	Retracted  bool   // deleted from the server again
+}
+
+// ProjectRules is one named project's automation: its trust level and rules.
+type ProjectRules struct {
+	Name    string
+	Trust   string   // ask, suggest or auto; never empty
+	Words   string   // what the trust level and rules do, in words
+	Members []string // the folders and chats it shares, as written
+	Rules   []RuleInfo
+}
+
+// RuleInfo is one rule. A session must meet every condition that is set.
+type RuleInfo struct {
+	ID       string
+	Action   string // approve or exclude
+	Source   string
+	Folder   string
+	Remote   string
+	Branch   string
+	WorkItem string
+	Words    string // the rule in words; set by the backend
 }
 
 // AgentsInfo is the Agents screen's content.
