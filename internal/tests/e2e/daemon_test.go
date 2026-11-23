@@ -153,6 +153,8 @@ func TestDaemonSendsByItself(t *testing.T) {
 		st := l.daemonStatus(t)
 		return st.Reachable != nil && !*st.Reachable
 	})
+	// a few more looks with nothing due must keep showing the backoff
+	time.Sleep(150 * time.Millisecond)
 	if st := l.daemonStatus(t); st.NextRun.Before(clk.Now().Add(50*time.Second)) || !strings.Contains(st.LastResult, "not reachable") {
 		t.Errorf("next_run shows the backoff (%s from now): %+v", st.NextRun.Sub(clk.Now()), st)
 	}
