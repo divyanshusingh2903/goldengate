@@ -30,6 +30,7 @@ var sourceMetas = map[string]sourceMeta{
 	"codex":       {"CX", kindCode},
 	"opencode":    {"OC", kindCode},
 	"cursor":      {"CU", kindCode},
+	"antigravity": {"AG", kindCode},
 	"claude-ai":   {"AI", kindChat},
 	"chatgpt":     {"GPT", kindChat},
 }
@@ -94,7 +95,7 @@ func (m *Model) kindLabel(k sourceKind) string {
 // legend lists every tag, for help.
 func (m *Model) legend() []string {
 	var code, chat []string
-	for _, s := range []string{"claude-code", "codex", "opencode", "cursor", "claude-ai", "chatgpt"} {
+	for _, s := range []string{"claude-code", "codex", "opencode", "cursor", "antigravity", "claude-ai", "chatgpt"} {
 		e := m.tag(s) + " " + pretty(s)
 		if metaOf(s).kind == kindChat {
 			chat = append(chat, e)

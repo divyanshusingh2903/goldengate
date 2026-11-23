@@ -4,7 +4,7 @@
 
 An open-source, self-hosted tool that lets any MCP-capable assistant (Gemini, ChatGPT, Claude, etc.) know what you have been working on in your AI coding tools, with **you choosing exactly which projects are shared**.
 
-- **Sources (read from your machine):** Claude Code, Codex CLI, OpenCode, Cursor, plus imported claude.ai and ChatGPT data exports.
+- **Sources (read from your machine):** Claude Code, Codex CLI, OpenCode, Cursor, Antigravity, plus imported claude.ai and ChatGPT data exports.
 - **Ingester + TUI (runs locally):** discovers sessions, lets you pick which project folders to share, redacts, summarizes, pushes.
 - **Server (runs in the cloud, e.g. Cloud Run):** stores summaries, serves them over MCP (streamable HTTP) to a remote assistant.
 
@@ -13,7 +13,7 @@ The MCP server never reaches into your machine. Data only flows laptop -> server
 ## 1. Goals, principles and non-goals
 
 Users
-- Developers, and other professionals, who use both AI coding tools (Claude Code, Codex, Cursor, OpenCode) and AI chat apps (claude.ai, ChatGPT), and want the assistants they talk to to know what they have been doing in the others.
+- Developers, and other professionals, who use both AI coding tools (Claude Code, Codex, Cursor, OpenCode, Antigravity) and AI chat apps (claude.ai, ChatGPT), and want the assistants they talk to to know what they have been doing in the others.
 - The set of sources is deliberately small: a few data-producing tools, each supported well, rather than many supported loosely.
 
 Goals
@@ -40,7 +40,7 @@ These decide every product question. When a feature conflicts with one of them, 
 
 | Word | Meaning |
 |---|---|
-| **Source** | A tool that produces activity: Claude Code, Codex, Cursor, OpenCode, claude.ai, ChatGPT. |
+| **Source** | A tool that produces activity: Claude Code, Codex, Cursor, OpenCode, Antigravity, claude.ai, ChatGPT. |
 | **Session** | One coding session or one chat conversation. Its raw content stays on the machine. |
 | **Work item** | A commit, pull or merge request, or issue (GitHub, GitLab, Linear, Jira) a session created, changed or mentioned (section 4.1). |
 | **Thread** | The sessions, across tools, that share a work item: one piece of work. |
@@ -95,7 +95,7 @@ cmd/goldengatebridge/     # server entry (thin main)
 internal/
   goldengate/             # code that ships only in the local tool
     adapters/             # one package per source tool (+ Adapter interface, registry)
-      claudecode/ codex/ opencode/ cursor/ claudeai/ chatgpt/
+      claudecode/ codex/ opencode/ cursor/ antigravity/ claudeai/ chatgpt/
     cli/ tui/             # cobra commands; Bubble Tea models, views, styles
     webui/                # local web UI (6.1): loopback server, request checks, JSON API, embedded assets
     client/ config/       # bridge HTTP client; TOML config, XDG paths
@@ -145,6 +145,7 @@ These come from memory and tool formats change. The implementer must inspect rea
 | Codex CLI | `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl` (honor `CODEX_HOME`) | JSONL; working directory is recorded in session metadata events. |
 | OpenCode | `~/.local/share/opencode/` (honor XDG data dir) | Historically JSON files under a `storage/` tree (sessions, messages, parts); newer versions may use SQLite. Support whichever exists; detect by presence. |
 | Cursor | `<user dir>/globalStorage/state.vscdb` (`~/.config/Cursor/User` on Linux), plus `~/.cursor/projects/<slug>/agent-transcripts/<id>/<id>.jsonl` | Verified on disk with Cursor 3.30 on Linux; see "Cursor" below. The macOS and Windows locations follow the platform convention and were not verified. |
+| Antigravity | `~/.gemini/antigravity` (IDE) and `~/.gemini/antigravity-cli` (`agy`): `conversation_summaries.db`, `brain/<id>/.system_generated/logs/transcript_full.jsonl`, `conversations/<id>.db` | Verified on disk on Linux (#200); see "Antigravity" below. The macOS and Windows locations use the same home-relative path and were not verified. |
 | claude.ai export | user-supplied `.zip` from Settings -> Privacy -> Export data | Conversations and projects as JSON. No folder concept; treat each claude.ai Project as a "project" and ungrouped chats as one "Chats" bucket. |
 
 ### Cursor (spike result, 3.30 on Linux)
@@ -158,6 +159,18 @@ What was found on disk, and what the adapter (`adapters/cursor`, format version 
 - **Not listed.** Drafts, sub-agent conversations, and conversations without any message. A header of an unknown shape is skipped with a warning; a conversation whose bubbles are not version 3 is skipped rather than guessed at; single unreadable bubbles are dropped with a warning on the session.
 - **What is not read.** The same database holds sign-in state (`ItemTable`) and per-conversation encryption keys (`composerData:*`). The adapter opens it read-only and reads `composerHeaders`, the `bubbleId:*` rows and one version entry, nothing else; fixtures plant decoy secrets there and tests check they never surface.
 - **Open, to verify with real data:** how a failing shell command is recorded (to allow evidence), the file-editing tools, the `cursor-agent` CLI's own store, and the macOS and Windows locations.
+
+### Antigravity (#200, verified on Linux)
+
+What was found on disk, and what the adapter (`adapters/antigravity`) does with it:
+
+- **Where.** The IDE keeps its data in `~/.gemini/antigravity`, the `agy` command-line tool in `~/.gemini/antigravity-cli`, in the same layout. `conversation_summaries.db`, table `conversation_summaries`, has one row per conversation: id, title, `workspace_uris` (a JSON list of `file://` URIs), `parent_conversation_id` and `nesting_depth` (subagents), and `app_data_dir`. The IDE's table also lists `agy`'s conversations, marked as the IDE's, while their files are in `agy`'s directory; so the transcript, not the row, decides where a conversation is, and ids are deduplicated only among conversations whose transcript exists.
+- **Transcript.** Antigravity writes `brain/<id>/.system_generated/logs/transcript_full.jsonl` itself: one JSON object per step with `type`, `status`, `created_at` and `content`. `USER_INPUT` holds the prompt inside `<USER_REQUEST>`, followed by harness metadata (`<ADDITIONAL_METADATA>`, `<USER_SETTINGS_CHANGE>`), which is dropped. `PLANNER_RESPONSE` holds the reply, `thinking` (dropped) and `tool_calls` (`name`, JSON `args`). Each call is followed, in order and within the same response, by a `GENERIC` step with its result and a status: `DONE`, `ERROR`, `INVALID` or `RUNNING` (a background command). Results are paired per response, so a call that never got a result cannot shift later ones. `SYSTEM_MESSAGE`, `ERROR_MESSAGE` and `CHECKPOINT` (a summary the model wrote of the conversation so far) are dropped. A single step can be hundreds of kilobytes.
+- **Tool calls and evidence.** `run_command` (`CommandLine`) results start with `Command exited with code N.`: the exit code is recorded, so commits and pull requests from Antigravity are proven like Claude Code's. `ERROR` and `INVALID` are known failures; a `RUNNING`, cut-short or stopped command is unknown. `read_file` (`Path`) and `view_file` (`AbsolutePath`) are reads; `edit_file` and `write_file` (`Path`) are edits and writes, `write_file` creating a file when the result says `Created file.` Only successful edits and writes are files touched.
+- **Branch and remote.** `conversations/<id>.db`, table `trajectory_metadata_blob` (protobuf): field 1 is the workspace, with field 3 the repository (2: its remote) and field 4 the branch. Read with `protowire`; anything unreadable leaves both empty. Credentials are stripped from the remote.
+- **Not listed.** Subagent conversations, and conversations without a transcript: the older format, `conversations/<id>.pb`, is encrypted and has none; `goldengate doctor` counts them. Listing only stats transcripts and never opens one, so the background daemon's frequent looks read nothing of folders that are not shared.
+- **What is not read.** The same directories hold sign-in tokens, logs and the model's own artifacts. The adapter opens the two databases read-only and reads the transcripts; nothing else.
+- **Open, to verify with real data:** the macOS and Windows locations, the issue-tracker tools' names (mapped by the shared rule if they follow it), and whether a scripted `agy` run can be told from an interactive one (all are sent as chats).
 
 ### Share-link import: spike result (issue #39, 2026-11-15)
 
@@ -226,6 +239,7 @@ What each source can provide
 |---|---|---|
 | Claude Code, Codex, OpenCode | From shell tool calls and results (`git commit`, `git push`, `gh pr create\|merge\|close`, `glab mr create\|merge\|close`), plus SHAs, URLs and `#n` in text | Files created vs modified, from write/edit/patch tool calls (each tool names these differently; the adapter normalizes them), and files a successful shell command wrote: `git add` paths, `sed -i` targets, `>`/`>>` redirections, `tee`, and a Python heredoc's `open(path, "w")` (status `updated`; a variable, glob or path outside the project is left out) |
 | Cursor | Mentions only (status `mentioned`): a shell call records no exit code, so its result is never taken as proof | None yet: no file-editing call was available to verify |
+| Antigravity | From shell calls and results, as for the coding tools above: a `run_command` result records its exit code | Files edited or written, from successful `edit_file` and `write_file` calls |
 | claude.ai export | Mentions in text only (status `mentioned`) | Artifacts and files created or uploaded in chats, if the export includes them (verify against a real export) |
 
 Privacy
@@ -305,7 +319,7 @@ path = "claude-ai:Pharmfindr"
 [share]
 default = "deny"                 # deny | allow
 deny  = ["~/code/**/secrets", "~/work/client-x"]   # deny always wins over project membership
-include_sources = ["claude-code", "codex", "opencode", "cursor"]
+include_sources = ["claude-code", "codex", "opencode", "cursor", "antigravity"]
 since = "90d"                    # ignore older sessions (upload look-back; agents still default to the last 5 days, see section 9)
 level = "summary"                # summary | titles-only | full (full requires --i-understand)
 

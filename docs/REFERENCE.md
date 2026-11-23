@@ -227,6 +227,7 @@ Grants and revocations apply to the assistant's next request. A project an assis
 | Codex CLI / Desktop | `~/.codex/sessions/**/rollout-*.jsonl` (honors `CODEX_HOME`) |
 | OpenCode | its SQLite database, read-only (`$XDG_DATA_HOME/opencode/opencode.db`) |
 | Cursor | its state database, read-only (`~/.config/Cursor/User/globalStorage/state.vscdb` on Linux); tag `CU`. Commits and pull requests from Cursor show as mentioned only, because Cursor records no exit code for commands |
+| Antigravity | the IDE (`~/.gemini/antigravity`) and the `agy` command-line tool (`~/.gemini/antigravity-cli`), read-only: the conversation list, each conversation's transcript, and its branch; tag `AG`. Older conversations kept in an encrypted format are not read (`goldengate doctor` counts them). A config that lists its tools must have `antigravity` switched on under Tools. |
 | claude.ai | `goldengate import-claude-ai export.zip` |
 | ChatGPT | `goldengate import-chatgpt export.zip` |
 

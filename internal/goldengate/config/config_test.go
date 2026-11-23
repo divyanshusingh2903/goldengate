@@ -255,3 +255,33 @@ func TestSyncSettingsRoundTrip(t *testing.T) {
 		}
 	}
 }
+
+// Antigravity joins the source list earlier builds wrote, from version 3 (via
+// Cursor) and from version 4; a list the user changed is left alone.
+func TestAntigravityJoinsTheDefaultSources(t *testing.T) {
+	load := func(body string) Config {
+		t.Helper()
+		p := filepath.Join(t.TempDir(), "config.toml")
+		if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		c, err := Load(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return c
+	}
+	want := []string{"claude-code", "codex", "opencode", "cursor", "antigravity", "claude-ai", "chatgpt"}
+	if c := load("version = 3\n[share]\ninclude_sources = [\"claude-code\", \"codex\", \"opencode\", \"claude-ai\", \"chatgpt\"]\n"); !slices.Equal(c.Share.IncludeSources, want) || c.Version != CurrentVersion {
+		t.Errorf("from v3: %v v%d", c.Share.IncludeSources, c.Version)
+	}
+	if c := load("version = 4\n[share]\ninclude_sources = [\"claude-code\", \"codex\", \"opencode\", \"cursor\", \"claude-ai\", \"chatgpt\"]\n"); !slices.Equal(c.Share.IncludeSources, want) {
+		t.Errorf("from v4: %v", c.Share.IncludeSources)
+	}
+	if c := load("version = 4\n[share]\ninclude_sources = [\"claude-code\"]\n"); !slices.Equal(c.Share.IncludeSources, []string{"claude-code"}) {
+		t.Errorf("changed list: %v", c.Share.IncludeSources)
+	}
+	if !slices.Equal(Default().Share.IncludeSources, want) {
+		t.Errorf("default: %v", Default().Share.IncludeSources)
+	}
+}

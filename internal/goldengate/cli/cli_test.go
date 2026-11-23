@@ -13,6 +13,7 @@ import (
 
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/adapters"
 	"github.com/divyanshusingh2903/goldengate/internal/goldengate/adapters/claudecode"
+	"github.com/divyanshusingh2903/goldengate/internal/goldengate/config"
 	gsync "github.com/divyanshusingh2903/goldengate/internal/goldengate/sync"
 	"github.com/divyanshusingh2903/goldengate/internal/model"
 )
@@ -183,6 +184,26 @@ func TestDoctor(t *testing.T) {
 	out := h.out.String()
 	if !strings.Contains(out, "claude-code") || !strings.Contains(out, "2 sessions") {
 		t.Fatalf("doctor output:\n%s", out)
+	}
+}
+
+// A tool that is found but switched off says so, since nothing of it is read.
+func TestDoctorSaysWhenAToolIsSwitchedOff(t *testing.T) {
+	h := newHarness(t)
+	a := &app{Deps: h.deps}
+	cfg, err := a.load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg.Share.IncludeSources = []string{"codex"}
+	if err := config.Save(a.cfgPath(), cfg); err != nil {
+		t.Fatal(err)
+	}
+	if err := h.run("doctor"); err != nil {
+		t.Fatalf("%v\n%s", err, h.out.String())
+	}
+	if !strings.Contains(h.out.String(), "switched off: not read until it is on under Tools") {
+		t.Errorf("doctor output:\n%s", h.out.String())
 	}
 }
 

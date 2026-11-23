@@ -238,6 +238,7 @@ td .row { margin: 0; flex-wrap: nowrap; }
 .src-chatgpt { --logo: url("/assets/logos/chatgpt.svg"); }
 .src-cursor { --logo: url("/assets/logos/cursor.svg"); }
 .src-opencode { --logo: url("/assets/logos/opencode.svg"); }
+.src-antigravity { --logo: url("/assets/logos/antigravity.svg"); }
 .wi { display: inline-block; width: 14px; height: 14px; flex: none; vertical-align: -2px; background: currentColor; -webkit-mask: var(--wi) center / contain no-repeat; mask: var(--wi) center / contain no-repeat; }
 .wi-pull_request { --wi: url("/assets/icons/pull_request.svg"); color: var(--cypress); }
 .wi-issue { --wi: url("/assets/icons/issue.svg"); color: var(--pacific); }

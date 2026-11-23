@@ -47,7 +47,7 @@ Prebuilt binaries for Linux, macOS and Windows are on the [releases page](https:
 | [User guide](docs/GUIDE.md) | a full walkthrough on one computer |
 | [Design](DESIGN.md) | product principles and architecture |
 
-Sources: Claude Code, Codex, OpenCode, Cursor, and claude.ai / ChatGPT data exports. Status: beta.
+Sources: Claude Code, Codex, OpenCode, Cursor, Antigravity, and claude.ai / ChatGPT data exports. Status: beta.
 
 ## Development
 

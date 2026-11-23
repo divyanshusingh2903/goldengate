@@ -118,3 +118,9 @@ func TestNarrativeHasItsOwnCap(t *testing.T) {
 		t.Errorf("a derived abstract is cut to the cap: %d", len([]rune(a)))
 	}
 }
+
+func TestAntigravityIsASource(t *testing.T) {
+	if !ValidSource("antigravity") || ValidSource("antigravity-cli") {
+		t.Error("antigravity is the one source name for the IDE and agy")
+	}
+}

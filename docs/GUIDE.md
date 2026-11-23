@@ -49,7 +49,7 @@ Your coding tools are only ever read, never changed, so you test against your re
 goldengate doctor
 ```
 
-It lists the tools it found (Claude Code, Codex, OpenCode, Cursor) and how many sessions each has. Nothing goes over the network.
+It lists the tools it found (Claude Code, Codex, OpenCode, Cursor, Antigravity) and how many sessions each has. Nothing goes over the network.
 
 ---
 
@@ -130,7 +130,7 @@ The list on the left, a card about the highlighted project on the right.
 | `▲ 3 to send` | 3 sessions new or changed since the last send |
 | `✓ sent 2h` | up to date on the server |
 
-Source tags: `CC` Claude Code, `CX` Codex, `OC` OpenCode, `CU` Cursor (coding tools), `AI` claude.ai, `GPT` ChatGPT (chat exports).
+Source tags: `CC` Claude Code, `CX` Codex, `OC` OpenCode, `CU` Cursor, `AG` Antigravity (coding tools), `AI` claude.ai, `GPT` ChatGPT (chat exports).
 
 | Key | Action |
 |---|---|
